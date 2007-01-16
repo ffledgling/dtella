@@ -1,0 +1,22 @@
+#Connection Parameters
+my_host = ""  # Hostname of this IRC server
+my_name = "Dtella IRC Bridge"
+irc_server = ""  # Main IRC server to connect to
+irc_port = 6667
+irc_password = ""
+irc_chan = ""
+
+#Bot Parameters
+bot_nick = '*IRC'
+bot_irc = 'dtella'
+
+#Global Prefix Settings
+irc_prefix = '}'
+dc_prefix = '~'
+
+# Dtella stuff
+my_ip = '1.2.3.4'
+udp_port = 41236
+ip_cache = ['1.2.3.4:41234']
+
+private_key = ()  # Tuple of long integers
