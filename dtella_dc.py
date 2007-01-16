@@ -5,6 +5,7 @@ from twisted.internet import reactor
 from dtella_util import Ad, validateNick
 import dtella
 import struct
+import os
 
 
 
@@ -151,6 +152,32 @@ class DCHandler(LineOnlyReceiver):
         self.sendLine("$OpList %s$$" % self.bot.nick)
 
 
+    def split_info(self, info):
+        # Split a MyINFO string
+        # [0:'description<tag>', 1:' ', 2:'speed_', 3:'email', 4:'sharesize', 5:'']
+
+        if info:
+            info = info.split('$',6)
+            if len(info) == 6:
+                return info
+
+        # Too many or too few parts
+        raise ValueError
+
+
+    def split_tag(self, desc):
+        # Break 'description<tag>' into ('description','tag')
+        tag = ''
+        if desc[-1:] == '>':
+            try:
+                pos = desc.rindex('<')
+                tag = desc[pos+1:-1]
+                desc = desc[:pos]
+            except ValueError:
+                pass
+        return desc, tag
+
+
     def d_MyInfo(self, _1, _2, info):
 
         if not self.nick:
@@ -163,9 +190,21 @@ class DCHandler(LineOnlyReceiver):
         if self.state == 'login':
             self.state = 'ready'
 
-        # Hack version into description
-        info = dtella.VERSION + " " + info
-       
+        # Insert version and OS information into tag.
+        try:
+            info = self.split_info(info)
+        except ValueError:
+            return
+        desc, tag = self.split_tag(info[0])
+        if tag:
+            info[0] = "%s<%s,Dv:%s,Os:%s>" % (desc, tag, dtella.VERSION, os.name)
+        else:
+            info[0] = "%s<Dv:%s,Os:%s>" % (desc, dtella.VERSION, os.name)
+        info = '$'.join(info)
+
+        #Insert Version and OS information into the description
+        info = dtella.VERSION + " (" + os.name + ") " + info
+
         # Save my new info
         self.info = info
 
