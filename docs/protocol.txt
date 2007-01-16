@@ -1,0 +1,556 @@
+This file consists of my random sketches of how the Dtella protocol might work.
+Note that it's basically my brainstorming dump file, and parts of it are
+inconsistent, outdated, incomplete, and/or nonsense.
+
+====================================================
+
+nickhash = md5(ipport + session_id + nick)[:4]
+
+nickhash is used to verify that DC messages are only sent to/from
+properly synchronized nodes.
+
+
+Packet numbers are kept for different kinds of messages:
+
+    - status_pktnum is used for status updates.  Any packet with a
+      slightly outdated status number will get ignored by the network.
+    
+    - chat_pktnum is used for messages to the public chat.  If a chat
+      message is received which is not exactly the previous + 1, then
+      delay for a couple seconds to see if the in-sequence packet arrives.
+
+    - general_pktnum is for everything else, because specific order doesn't
+      matter much.
+      
+================= BROADCAST TYPES
+
+Header:
+2-byte type = __
+6-byte forwarder's IPPort
+1-byte hop limit
+1-byte flags (bit 0 = src has been notified)
+6-byte source IPPort
+4-byte packet_id (contents depend on type)
+
+
+* [NS] Node Status Update
+packet_id = status packet number
+2-byte expiration time
+4-byte session ID
+4-byte uptime
+1-byte flags:
+    bit0 = Node is persistent
+1-byte length + nick
+1-byte length + info_string
+
+* [NH] Node Status Hash (keep-alive message)
+packet_id = status packet number
+2-byte expiration time
+4-byte md5(session_id + flags + nick + info)[:4]
+(if a syncd node doesn't understand the hash, then it should reply with an
+ NQ packet and NOT forward the broadcast)
+
+* [NX] Node exiting
+packet_id = session ID
+
+* [NF] Node failure (sent by neighbors)
+src_ipp = failed IPPort
+packet_id = last-seen status packet number
+4-byte session ID
+
+* [CH] chat message
+packet_id = chat packet number
+4-byte nickhash
+1-byte chat flags:
+    bit 0 = '/me' bit
+    bit 1 = notice bit
+2-byte length (max 1024)
++ chat_text
+
+* [SQ] search request
+packet_id = general packet number
+1-byte length
+       + search_string
+
+================ UNICAST TYPES
+
+2-byte type = __
+
+* [AK] acknowledgement
+6-byte sender's IPPort
+1-byte mode
+    (Ping=1, PM=2, Broadcast=3, ...)
+1-byte flags
+    bit 0 = rejected
+8-byte key
+
+* [CA] Connect Active (connecttome)
+6-byte source ipport
+4-byte packet_id
+4-byte source nickhash
+4-byte dest nickhash
+2-byte DC port
+
+* [CP] Connect Passive (revconnecttome)
+6-byte source IPPort
+4-byte packet_id
+4-byte source nickhash
+4-byte dest nickhash
+
+* [PM] private message
+6-byte source ipport
+8-byte ack key
+4-byte source nickhash
+4-byte dest nickhash
+1-byte chat flags:
+    bit 0 = /me bit
+    bit 1 = notice bit
+2-byte length
+       + message_text
+
+* [PF] Possible failure
+6-byte source IPPort
+6-byte maybe-failed IPPort
+4-byte last-seen status packet number
+    
+
+=============================================
+
+
+Persistent nodes are nodes that stay sync'd whenever the Dtella program is open.
+
+Nodes without a DC Client connected can specify a nick in order to keep it
+reserved but invisible, so a persistent node lets you reserve your nick as
+long as your computer is on.
+
+Nonpersistent nodes will disconnect and go idle after 5 or so minutes without
+a DC client.
+
+A DC client hopping onto a sync'd node should be ready in a fraction of a
+a second
+
+Only one DC client connection permitted per Dtella node.  Other connections
+to 127.0.0.1:7314 will be rejected.
+
+
+=============================================)
+Some routers, when sending a packet from the LAN to the router's external
+IP, will give the packet a source address of the router's internal IP.
+We need to detect this on login, and remap the internal IP to the external.
+
+Send this to my own address, just as the sync is beginning:
+
+[EC] - Echo
+2-byte type = EC
+8-byte random stuff
+
+Establish a 3-second timer to receive a response.
+
+If no response arrives, print a warning.
+
+If the response is received from the expected address, do nothing.
+
+If the response comes from some other IP, then any future incoming packets
+from that IP should have their source IP rewritten.
+    
+
+=============================================
+
+UDP Bootstrapping Procedure:
+
+Send out UDP packets to lots of people, from a random port
+those packets should contain your fixed UDP port, and the beginning of your
+node ID
+
+replies come back on the random port with messages like:
+    - ok, pinged normal port
+    - if IP invalid, but key correct, "bad IP"
+    - otherwise, no reply
+
+When an "ok" is sent to the random port, also send to the normal port:
+    - if pinged node isn't sync'd, reply with a packet full of other IPs to try
+    - if it is sync'd reply with:
+        * your ID+IP
+        * ID+IP+Port for the 16 closest online nodes
+
+Need some sort of heuristic to determine when UDP port isn't forwarded properly
+If we get lots of OK's, but never get a reply on the normal port, then
+something's wrong.
+
+Establish neighbor connections with the first 3 available "closest" nodes
+
+=============================================
+
+Distributed Sync Algorithm:
+
+- set of uncontacted nodes
+- set of contated nodes
+
+Every ? seconds:
+    Send a sync request to an uncontacted node
+
+
+
+=============================================
+
+[YQ] Sync Request
+2-byte type = __
+6-byte sending neighbor's IPPort
+1-byte hop limit
+1-byte flags:
+    bit 0 = timeout occurred, retransmit but don't re-forward.
+6-byte src IPPort
+4-byte session ID
+
+
+[YR] Sync Response
+2-byte type = __
+6-byte src IPPort
+4-byte last packet number broadcasted
+
+2-byte expiration time
+4-byte session ID
+4-byte uptime
+1-byte flags:
+    bit0 = Node is persisitent
+1-byte length + nick
+1-byte length + info_string
+
+1-byte contacted neighbor count
+( 6-byte neighbor's IPPort ) *
+1-byte uncontacted neighbor count
+( 6-byte neighbor's IPPort ) *
+
+A contacted neighbor is either:
+    - the neighbor I received your YQ from
+    - a neighbor I forwarded your YQ to
+
+=============================================
+
+Peer discovery algorithm
+
+Cache file stores a list:
+    IPPort + Last seen UNIX time
+
+When running, we have a heap of IPPorts, sorted by last-seen time.
+The results from the DNS query have a time of now()
+
+sentlist = {'IPPort' -> info}
+info has:
+    .status = {no reply, ok reply, error reply, mainport reply, timeout}
+    .delayedcall = status timeout, or mainport timeout
+
+TryOne:
+    pop off node
+    if it's in the "tried it" list, go back
+    add node to "tried it" list
+    send init packet to address
+    callLater(50ms, TryOne)
+
+received_packet_random_port:
+    if 'IR':
+        if .status != no reply:
+            return
+
+        increment count for My_IP in iplist
+
+        if OK:
+            .status = ok reply
+            callLater(noMainPortReply, 5sec)
+        if BADIP:
+            .status = error reply
+            ??
+        if BADKEY:
+            .status = error reply
+            ??
+
+received_packet_main_port:
+    if .status not (no reply || ok reply):
+        shouldn't happen, return.
+
+    cancel delayedcall
+
+    update this node's lastseen time = now
+
+    increment count for My_IP in iplist
+    
+    if 'NB':
+        add all neighbors to initial neighbor list
+        call maybeStartConnecting()
+
+    if 'PC':
+        find maximum time value
+        if maxtime > now, then subtract all times by maxtime-now
+        subtract all times by 1hr
+        add nodes to heap
+        
+maybeStartConnecting():
+    increment good_count
+    if good_count >= 5:
+        startConnecting()
+    if STARTCONNECT delayedcall doesn't exist yet:
+        callLater(startConnecting, 3sec)
+
+startConnecting():
+    if STARTCONNECT delayedcall hasn't fired, cancel it
+
+    cancel the TryOne delayedcall, to stop sending requests
+    reset the node heap, put all the sentlist stuff back into it.
+
+    determine my IP:
+        count up the My_IPs in iplist, and pick the one with the most hits
+
+    set my node ID
+    look at neighbor list, sort by closeness
+    every 50ms, send an "I want you" ping to a neighbor, in order of closeness
+
+    If we have 3 neighbors:
+        stop sending pings
+        goto sync mode
+
+    if we've pinged every neighbor, enter sync mode in 3 seconds?
+
+
+=============================================
+
+Initial Peer Discovery packets
+
+* [IQ] Initialize Request (send from random port)
+4-byte target's IP address
+2-byte my regular port
+
+
+This is sent back to the dtella port:
+    
+* [IR] Initialize Response
+6-byte my ipport (IP comes straight from the IQ)
+4-byte your IP address
+1-byte Response code:
+    00 = Ok
+    01 = IP not permitted
+
+1-byte # of online nodes
+(
+6-byte IPPort
+4-byte age (seconds)
+)*
+
+1-byte # of other nodes
+(
+6-byte IPPort
+4-byte age (seconds)
+)*
+
+
+This is sent to the temporary port
+* [IC] Initialization Peer Cache
+6-byte my ipport (IP comes straight from the IQ)
+4-byte your IP address
+1-byte Response code:
+    00 = Ok
+    01 = IP not permitted
+
+1-byte # of other nodes
+(
+6-byte IPPort
+4-byte age (seconds)
+)*
+
+=============================================
+
+Node-Node communication
+
+Node X finds its "closest" neighbors by this algorithm:
+    for each N:
+        distance = md5(smaller(X,N) . larger(X,N))
+
+    sort the distance strings, and pick the lowest values
+
+The "closeness" thing is sort of an anti-DHT.  it basically gives every node
+a pseudorandom but consistent list of nodes to become neighbors with
+
+* [PG] Ping
+2-byte type = PG
+6-byte src IPPort
+1-byte flags:
+
+    bit0 = the "I want you" bit.  Set if the target is one of the closest
+           nodes from the perspective of the sender.  Pings should keep going
+           back and forth as long as at least one node prefers the other.
+
+    bit1 = GOTACK. "I'll accept your broadcasts"  
+
+    bit2 = REQ (Ack Request) bit.
+           This is set if ack_key contains a 4-byte ID number which is used
+           in the ping AK packet.
+
+    bit3 = ACK (Ack reply) bit.
+
+    bit4 = NBLIST.  set if a neighbor list is included
+
+
+4-byte req_key
+4-byte ack_key
+
+1-byte length
++ list of neighbors
+
+
+Connection criteria:
+    
+    Always try stay in contact with the 3 closest nodes.
+
+    Always stay in contact with anyone who says that we're a closest node
+    to them (closeness isn't exactly symmetrical)
+
+    If the above criteria don't result in at least 3 working connections
+    then establish "I want you" connections with the next closest nodes
+    until a minimum of 3 good connections exist.
+
+
+
+==================================================
+
+IRC Bridge Packets:
+
+2-byte type = __
+6-byte forwarder's IPPort
+1-byte hop limit
+1-byte flags
+6-byte source IPPort
+8-byte bridge sequence number
+ ...
+?? byte signature
+
+
+* [BS] Bridge Status Update
+
+2-byte expiration time
+4-byte session ID
+4-byte uptime
+1-byte flags:
+    bit0 = Node is persistent (always set)
+
+1-byte # of block hashes
+16*N bytes - block hashes
+
+2-byte public key length
++ public key
+
+
+* [BB] Bridge data block
+2-byte length
+N-byte data
+
+
+* [BC] Bridge Change/Chat
+2-byte length of chunks
++ chunk sequence
+
+
+* [BX] Bridge exiting
+--
+
+==============
+
+Bridge Private Stuff
+
+* [bC] - Bridge Change/Chat (private)
+6-byte source ipport
+8-byte sequence number
+4-byte dest nickhash
+2-byte length of chunks
++ ??-byte chunk data
+??-byte signature
+
+* [bY] - Bridge Sync Response (private)
+6-byte source ipport
+8-byte sequence number
+2-byte expiration time
+4-byte session ID
+4-byte uptime
+1-byte flags:
+    bit0 = Node is persistent (always set)
+
+1-byte # of block hashes
+16*N bytes - block hashes
+
+2-byte public key length
++ public key
+
+1-byte contacted neighbor count
+( 6-byte IPP ) *
+1-byte uncontacted neighbor count
+( 6-byte IPP ) *
+
+??-byte signature
+
+* [bQ] - Bridge block request (private)
+6-byte source IPPort
+16-byte block hash
+
+* [bB] - Bridge data block (private)
+6-byte source IPPort
+2-byte block length
++ block data
+
+* [bP] private message (to bridge)
+6-byte source ipport
+8-byte ack key
+4-byte source nickhash
+1-byte dest nick length
+  + dest nick
+1-byte flags:
+    ?
+2-byte length
+       + message_text
+
+
+==============
+
+chunks:
+
+'C' - chat text
+4-byte chat seq number (used by ChatMessageSequencer)
+1-byte chat flags
+1-byte nick length
++ N-byte nick
+2-byte length
++ N-byte text
+
+'B' - ban
+4-byte IP
+1-byte flag/subnet:
+    bit 7 = ban/unban flag
+    bits 5..0 = subnet length (0..32)
+
+'N' - nick info
+1-byte mode ('\x00' == offline)
+1-byte nick length
++ N-byte nick
+
+'I' - mode info
+1-byte mode byte
+1-byte description length
++ N-byte description
+
+'M' - private message:
+1-byte flags:
+    bit 0 = '/me' bit
+    bit 1 = notice bit
+1-byte source nick length
++ source nick
+2-byte text length
++ text
+
+'K' - kick
+6-byte ipp
+4-byte pktnum
+1-byte flags:
+    bit 0 = automatic rejoin after a while
+1-byte nick len (kicker)
++ nick
+2-byte reason len
++ reason
+
+'R' - trigger node reboot

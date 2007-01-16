@@ -1,0 +1,56 @@
+Different States?
+
+1 Offline, no desire to reconnect
+2 Offline, connect after a timeout because previous attempt failed
+3 Offline, waiting for blockers (DNS and/or changeUDP)
+
+4 Online, ICM
+5 Online, Syncing
+6 Online, Syncd
+
+
+State 2 + Received IQ:
+	clear reconnect timer
+	goto 6 as the sole node
+
+
+When DC client disconnects:
+	If not persistent:
+		clear reconnect timer
+		if online, set 5-minute disconnect timer
+
+When a disconnect/failure happens:
+	clear the disconnect timer.
+	call "SetReconnectTimer"
+
+"SetReconnectTimer":
+	If ((dc client) or (persistent)) and (no blockers):
+		schedule reconnect
+
+When DC client Connects, or startup in persistent mode:
+	call "ConnectionDesired"
+
+"ConnectionDesired":
+	If in {4,5,6} stay there
+
+	If DNS info is stale or missing:
+		Do DNS query
+		add a blocker for DNS
+
+	call "ConnectIfNoBlockers"
+
+When the reconnect timer fires:
+	call "ConnectIfNoBlockers"
+
+When a blocker is added:
+	disconnect
+	clear disconnect timer
+	clear reconnect timer
+
+When a blocker is removed:
+	call "ConnectIfNoBlockers"
+
+"ConnectIfNoBlockers":
+	If there are no blockers left:
+		if (dc client) or (persistent):
+			launch ICM (goto 4)
