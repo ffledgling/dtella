@@ -197,9 +197,9 @@ class DCHandler(LineOnlyReceiver):
             return
         desc, tag = self.split_tag(info[0])
         if tag:
-            info[0] = "%s<%s,Dv:%s,Os:%s>" % (desc, tag, dtella.VERSION, os.name)
+            info[0] = "%s<%s,Dv:%s(%s)>" % (desc, tag, dtella.VERSION, os.name)
         else:
-            info[0] = "%s<Dv:%s,Os:%s>" % (desc, dtella.VERSION, os.name)
+            info[0] = "%s<Dv:%s(%s)>" % (desc, dtella.VERSION, os.name)
         info = '$'.join(info)
 
         #Insert Version and OS information into the description

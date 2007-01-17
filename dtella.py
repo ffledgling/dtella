@@ -37,8 +37,6 @@ except ImportError:
 
 # TODO: Add a REJOIN (?) command to let the user retry a collided nick
 
-# TODO: Put OS type into the tag?
-
 # TODO: Make the delay between NH updates grow with the size of the network
 
 # TODO: Ping ack delay should affect the retransmit time for broadcasts?

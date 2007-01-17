@@ -2,7 +2,7 @@
 
 network_key = 'PurdueDtella-test8'
 
-dnshost = 'dtella-test.yi.org'
+dnshost = 'config.dtella.org'
 
 def validateIP(ip):
     # ip is a tuple of 4 integers (a, b, c, d)
