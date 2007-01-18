@@ -2,6 +2,7 @@ import dtella_local
 
 import struct
 import random
+import os
 
 from twisted.python.runtime import seconds
 
@@ -88,6 +89,13 @@ def dcall_discard(obj, attr):
 def dcall_timeleft(d):
     return d.getTime() - seconds()
 
+
+def getOS():
+    os_map = {'nt':'W', 'posix':'L', 'mac':'M'}
+    try:
+        return os_map[os.name]
+    except KeyError:
+        return '?'
 
 
 ###########################################################################

@@ -2,10 +2,9 @@ from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
 
-from dtella_util import Ad, validateNick
+from dtella_util import Ad, validateNick, getOS
 import dtella
 import struct
-import os
 
 
 
@@ -191,19 +190,18 @@ class DCHandler(LineOnlyReceiver):
             self.state = 'ready'
 
         # Insert version and OS information into tag.
+        ver_string = "%s[%s]" % (dtella.VERSION, getOS())
+
         try:
             info = self.split_info(info)
         except ValueError:
             return
         desc, tag = self.split_tag(info[0])
         if tag:
-            info[0] = "%s<%s,Dt:%s(%s)>" % (desc, tag, dtella.VERSION, os.name)
+            info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
         else:
-            info[0] = "%s<Dt:%s(%s)>" % (desc, dtella.VERSION, os.name)
+            info[0] = "%s<Dt:%s>" % (desc, ver_string)
         info = '$'.join(info)
-
-        #Insert Version and OS information into the description
-        info = dtella.VERSION + " (" + os.name + ") " + info
 
         # Save my new info
         self.info = info
