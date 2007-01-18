@@ -52,8 +52,12 @@ class DNSHandler(object):
         d = self.resolver.query(
             dns.Query(dtella_local.dnshost, type=dns.TXT))
 
+        def err(text):
+            print "DNS Failed"
+            self.main.removeBlocker('dns')
+
         d.addCallback(self.handleTXT)
-        d.addErrback(self.handleTXT_Error)
+        d.addErrback(err)
 
 
     def handleTXT(self, reply):
@@ -79,13 +83,6 @@ class DNSHandler(object):
         print "handled"
 
         self.lastUpdate = seconds()
-
-        self.main.removeBlocker('dns')
-
-
-    def handleTXT_Error(self, data):
-        print "DNS ERROR"
-        print data
 
         self.main.removeBlocker('dns')
 
@@ -137,4 +134,29 @@ class DNSHandler(object):
             self.main.state.refreshPeer(ad, age)
 
 
+    def lookupIP(self, ad, cb):
+        # Try to determine the hostname of the provided address.
+        # When done, call the cb function.  If it fails, the
+        # argument is None.
+        
+        revip = '.'.join('%d' % o for o in reversed(ad.ip))
+        host = "%s.in-addr.arpa" % revip
+
+        d = self.resolver.query(
+            dns.Query(host, type=dns.PTR))
+
+        def success(reply):
+            try:
+                hostname = reply[0][0].payload.name
+                if not hostname:
+                    raise ValueError
+            except:
+                hostname = None
+            cb(hostname)
+
+        def err(why):
+            cb(None)
+
+        d.addCallback(success)
+        d.addErrback(err)
 

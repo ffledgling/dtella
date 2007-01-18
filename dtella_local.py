@@ -9,3 +9,5 @@ def validateIP(ip):
     # Return True if the IP belongs to this site
     return ip[0] == 128 and ip[1] in (10,46,210,211)
 
+def hostnameToLocation(hostname):
+    pass
