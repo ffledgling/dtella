@@ -553,7 +553,7 @@ class DtellaBot(object):
             return
 
         def format_out(line):
-            for l in word_wrap(line, 80):
+            for l in word_wrap(line):
                 if l:
                     out(l)
                 else:
@@ -679,14 +679,8 @@ class DtellaBot(object):
     def handleCmd_REBOOT(self, out, args, prefix):
 
         if len(args) == 0:
-            
             out("Rebooting Node...")
-
             self.main.shutdown(final=True)
-
-            if not prefix:
-                self.main.enableCopyStatusToPM()
-                
             self.main.newConnectionRequest()
             return
 
@@ -709,7 +703,6 @@ class DtellaBot(object):
             else:
                 if self.main.changeUDPPort(port):
                     out("Changing UDP port to: %d." % port)
-                    self.main.enableCopyStatusToPM()
                 else:
                     out("Can't change UDP port; busy.")
                 return
@@ -727,7 +720,6 @@ class DtellaBot(object):
                     out("Added to peer cache: %s" % ad.getTextIPPort())
 
                     # Jump-start stuff if it's not already going
-                    self.main.enableCopyStatusToPM()
                     self.main.newConnectionRequest()
                 else:
                     out("The address '%s' is not permitted on this network."
@@ -757,7 +749,6 @@ class DtellaBot(object):
                 if self.main.osm:
                     self.main.osm.updateMyInfo()
 
-                self.main.enableCopyStatusToPM()
                 self.main.newConnectionRequest()
                 return
 

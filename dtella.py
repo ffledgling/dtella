@@ -22,7 +22,7 @@ import dtella_crypto
 import dtella_dnslookup
 import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
-                         validateNick)
+                         validateNick, word_wrap)
 
 try:
     import dtella_bridgeclient
@@ -2117,8 +2117,6 @@ class OnlineStateManager(object):
         self.main.showLoginStatus("Sync Complete; You're Online!",
                                   counter='inc')
 
-        self.main.disableCopyStatusToPM()
-
 
     def refreshNodeStatus(self, src_ipp, pktnum, expire, sesid, uptime,
                           persist, nick, info):
@@ -3600,7 +3598,6 @@ class DtellaMain(object):
         # Login counter (just for eye candy)
         self.login_counter = 0
         self.login_text = ""
-        self.copy_status_to_pm = False
 
         # DC Handler(s)
         self.dch = None
@@ -3657,7 +3654,7 @@ class DtellaMain(object):
         if self.ph.transport:
             self.ph.transport.stopListening().addCallback(cb)
         else:
-            cb(None)
+            reactor.callLater(0, cb, None)
 
         return True
 
@@ -3667,11 +3664,23 @@ class DtellaMain(object):
             reactor.listenUDP(self.state.udp_port, self.ph)
         except twisted.internet.error.BindError:
             # TODO: more informative
-            self.showLoginStatus("Failed to bind UDP Port %d.  You should"
-                                 " probably go pick a different one.  And"
-                                 " I should make this error message more"
-                                 " informative."
-                                 % self.state.udp_port)
+
+            self.showLoginStatus("*** FAILED TO BIND UDP PORT ***")
+
+            text = (
+                "Dtella was not able to listen on UDP port %d. One possible "
+                "reason for this is that you've tried to make your DC "
+                "client use the same UDP port as Dtella. Two programs "
+                "are not allowed listen on the same port.  To tell Dtella "
+                "to use a different port, type !UDP followed by a number. "
+                "Note that if you have a firewall or router, you will have "
+                "to tell it to let traffic through on this port."
+                % self.state.udp_port
+                )
+
+            for line in word_wrap(text):
+                self.showLoginStatus(line)
+            
             if 'udp_bind' not in self.blockers:
                 self.addBlocker('udp_bind')
         else:
@@ -3782,22 +3791,30 @@ class DtellaMain(object):
     def reportDeadPort(self):
 
         port = self.state.udp_port
-        
-        msg = [
-        "",
-        "*** PORT FORWARD REQUIRED ***",
-        "Dtella needs an available UDP port in order to function.",
-        "You must configure your router to forward UDP port %d to this computer." % port,
-        "",
-        "If you'd like to switch to a different port, please type it into the chat box:",
-        "(er, not implemented yet.  send a PM to *Dtella with 'udpport #####' instead.)",
-        ]
 
-        for line in msg:
+        self.showLoginStatus("*** UDP PORT FORWARD REQUIRED ***")
+
+        text = (
+            "In order for Dtella to communicate properly, it needs to "
+            "receive UDP traffic from the Internet.  Dtella is currently "
+            "listening on UDP port %d, but the packets appear to be "
+            "getting blocked, most likely by a firewall or a router. "
+            "If this is the case, then you will have to configure your "
+            "firewall or router to allow UDP traffic through on this port. "
+            "You may tell Dtella to use a different port from now on by "
+            "typing !UDP followed by a number." % self.state.udp_port
+            )
+        
+        for line in word_wrap(text):
             self.showLoginStatus(line)
 
 
     def showLoginStatus(self, text, counter=None):
+
+        # counter can be:
+        # - int: set the counter to this value
+        # - 'inc': increment from the previous counter value
+        # - None: don't show a counter
 
         if type(counter) is int:
             self.login_counter = counter
@@ -3805,36 +3822,15 @@ class DtellaMain(object):
             self.login_counter += 1
 
         if counter is not None:
+            # Prepend a number
             text = "%d. %s" % (self.login_counter, text)
+
+            # This text will be remembered for new DC clients
             self.login_text = text
         
         dch = self.dch
         if dch:
             dch.pushStatus(text)
-
-            if self.copy_status_to_pm:
-                dch.bot.say(text)
-
-
-    def enableCopyStatusToPM(self):
-        # If we're not already syncd, then start copying status to the
-        # bot's PM window until one of the following happens:
-        #
-        # - The network gets connected
-        # - The DC client disconnects
-        # - shutdown() is called for whatever reason
-        
-        osm = self.osm
-        if not (osm and osm.syncd):
-            self.copy_status_to_pm = True
-
-
-    def disableCopyStatusToPM(self, final_shutdown=False):
-        if self.copy_status_to_pm:
-            self.copy_status_to_pm = False
-
-            if self.dch and not final_shutdown:
-                self.dch.bot.say("Switch to the main chat window for future status messages.")
 
 
     def shutdown(self, final=False):
@@ -3842,8 +3838,6 @@ class DtellaMain(object):
 
         if self.icm or self.osm:
             self.showLoginStatus("Shutting down.")
-
-        self.disableCopyStatusToPM(final)
 
         dcall_discard(self, 'reconnect_dcall')
         dcall_discard(self, 'disconnect_dcall')
@@ -3896,7 +3890,7 @@ class DtellaMain(object):
 
         self.newConnectionRequest()
 
-        if oldtext and not self.login_text:
+        if self.osm and oldtext and not self.login_text:
             # The connection request didn't trigger any text, so show
             # the previous status to this new DC client.
             self.login_text = oldtext
@@ -3907,7 +3901,6 @@ class DtellaMain(object):
         # DC client has left.
         
         self.dch = None
-        self.disableCopyStatusToPM()
 
         if self.osm:
             # Announce the DC client's departure

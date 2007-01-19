@@ -125,7 +125,7 @@ def split_tag(desc):
 
 
 
-def word_wrap(line, max_len):
+def word_wrap(line, max_len=80):
 
     lines = []
 

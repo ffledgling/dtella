@@ -1026,12 +1026,6 @@ class DtellaBridgeMain(object):
     def showLoginStatus(self, text, counter=None):
         print text
 
-    def disableCopyStatusToPM(self):
-        pass
-
-    def enableCopyStatusToPM(self, final_shutdown=False):
-        pass
-
 
     def shutdown(self, final=False):
         # Do a total shutdown of this Dtella node
