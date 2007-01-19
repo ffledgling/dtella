@@ -113,11 +113,6 @@ class DCHandler(LineOnlyReceiver):
             self.pushInfo(nick, info)
             return
 
-        if nick == self.nick:
-            if self.info:
-                self.pushInfo(nick, self.info)
-            return
-
         if not self.main.getOnlineDCH():
             return
 
@@ -159,20 +154,6 @@ class DCHandler(LineOnlyReceiver):
             self.transport.loseConnection()
             return
 
-        # Insert version and OS information into tag.
-        ver_string = "%s[%s]" % (dtella.VERSION, get_os())
-
-        try:
-            info = split_info(info)
-        except ValueError:
-            return
-        desc, tag = split_tag(info[0])
-        if tag:
-            info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
-        else:
-            info[0] = "%s<Dt:%s>" % (desc, ver_string)
-        info = '$'.join(info)
-
         # Save my new info
         self.info = info
 
@@ -191,6 +172,44 @@ class DCHandler(LineOnlyReceiver):
             # then send the full Dtella nick list.
             if logging_in:
                 self.d_GetNickList()
+
+
+    def formatMyInfo(self):
+        # Build and return a hacked-up version of my info string.
+
+        if not self.info:
+            return None
+
+        # Insert version and OS information into tag.
+        ver_string = "%s[%s]" % (dtella.VERSION, get_os())
+
+        # Split info string
+        try:
+            info = split_info(self.info)
+        except ValueError:
+            return None
+
+        # Update tag
+        desc, tag = split_tag(info[0])
+        if tag:
+            info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
+        else:
+            info[0] = "%s<Dt:%s>" % (desc, ver_string)
+
+        # Try to get my location name.
+        try:
+            ad = Ad().setRawIPPort(self.main.osm.me.ipp)
+            loc = self.main.location[ad.getTextIP()]
+        except (AttributeError, KeyError):
+            loc = None
+
+        print repr(loc)
+
+        # If I got a location name, splice it into my connection field
+        if loc:
+            info[2] = loc + info[2][-1:]
+
+        return '$'.join(info)
 
 
     def d_Search(self, addr_string, search_string):
@@ -217,8 +236,6 @@ class DCHandler(LineOnlyReceiver):
         osm.mrm.newMessage(''.join(packet), tries=4)
         
         self.pushSearchRequest(osm.me.ipp, search_string)
-
-        #self.sendLine("$SR someguy2 My Received Files\\03 - Teardrop.mp3\x055294332 1/1\x05TTH:EDHQFNLBKI5ATAICGCSJDYZQEWVUEHHH3SLLBIY (127.0.0.1:7314)")
 
 
     def d_PrivateMsg(self, nick, _1, _2, _3, text):
@@ -605,7 +622,7 @@ class DtellaBot(object):
             ),
         
         "UDP":(
-            "<PORT>",
+            "<port>",
             "Specify a port number between 1-65536 to change the UDP port "
             "that Dtella uses for peer-to-peer communication.  If you don't "
             "provide a port number, this will display the port number which "
@@ -613,7 +630,7 @@ class DtellaBot(object):
             ),
 
         "ADDPEER":(
-            "<IP:PORT>",
+            "<ip>:<port>",
             "If Dtella is unable to locate any neighbor nodes using the "
             "remote config data or your local neighbor cache, then you "
             "can use this command to manually add the address of an existing "

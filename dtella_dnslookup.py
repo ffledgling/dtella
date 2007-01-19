@@ -134,7 +134,7 @@ class DNSHandler(object):
             self.main.state.refreshPeer(ad, age)
 
 
-    def lookupIP(self, ad, cb):
+    def ipToHostname(self, ad, cb):
         # Try to determine the hostname of the provided address.
         # When done, call the cb function.  If it fails, the
         # argument is None.
@@ -147,7 +147,7 @@ class DNSHandler(object):
 
         def success(reply):
             try:
-                hostname = reply[0][0].payload.name
+                hostname = reply[0][0].payload.name.name
                 if not hostname:
                     raise ValueError
             except:

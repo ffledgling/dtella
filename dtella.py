@@ -2289,7 +2289,7 @@ class OnlineStateManager(object):
         persist = self.main.state.persistent
 
         if dch:
-            info = dch.info
+            info = dch.formatMyInfo()
             nick = dch.nick
         else:
             info = ''
@@ -3603,6 +3603,9 @@ class DtellaMain(object):
         self.dch = None
         self.pending_dch = None
 
+        # Location map: ipp->string, usually only contains 1 entry
+        self.location = {}
+
         # State Manager
         self.state = dtella_state.StateManager(self, 'dtella.state')
 
@@ -3779,6 +3782,8 @@ class DtellaMain(object):
             print "I don't know who I am!"
             return
 
+        self.queryLocation(my_ipp)
+
         if dtella_bridgeclient:
             bcm = dtella_bridgeclient.BridgeClientManager(self)
         else:
@@ -3786,6 +3791,53 @@ class DtellaMain(object):
 
         # Enable the object that keeps us online
         self.osm = OnlineStateManager(self, my_ipp, node_ipps, bcm=bcm)
+
+
+    def queryLocation(self, my_ipp):
+        # Try to convert the IP address into a human-readable location name.
+        # This might be slightly more complicated than it really needs to be.
+
+        ad = Ad().setRawIPPort(my_ipp)
+        my_ip = ad.getTextIP()
+
+        skip = False
+        for ip,loc in self.location.items():
+            if ip == my_ip:
+                skip = True
+            elif loc:
+                # Forget old entries
+                del self.location[ip]
+
+        # If we already had an entry for this IP, then don't start
+        # another lookup.
+        if skip:
+            return
+
+        # A location of None indicates that a lookup is in progress
+        self.location[my_ip] = None
+
+        def cb(hostname):
+            
+            # Use dtella_local to transform this hostname into a
+            # human-readable location
+            if hostname:
+                loc = dtella_local.hostnameToLocation(hostname)
+            else:
+                loc = None
+
+            # If we got a location, save it, otherwise dump the
+            # dictionary entry
+            if loc:
+                self.location[my_ip] = loc
+            else:
+                del self.location[my_ip]
+
+            # Maybe send an info update
+            if self.osm:
+                self.osm.updateMyInfo()
+
+        # Start lookup
+        self.dnsh.ipToHostname(ad, cb)
 
 
     def reportDeadPort(self):
