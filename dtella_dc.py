@@ -2,7 +2,8 @@ from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
 
-from dtella_util import Ad, validateNick, getOS
+from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
+                         split_tag)
 import dtella
 import struct
 
@@ -151,32 +152,6 @@ class DCHandler(LineOnlyReceiver):
         self.sendLine("$OpList %s$$" % self.bot.nick)
 
 
-    def split_info(self, info):
-        # Split a MyINFO string
-        # [0:'description<tag>', 1:' ', 2:'speed_', 3:'email', 4:'sharesize', 5:'']
-
-        if info:
-            info = info.split('$',6)
-            if len(info) == 6:
-                return info
-
-        # Too many or too few parts
-        raise ValueError
-
-
-    def split_tag(self, desc):
-        # Break 'description<tag>' into ('description','tag')
-        tag = ''
-        if desc[-1:] == '>':
-            try:
-                pos = desc.rindex('<')
-                tag = desc[pos+1:-1]
-                desc = desc[:pos]
-            except ValueError:
-                pass
-        return desc, tag
-
-
     def d_MyInfo(self, _1, _2, info):
 
         if not self.nick:
@@ -190,13 +165,13 @@ class DCHandler(LineOnlyReceiver):
             self.state = 'ready'
 
         # Insert version and OS information into tag.
-        ver_string = "%s[%s]" % (dtella.VERSION, getOS())
+        ver_string = "%s[%s]" % (dtella.VERSION, get_os())
 
         try:
-            info = self.split_info(info)
+            info = split_info(info)
         except ValueError:
             return
-        desc, tag = self.split_tag(info[0])
+        desc, tag = split_tag(info[0])
         if tag:
             info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
         else:
@@ -244,7 +219,13 @@ class DCHandler(LineOnlyReceiver):
 
     def d_PrivateMsg(self, nick, _1, _2, _3, text):
         if nick == self.bot.nick:
-            self.bot.commandInput(text)
+            out = self.bot.say
+
+            # No ! is needed for commands in the private message context
+            if text[:1] == '!':
+                text = text[1:]
+            
+            self.bot.commandInput(out, text)
             return
 
         if not self.main.getOnlineDCH():
@@ -313,6 +294,16 @@ class DCHandler(LineOnlyReceiver):
 
 
     def d_PublicMsg(self, text):
+
+        # Route commands to the bot
+        if text[:1] == '!':
+
+            # TODO: this looks funny if the command fails
+            self.pushChatMessage(self.nick, text)
+            
+            out = self.pushStatus
+            if self.bot.commandInput(out, text[1:], '!'):
+                return
 
         if not self.main.getOnlineDCH():
             self.pushStatus("Chat: Not online!")
@@ -524,93 +515,172 @@ class DtellaBot(object):
         self.dch.pushPrivMsg(self.nick, txt)
 
 
-    def commandInput(self, txt):
-        cmd = txt.upper().split()
+    def commandInput(self, out, line, prefix=''):
+
+        cmd = line.upper().split()
 
         if not cmd:
             return
 
+        def format_out(line):
+            for l in word_wrap(line, 80):
+                if l:
+                    out(l)
+                else:
+                    out(" ")
+
         try:
             f = getattr(self, 'handleCmd_' + cmd[0])
         except AttributeError:
-            self.say("Unknown command '%s'.  Try HELP." % cmd[0])
+            if prefix:
+                return False
+            else:
+                out("Unknown command '%s'.  Try %sHELP." % (cmd[0], prefix))
+        else:
+            f(format_out, cmd[1:], prefix)
+
+        return True
+
+    
+    minihelp = [
+        ("UDP","Change Dtella's UDP Port"),
+        ("ADDPEER","Add the IP:Port of another node to the neighbor cache"),
+        ("REBOOT","Exit from the network and immediately reconnect"),
+        ("PERSISTENT","Enable/Disable persistent mode")
+        ]
+
+
+    bighelp = {
+        "UDP":("[PORT #]",
+            
+            "Specify a port number between 1-65536 to change the UDP port "
+            "that Dtella uses for peer-to-peer communication.  If you don't "
+            "provide a port number, this will display the port number which "
+            "is currently in use."
+            ),
+
+        "ADDPEER":("[IP_ADDRESS:PORT]",
+
+            "If Dtella is unable to locate any neighbor nodes automatically, "
+            "this command can be used to manually add the address of "
+            "an existing node on the network that you know about."
+            ),
+
+        "REBOOT":("",
+            
+            "This command will reboot the ..."
+            ),
+
+        "PERSISTENT":("[ON | OFF]",
+            
+            "bla bla bla"
+            )
+        }
+
+
+    def handleCmd_HELP(self, out, args, prefix):
+
+        if len(args) == 0:
+            out("This is your local Dtella bot.  You can send messages here "
+                "to control the various features of Dtella.  A list of "
+                "commands is provided below.  Note that you can PM a command "
+                "directly to the %s user, or enter it in the main chat "
+                "window prefixed with an exclamation point (!)" % self.nick)
+            out("")
+            out("For more detailed information, type: "
+               "%sHELP <command>" % prefix)
+            out("")
+
+            for command, description in self.minihelp:
+                out("  %s%s - %s" % (prefix, command, description))
+
+            out("")
+
+        else:
+            key = ' '.join(args)
+
+            # If they use a !, strip it off
+            if key[:1] == '!':
+                key = key[1:]
+
+            try:
+                (head, body) = self.bighelp[key]
+            except KeyError:
+                out("Sorry, no help available for '%s'." % key)
+            else:
+                out("Syntax: %s%s %s" % (prefix, key, head))
+                out("")
+                out(body)
+
+
+    def handleCmd_REBOOT(self, out, args, prefix):
+
+        if len(args) != 0:
+            out("REBOOT does not accept any arguments.")
             return
-
-        f(cmd[1:])
-
         
-    def handleCmd_HELP(self, args):
-        self.say("This is your local Dtella bot.  You can send messages here")
-        self.say("to control the various features of Dtella.  For more")
-        self.say("information on a specific command, say HELP followed by")
-        self.say("one of the commands below:")
-        self.say(" ")
-        self.say("   UDPPORT - Change Dtella's UDP Port")
-        self.say("   ADDPEER - Add the IP:Port of another peer")
-        self.say("   REBOOT - Shut down and reconnect this node")
-        self.say("   PERSISTENT - Enable/Disable persistent mode")
-        self.say(" ")
+        out("Rebooting Node...")
 
-
-    def handleCmd_REBOOT(self, args):
-        self.say("Rebooting Node...")
         self.main.shutdown(final=True)
-        
-        self.main.enableCopyStatusToPM()
+
+        if not prefix:
+            self.main.enableCopyStatusToPM()
+            
         self.main.newConnectionRequest()
 
 
-    def handleCmd_UDPPORT(self, args):
+    def handleCmd_UDP(self, out, args, prefix):
         if len(args) == 1:
             try:
                 port = int(args[0])
                 if not 1 <= port <= 65535:
                     raise ValueError
             except ValueError:
-                self.say("UDPPORT must be followed by a port number between 1 and 65535")
+                out("%sUDP must be followed by a port number between 1 and 65535" % prefix)
             else:
                 if self.main.changeUDPPort(port):
-                    self.say("UDP port has been changed to %d." % port)
+                    out("UDP port has been changed to %d." % port)
                     self.main.enableCopyStatusToPM()
                 else:
-                    self.say("UDP port was not changed; busy.")
+                    out("UDP port was not changed; busy.")
         else:
-            self.say("Dtella is currently using UDP port %d" % self.main.state.udp_port)
+            out("Dtella is currently using UDP port %d" % self.main.state.udp_port)
 
 
-    def handleCmd_ADDPEER(self, args):
+    def handleCmd_ADDPEER(self, out, args, prefix):
 
         if len(args) == 1:
             try:
                 ad = Ad().setTextIPPort(args[0])
                 if ad.validate():
                     self.main.state.refreshPeer(ad, 0)
-                    self.say("Added to peer cache: %s" % ad.getTextIPPort())
+                    out("Added to peer cache: %s" % ad.getTextIPPort())
 
                     # Jump-start stuff if it's not already going
                     self.main.enableCopyStatusToPM()
                     self.main.newConnectionRequest()
                     return
                 else:
-                    self.say("That IP is not permitted on this network")
+                    out("That IP is not permitted on this network")
             except ValueError:
                 pass
 
-        self.say("ADDPEER must be followed by an IP:Port")
+        out("ADDPEER must be followed by an IP:Port")
 
-    def handleCmd_PERSISTENT(self, args):
+
+    def handleCmd_PERSISTENT(self, out, args, prefix):
         if len(args) == 0:
             if self.main.state.persistent:
-                self.say("Persistent mode is currently ON."
+                out("Persistent mode is currently ON."
                          "  Type PERSISTENT OFF to turn it off.")
             else:
-                self.say("Persistent mode is currently OFF."
+                out("Persistent mode is currently OFF."
                          "  Type PERSISTENT ON to turn it on.")
             return
 
         if len(args) == 1:
             if args[0] == 'ON':
-                self.say("Persistent mode is now ON.")
+                out("Persistent mode is now ON.")
                 self.main.state.persistent = True
                 self.main.state.saveState()
 
@@ -622,7 +692,7 @@ class DtellaBot(object):
                 return
 
             elif args[0] == 'OFF':
-                self.say("Persistent mode is now OFF.")
+                out("Persistent mode is now OFF.")
                 self.main.state.persistent = False
                 self.main.state.saveState()
 
@@ -630,6 +700,6 @@ class DtellaBot(object):
                     self.main.osm.updateMyInfo()
                 return
                 
-        self.say("PERSISTENT must be followed by ON or OFF.")
+        out("PERSISTENT must be followed by ON or OFF.")
 
 

@@ -90,7 +90,7 @@ def dcall_timeleft(d):
     return d.getTime() - seconds()
 
 
-def getOS():
+def get_os():
     os_map = {'nt':'W', 'posix':'L', 'mac':'M'}
     try:
         return os_map[os.name]
@@ -98,8 +98,63 @@ def getOS():
         return '?'
 
 
-###########################################################################
+def split_info(info):
+    # Split a MyINFO string
+    # [0:'description<tag>', 1:' ', 2:'speed_', 3:'email', 4:'sharesize', 5:'']
 
+    if info:
+        info = info.split('$',6)
+        if len(info) == 6:
+            return info
+
+    # Too many or too few parts
+    raise ValueError
+
+
+def split_tag(desc):
+    # Break 'description<tag>' into ('description','tag')
+    tag = ''
+    if desc[-1:] == '>':
+        try:
+            pos = desc.rindex('<')
+            tag = desc[pos+1:-1]
+            desc = desc[:pos]
+        except ValueError:
+            pass
+    return desc, tag
+
+
+
+def word_wrap(line, max_len):
+
+    lines = []
+
+    words = line.split(' ')
+    i = 0
+
+    while i < len(words):
+        cur_line = None
+
+        while i < len(words):
+            word = words[i]
+
+            if cur_line is None:
+                cur_line = ''
+            else:
+                word = ' ' + word
+                if len(cur_line) + len(word) > max_len:
+                    break
+            
+
+            cur_line += word
+            i += 1
+
+        lines.append(cur_line)
+
+    return lines
+
+
+###########################################################################
 
 
 class Ad(object):
@@ -221,4 +276,3 @@ class Ad(object):
             return struct.pack('!BBBBH', *addr)
         except (struct.error, TypeError, IndexError):
             return None
-
