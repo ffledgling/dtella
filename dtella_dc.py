@@ -140,7 +140,7 @@ class DCHandler(LineOnlyReceiver):
         # Me and the bot are ALWAYS online
         nicks = [self.bot.nick, self.nick]
 
-        # Add in the Dtella nicks, if we're on.
+        # Add in the Dtella nicks, if we're fully online (DC and Dtella)
         if self.main.getOnlineDCH():
             nicks = set(nicks)
             nicks.update(self.main.osm.nkm.getNickList())
@@ -159,11 +159,6 @@ class DCHandler(LineOnlyReceiver):
             self.transport.loseConnection()
             return
 
-        oldstate = self.state
-
-        if self.state == 'login':
-            self.state = 'ready'
-
         # Insert version and OS information into tag.
         ver_string = "%s[%s]" % (dtella.VERSION, get_os())
 
@@ -181,12 +176,21 @@ class DCHandler(LineOnlyReceiver):
         # Save my new info
         self.info = info
 
-        # If we're on, send it
+        logging_in = (self.state == 'login')
+
+        # The DC login phase is "officially over" because we have both a nick
+        # and and Info string to go with it.
+        if logging_in:
+            self.state = 'ready'
+
+        # If we're on, send my info
         if self.main.getOnlineDCH():
             self.main.osm.updateMyInfo()
 
-        if oldstate == 'login' and self.state == 'ready':
-            self.d_GetNickList()
+            # If we were logging in, but now we're all set to go,
+            # then send the full Dtella nick list.
+            if logging_in:
+                self.d_GetNickList()
 
 
     def d_Search(self, addr_string, search_string):
@@ -384,15 +388,30 @@ class DCHandler(LineOnlyReceiver):
 
         
     def nickCollision(self):
-        oldstate = self.state
+
+        # Make all the Dtella nicks vanish (if any exist)
+        if self.main.osm:
+            self.main.osm.nkm.quitEverybody()
+
         self.state = 'collision'
 
-        if oldstate == 'ready':
-            self.d_GetNickList()
+        self.pushStatus(
+            "The nick '%s' is already in use on this network." % self.nick)
+        self.pushStatus(
+            "Please change your nick, or type !REJOIN to try again.")
 
-        self.pushStatus("The nick '%s' is already in use on this network."
-                        "  Please change your nick, or try again later."
-                        % self.nick)
+
+    def kickMe(self, l33t, reason):
+
+        # Make all the Dtella nicks vanish (if any exist)
+        if self.main.osm:
+            self.main.osm.nkm.quitEverybody()
+
+        self.state = 'kicked'
+
+        # Show kick text
+        self.pushStatus("You were kicked by %s: %s" % (l33t, reason))
+        self.pushStatus("Type !REJOIN to get back in.")
 
 
     def isProtectedNick(self, nick):
@@ -744,6 +763,25 @@ class DtellaBot(object):
 
 
     def handleCmd_REJOIN(self, out, args, prefix):
-        out("TODO: implement REJOIN...")
+
+        if len(args) == 0:
+
+            if self.dch.state not in ('collision','kicked'):
+                out("Can't rejoin: You're not invisible!")
+                return
+
+            out("Rejoining...")
+
+            self.dch.state = 'ready'
+
+            if self.main.osm:
+                # Maybe tell the network that I'm back (unless it collides)
+                self.main.osm.updateMyInfo()
+                
+                # Maybe send a full nicklist (if the update succeeded)
+                self.dch.d_GetNickList()
+
+            return
+        
         self.syntaxHelp(out, 'REJOIN', prefix)
 

@@ -856,15 +856,10 @@ class BridgeNodeData(object):
         dch = self.main.getOnlineDCH()
         if dch:
             if n is osm.me:
-                osm.nkm.quitEverybody()
-                dch.nickCollision()
-                dch.pushStatus("You were kicked by %s: %s" %
-                               (l33t, reason))
-                
+                dch.kickMe(l33t, reason)
                 # TODO: handle reconnect flag
             else:
-                dch.pushStatus("%s has kicked %s: %s" %
-                               (l33t, n.nick, reason))
+                dch.pushStatus("%s has kicked %s: %s" % (l33t, n.nick, reason))
 
         # Drop this node from the nick list (if it's there)
         osm.nkm.removeNode(n)
