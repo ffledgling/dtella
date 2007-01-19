@@ -535,45 +535,78 @@ class DtellaBot(object):
             if prefix:
                 return False
             else:
-                out("Unknown command '%s'.  Try %sHELP." % (cmd[0], prefix))
+                out("Unknown command '%s'.  Type %sHELP for help." %
+                    (cmd[0], prefix))
         else:
             f(format_out, cmd[1:], prefix)
 
         return True
 
+
+    def syntaxHelp(self, out, key, prefix):
+
+        try:
+            head = self.bighelp[key][0]
+        except KeyError:
+            return
+
+        out("Syntax: %s%s %s" % (prefix, key, head))
+        out("Type '%sHELP %s' for more information." % (prefix, key))
+
     
     minihelp = [
-        ("UDP","Change Dtella's UDP Port"),
-        ("ADDPEER","Add the IP:Port of another node to the neighbor cache"),
-        ("REBOOT","Exit from the network and immediately reconnect"),
-        ("PERSISTENT","Enable/Disable persistent mode")
+        ("REJOIN", "Hop back online after a kick or collision"),
+        ("UDP", "Change Dtella's peer communication port"),
+        ("REBOOT", "Exit from the network and immediately reconnect"),
+        ("ADDPEER", "Add the address of another node to your cache"),
+        ("PERSISTENT", "View or toggle persistent mode")
         ]
 
 
     bighelp = {
-        "UDP":("[PORT #]",
-            
+        "REJOIN":(
+            "",
+            "If you are kicked from the chat system, or if you attempt to use "
+            "a nick which is already occupied by someone else, your node "
+            "will remain connected to the peer network in an invisible state. "
+            "If this happens, you can use the REJOIN command to hop back "
+            "online.  Note that this is only useful after a nick collision "
+            "if the conflicting nick has left the network."
+            ),
+        
+        "UDP":(
+            "<PORT>",
             "Specify a port number between 1-65536 to change the UDP port "
             "that Dtella uses for peer-to-peer communication.  If you don't "
             "provide a port number, this will display the port number which "
             "is currently in use."
             ),
 
-        "ADDPEER":("[IP_ADDRESS:PORT]",
-
-            "If Dtella is unable to locate any neighbor nodes automatically, "
-            "this command can be used to manually add the address of "
-            "an existing node on the network that you know about."
+        "ADDPEER":(
+            "<IP:PORT>",
+            "If Dtella is unable to locate any neighbor nodes using the "
+            "remote config data or your local neighbor cache, then you "
+            "can use this command to manually add the address of an existing "
+            "node that you know about."
             ),
 
-        "REBOOT":("",
-            
-            "This command will reboot the ..."
+        "REBOOT":(
+            "",
+            "This command takes no arguments.  It will cause your node to "
+            "exit from the network, and immediately restart the connection "
+            "process.  Use of this command shouldn't be necessary for "
+            "normal operation."
             ),
 
-        "PERSISTENT":("[ON | OFF]",
-            
-            "bla bla bla"
+        "PERSISTENT":(
+            "<ON | OFF>",
+            "This option controls how Dtella will behave when it is not "
+            "attached to a Direct Connect client.  When PERSISTENT mode is "
+            "OFF, Dtella will automatically close its peer connection after "
+            "5 minutes of inactivity.  When this mode is ON, Dtella will "
+            "try to stay connected to the network continuously.  To see "
+            "whether PERSISTENT is enabled, enter the command with no "
+            "arguments."
             )
         }
 
@@ -615,36 +648,43 @@ class DtellaBot(object):
 
     def handleCmd_REBOOT(self, out, args, prefix):
 
-        if len(args) != 0:
-            out("REBOOT does not accept any arguments.")
-            return
-        
-        out("Rebooting Node...")
-
-        self.main.shutdown(final=True)
-
-        if not prefix:
-            self.main.enableCopyStatusToPM()
+        if len(args) == 0:
             
-        self.main.newConnectionRequest()
+            out("Rebooting Node...")
+
+            self.main.shutdown(final=True)
+
+            if not prefix:
+                self.main.enableCopyStatusToPM()
+                
+            self.main.newConnectionRequest()
+            return
+
+        self.syntaxHelp(out, 'REBOOT', prefix)
 
 
     def handleCmd_UDP(self, out, args, prefix):
-        if len(args) == 1:
+        if len(args) == 0:
+            out("Dtella's UDP port is currently set to: %d"
+                % self.main.state.udp_port)
+            return
+
+        elif len(args) == 1:
             try:
                 port = int(args[0])
                 if not 1 <= port <= 65535:
                     raise ValueError
             except ValueError:
-                out("%sUDP must be followed by a port number between 1 and 65535" % prefix)
+                pass
             else:
                 if self.main.changeUDPPort(port):
-                    out("UDP port has been changed to %d." % port)
+                    out("Changing UDP port to: %d." % port)
                     self.main.enableCopyStatusToPM()
                 else:
-                    out("UDP port was not changed; busy.")
-        else:
-            out("Dtella is currently using UDP port %d" % self.main.state.udp_port)
+                    out("Can't change UDP port; busy.")
+                return
+            
+        self.syntaxHelp(out, 'UDP', prefix)
 
 
     def handleCmd_ADDPEER(self, out, args, prefix):
@@ -659,28 +699,28 @@ class DtellaBot(object):
                     # Jump-start stuff if it's not already going
                     self.main.enableCopyStatusToPM()
                     self.main.newConnectionRequest()
-                    return
                 else:
-                    out("That IP is not permitted on this network")
+                    out("The address '%s' is not permitted on this network."
+                        % ad.getTextIPPort())
+                return
+
             except ValueError:
                 pass
 
-        out("ADDPEER must be followed by an IP:Port")
+        self.syntaxHelp(out, 'ADDPEER', prefix)
 
 
     def handleCmd_PERSISTENT(self, out, args, prefix):
         if len(args) == 0:
             if self.main.state.persistent:
-                out("Persistent mode is currently ON."
-                         "  Type PERSISTENT OFF to turn it off.")
+                out("Persistent mode is currently ON.")
             else:
-                out("Persistent mode is currently OFF."
-                         "  Type PERSISTENT ON to turn it on.")
+                out("Persistent mode is currently OFF.")
             return
 
         if len(args) == 1:
             if args[0] == 'ON':
-                out("Persistent mode is now ON.")
+                out("Set persistent mode to ON.")
                 self.main.state.persistent = True
                 self.main.state.saveState()
 
@@ -692,14 +732,18 @@ class DtellaBot(object):
                 return
 
             elif args[0] == 'OFF':
-                out("Persistent mode is now OFF.")
+                out("Set persistent mode to OFF.")
                 self.main.state.persistent = False
                 self.main.state.saveState()
 
                 if self.main.osm:
                     self.main.osm.updateMyInfo()
                 return
-                
-        out("PERSISTENT must be followed by ON or OFF.")
 
+        self.syntaxHelp(out, 'PERSISTENT', prefix)
+
+
+    def handleCmd_REJOIN(self, out, args, prefix):
+        out("TODO: implement REJOIN...")
+        self.syntaxHelp(out, 'REJOIN', prefix)
 
