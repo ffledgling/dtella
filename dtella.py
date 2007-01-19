@@ -2422,6 +2422,10 @@ class OnlineStateManager(object):
         if self.nkm:
             self.nkm.quitEverybody()
 
+        # Reset the kick/collision state (if any)
+        if self.main.dch:
+            self.main.dch.resetInvisibility()
+
         # If I'm still syncing, shutdown the SyncManager
         if self.sm:
             self.sm.shutdown()

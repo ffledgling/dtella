@@ -37,7 +37,7 @@ class DCHandler(LineOnlyReceiver):
         self.addDispatch('',                0, self.d_KeepAlive)
         self.nicks = {}
 
-        # ['login', 'ready', 'collision', 'kicked']
+        # ['login', 'ready', 'invisible']
         self.state = 'login'
 
         self.sendLine("$Lock FOO Pk=BAR")
@@ -393,7 +393,7 @@ class DCHandler(LineOnlyReceiver):
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()
 
-        self.state = 'collision'
+        self.state = 'invisible'
 
         self.pushStatus(
             "The nick '%s' is already in use on this network." % self.nick)
@@ -407,11 +407,22 @@ class DCHandler(LineOnlyReceiver):
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()
 
-        self.state = 'kicked'
+        self.state = 'invisible'
 
         # Show kick text
         self.pushStatus("You were kicked by %s: %s" % (l33t, reason))
         self.pushStatus("Type !REJOIN to get back in.")
+
+
+    def resetInvisibility(self):
+        # When the dtella node leaves the network, and we're still
+        # in an invisible state, reset to normal for the next login.
+
+        if self.state == 'invisible':
+            self.state = 'ready'
+
+        # If this were meant to be called from anywhere but shutdown(),
+        # then we'd want to call updateMyInfo and d_GetNickList here.
 
 
     def isProtectedNick(self, nick):
@@ -766,7 +777,7 @@ class DtellaBot(object):
 
         if len(args) == 0:
 
-            if self.dch.state not in ('collision','kicked'):
+            if self.dch.state != 'invisible':
                 out("Can't rejoin: You're not invisible!")
                 return
 
