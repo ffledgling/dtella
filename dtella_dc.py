@@ -3,7 +3,7 @@ from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
 
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
-                         split_tag)
+                         split_tag, remove_dc_escapes)
 import dtella
 import struct
 
@@ -239,6 +239,9 @@ class DCHandler(LineOnlyReceiver):
 
 
     def d_PrivateMsg(self, nick, _1, _2, _3, text):
+
+        text = remove_dc_escapes(text)
+        
         if nick == self.bot.nick:
             out = self.bot.say
 
@@ -315,6 +318,8 @@ class DCHandler(LineOnlyReceiver):
 
 
     def d_PublicMsg(self, text):
+
+        text = remove_dc_escapes(text)
 
         # Route commands to the bot
         if text[:1] == '!':

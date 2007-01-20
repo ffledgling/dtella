@@ -98,6 +98,10 @@ def get_os():
         return '?'
 
 
+def remove_dc_escapes(text):
+    return text.replace('&#124;','|').replace('&#36;','$')
+
+
 def split_info(info):
     # Split a MyINFO string
     # [0:'description<tag>', 1:' ', 2:'speed_', 3:'email', 4:'sharesize', 5:'']
