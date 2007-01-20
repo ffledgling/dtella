@@ -209,7 +209,7 @@ class IRCServer(LineOnlyReceiver):
                 self.readytosend = True
 
                 # Send my own bridge nick
-                self.pushFullJoin(cfg.bot_irc, "bridge", "dtella.net")
+                self.pushFullJoin(cfg.dc_to_irc_bot, "bridge", "dtella.net")
 
                 # Maybe send Dtella nicks
                 if self.main.osm and self.main.osm.syncd:
@@ -429,7 +429,7 @@ class IRCServerData(object):
             if (self.ircs.syncd and osm and osm.syncd):
                 chunks = []
                 osm.bsm.addChatChunk(
-                    chunks, cfg.bot_nick,
+                    chunks, cfg.irc_to_dc_bot,
                     "%s is now known as %s" % (irc_to_dc(oldnick),
                                                irc_to_dc(newnick))
                     )
@@ -451,7 +451,7 @@ class IRCServerData(object):
                     # IRC nick
                     chunks = []
                     osm.bsm.addChatChunk(
-                        chunks, cfg.bot_nick,
+                        chunks, cfg.irc_to_dc_bot,
                         "%s has kicked %s: %s" %
                         (irc_to_dc(l33t), irc_to_dc(n00b), reason)
                         )
@@ -796,10 +796,16 @@ class BridgeServerManager(object):
         packet.append(osm.me.sesid)
         packet.append(struct.pack("!I", seconds() - osm.me.uptime))
         packet.append(struct.pack("!B", dtella.PERSIST_BIT))
+
+        # Get IRC nick list
+        nicks = set(ircs.data.getNicksInChan(cfg.irc_chan))
+        nicks.update(cfg.virtual_nicks)
+        nicks = list(nicks)
+        nicks.sort()
         
         # Build data string, containing all the online nicks
         data = []
-        for nick in ircs.data.getNicksInChan(cfg.irc_chan):
+        for nick in nicks:
             nick = irc_to_dc(nick)
             data.append('N')
             data.append('\x01')

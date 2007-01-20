@@ -4,15 +4,18 @@ my_name = "Dtella IRC Bridge"
 irc_server = ""  # Main IRC server to connect to
 irc_port = 6667
 irc_password = ""
-irc_chan = ""
+irc_chan = "#dtella"
 
-#Bot Parameters
-bot_nick = '*IRC'
-bot_irc = 'dtella'
+# Bot Parameters
+irc_to_dc_bot = "*IRC"
+dc_to_irc_bot = "Dtella"
 
-#Global Prefix Settings
-irc_prefix = '}'
-dc_prefix = '~'
+# Make these IRC nicks appear in the Dtella chat (tuple of strings)
+virtual_nicks = ()
+
+# Global Prefix Settings
+dc_to_irc_prefix = '}'
+irc_to_dc_prefix = '~'
 
 # Dtella stuff
 my_ip = '1.2.3.4'
