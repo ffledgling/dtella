@@ -10,8 +10,8 @@ irc_chan = "#dtella"
 irc_to_dc_bot = "*IRC"
 dc_to_irc_bot = "Dtella"
 
-# Make these IRC nicks appear in the Dtella chat (tuple of strings)
-virtual_nicks = ()
+# Make these IRC nicks appear in the Dtella chat (list of strings)
+virtual_nicks = []
 
 # Global Prefix Settings
 dc_to_irc_prefix = '}'
