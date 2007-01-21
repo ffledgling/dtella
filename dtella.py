@@ -2422,7 +2422,7 @@ class OnlineStateManager(object):
 
         # Reset the kick/collision state (if any)
         if self.main.dch:
-            self.main.dch.resetInvisibility()
+            self.main.dch.dtellaShutdown()
 
         # If I'm still syncing, shutdown the SyncManager
         if self.sm:

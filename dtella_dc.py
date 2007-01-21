@@ -3,7 +3,7 @@ from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
 
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
-                         split_tag, remove_dc_escapes)
+                         split_tag, remove_dc_escapes, dcall_discard)
 import dtella
 import struct
 
@@ -37,18 +37,26 @@ class DCHandler(LineOnlyReceiver):
         self.addDispatch('',                0, self.d_KeepAlive)
         self.nicks = {}
 
+        # Chat messages waiting to be sent
+        self.chatq = []
+        self.chat_counter = 99999
+        self.chatRate_dcall = None
+
         # ['login', 'ready', 'invisible']
         self.state = 'login'
 
         self.sendLine("$Lock FOO Pk=BAR")
         self.sendLine("$HubName Dtella")
 
-        self.main.addDCHandler(self)
+        self.scheduleChatRateControl()
 
+        self.main.addDCHandler(self)
+        
 
     def connectionLost(self, reason):
         print "Connection lost:", reason
         self.main.removeDCHandler()
+        dcall_discard(self, 'chatRate_dcall')
 
 
     def sendLine(self, line):
@@ -345,25 +353,15 @@ class DCHandler(LineOnlyReceiver):
             text = text[4:]
             flags |= dtella.SLASHME_BIT
 
-        osm = self.main.osm
+        if self.chat_counter > 0:
+            self.chat_counter -= 1
+            self.broadcastChatMessage(flags, text)
 
-        packet = osm.mrm.broadcastHeader('CH', osm.me.ipp)
-        packet.append(struct.pack('!I', osm.mrm.getPacketNumber_chat()))
-
-        packet.append(osm.me.nickHash())
-        packet.append(struct.pack('!BH', flags, len(text)))
-        packet.append(text)
-
-        osm.mrm.newMessage(''.join(packet), tries=4)
-
-        # Echo back to the DC client
-        if flags & dtella.SLASHME_BIT:
-            nick = "*"
-            text = "%s %s" % (osm.me.nick, text)
         else:
-            nick = osm.me.nick
-
-        self.pushChatMessage(nick, text)
+            if len(self.chatq) < 10:
+                self.chatq.append( (flags, text) )
+            else:
+                self.pushStatus("SLOW THE F*CK DOWN!")
 
 
     def d_KeepAlive(self):
@@ -408,14 +406,60 @@ class DCHandler(LineOnlyReceiver):
     def pushStatus(self, text):
         self.pushChatMessage(self.bot.nick, text)
 
-        
-    def nickCollision(self):
 
-        # Make all the Dtella nicks vanish (if any exist)
+    def scheduleChatRateControl(self):
+        if self.chatRate_dcall:
+            return
+
+        def cb():
+            self.chatRate_dcall = reactor.callLater(1.0, cb)
+           
+            if self.chatq:
+                args = self.chatq.pop(0)
+                self.broadcastChatMessage(*args)
+            else:
+                self.chat_counter = min(5, self.chat_counter + 1)
+
+        cb()
+
+
+    def broadcastChatMessage(self, flags, text):
+
+        assert self.main.getOnlineDCH()
+
+        osm = self.main.osm
+
+        packet = osm.mrm.broadcastHeader('CH', osm.me.ipp)
+        packet.append(struct.pack('!I', osm.mrm.getPacketNumber_chat()))
+
+        packet.append(osm.me.nickHash())
+        packet.append(struct.pack('!BH', flags, len(text)))
+        packet.append(text)
+
+        osm.mrm.newMessage(''.join(packet), tries=4)
+
+        # Echo back to the DC client
+        if flags & dtella.SLASHME_BIT:
+            nick = "*"
+            text = "%s %s" % (osm.me.nick, text)
+        else:
+            nick = osm.me.nick
+
+        self.pushChatMessage(nick, text)
+
+
+    def goInvisible(self):
+
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()
 
         self.state = 'invisible'
+        del self.chatq[:]
+
+
+    def nickCollision(self):
+
+        self.goInvisible()
 
         self.pushStatus(
             "The nick '%s' is already in use on this network." % self.nick)
@@ -425,18 +469,14 @@ class DCHandler(LineOnlyReceiver):
 
     def kickMe(self, l33t, reason):
 
-        # Make all the Dtella nicks vanish (if any exist)
-        if self.main.osm:
-            self.main.osm.nkm.quitEverybody()
-
-        self.state = 'invisible'
+        self.goInvisible()
 
         # Show kick text
         self.pushStatus("You were kicked by %s: %s" % (l33t, reason))
         self.pushStatus("Type !REJOIN to get back in.")
 
 
-    def resetInvisibility(self):
+    def dtellaShutdown(self):
         # When the dtella node leaves the network, and we're still
         # in an invisible state, reset to normal for the next login.
 
@@ -445,6 +485,9 @@ class DCHandler(LineOnlyReceiver):
 
         # If this were meant to be called from anywhere but shutdown(),
         # then we'd want to call updateMyInfo and d_GetNickList here.
+
+        # Wipe out my outgoing chat queue
+        del self.chatq[:]
 
 
     def isProtectedNick(self, nick):
