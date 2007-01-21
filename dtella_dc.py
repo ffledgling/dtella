@@ -332,10 +332,16 @@ class DCHandler(LineOnlyReceiver):
         # Route commands to the bot
         if text[:1] == '!':
 
-            # TODO: this looks funny if the command fails
-            self.pushChatMessage(self.nick, text)
+            def out(out_text, flag=[True]):
+
+                # If the bot produces output, inject our text input before
+                # the first line.
+                if flag[0]:
+                    self.pushChatMessage(self.nick, text)
+                    flag[0] = False
+
+                self.pushStatus(out_text)
             
-            out = self.pushStatus
             if self.bot.commandInput(out, text[1:], '!'):
                 return
 
@@ -343,25 +349,31 @@ class DCHandler(LineOnlyReceiver):
             self.pushStatus("Chat: Not online!")
             return
 
-        if len(text) > 1024:
-            text = text[:1024-12] + ' [Truncated]'
+        text = text.replace('\r\n','\n').replace('\r','\n')
 
-        flags = 0
+        for line in text.split('\n'):
 
-        # TODO: this checking could be factored to handle other commands
-        if len(text) > 4 and text[:4].lower() in ('/me ','+me ','!me '):
-            text = text[4:]
-            flags |= dtella.SLASHME_BIT
+            if len(line) > 1024:
+                line = line[:1024-12] + ' [Truncated]'
 
-        if self.chat_counter > 0:
-            self.chat_counter -= 1
-            self.broadcastChatMessage(flags, text)
+            flags = 0
 
-        else:
-            if len(self.chatq) < 10:
-                self.chatq.append( (flags, text) )
+            # TODO: this checking could be factored to handle other commands
+            if len(line) > 4 and line[:4].lower() in ('/me ','+me ','!me '):
+                line = line[4:]
+                flags |= dtella.SLASHME_BIT
+
+            if self.chat_counter > 0:
+                self.chat_counter -= 1
+                self.broadcastChatMessage(flags, line)
+
             else:
-                self.pushStatus("SLOW THE F*CK DOWN!")
+                if len(self.chatq) < 5:
+                    self.chatq.append( (flags, line) )
+                else:
+                    self.pushStatus(
+                        "*** Chat throttled.  Stop typing so much!")
+                    break
 
 
     def d_KeepAlive(self):
@@ -550,8 +562,10 @@ class DCPurgatory(Protocol):
 
         self.timeout_dcall = reactor.callLater(5.0, cb)
 
-        self.showStatus("Another DC client is already using Dtella on this"
-                        " computer.  Waiting 5 seconds for it to leave.")
+        self.showStatus(
+            "Another DC client is already using Dtella on this computer.")
+        self.showStatus(
+            "Waiting 5 seconds for it to leave.")
 
 
     def connectionLost(self, reason):
@@ -721,8 +735,6 @@ class DtellaBot(object):
 
             for command, description in self.minihelp:
                 out("  %s%s - %s" % (prefix, command, description))
-
-            out("")
 
         else:
             key = ' '.join(args)
