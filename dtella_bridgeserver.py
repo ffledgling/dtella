@@ -8,7 +8,7 @@ import fixtwistedtime
 
 from twisted.internet.protocol import ClientFactory, ServerFactory
 from twisted.protocols.basic import LineOnlyReceiver
-from twisted.internet import reactor
+from twisted.internet import reactor, defer
 from twisted.python.runtime import seconds
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
@@ -133,6 +133,7 @@ class IRCServer(LineOnlyReceiver):
         self.main = main
         self.syncd = False
         self.readytosend = False
+        self.shutdown_deferred = None
 
 
     def connectionMade(self):
@@ -171,8 +172,9 @@ class IRCServer(LineOnlyReceiver):
         elif command == "NICK":
 
             if args[0][:1] == cfg.irc_to_dc_prefix:
-                self.sendLine(":%s KILL %s :%s (nick reserved for Dtella)" %
-                              (cfg.my_host, args[0], cfg.my_host))
+                self.sendLine(
+                    ":%s KILL %s :%s (nick reserved for Dtella)"
+                    % (cfg.my_host, args[0], cfg.my_host))
                 return
                 
             if prefix:
@@ -211,8 +213,10 @@ class IRCServer(LineOnlyReceiver):
             # the Dtella state information if it's available and we haven't
             # sent it already.
 
-            self.sendLine(":%s TKL + Q * %s* bridge.dtella.net 0 %d :Reserved for Dtella"
-                          % (cfg.my_host, cfg.irc_to_dc_prefix, time.time()))
+            self.sendLine(
+                ":%s TKL + Q * %s* bridge.dtella.net 0 %d :Reserved for Dtella"
+                % (cfg.my_host, cfg.dc_to_irc_prefix, time.time())
+                )
 
             if not self.readytosend:
                 self.readytosend = True
@@ -364,7 +368,6 @@ class IRCServer(LineOnlyReceiver):
         nick = dc_to_irc(nick)
         host = Ad().setRawIPPort(ipp).getTextIP()
         self.pushFullJoin(nick, "dtnode", host)
-        
 
 
     def event_RemoveNick(self, nick, reason):
@@ -385,7 +388,40 @@ class IRCServer(LineOnlyReceiver):
             self.pushPrivMsg(inick, text, action=True)
         else:
             self.pushPrivMsg(inick, text)
+
+
+    def shutdown(self):
+        if not self.shutdown_deferred:
+
+            # Remove nick ban
+            self.sendLine(
+                ":%s TKL - Q * %s* bridge.dtella.net"
+                % (cfg.my_host, cfg.dc_to_irc_prefix)
+                )
+
+            # Scream
+            self.pushQuit(cfg.dc_to_irc_bot, "AIEEEEEEE!")
+
+            # Send SQUIT for completeness
+            self.sendLine(":%s SQUIT %s :Bridge Shutting Down"
+                          % (cfg.my_host, cfg.my_host))
+
+            # Close connection
+            self.transport.loseConnection()
+
+            # This will complete after loseConnection fires
+            self.shutdown_deferred = defer.Deferred()
+
+        return self.shutdown_deferred
+
+
+    def connectionLost(self, result):
+        self.main.ircs = None
         
+        if self.shutdown_deferred:
+            self.shutdown_deferred.callback("Bye!")
+
+       
         
 ##############################################################################
 
@@ -1093,8 +1129,13 @@ class DtellaBridgeMain(object):
 
     def cleanupOnExit(self):
         print "Reactor is shutting down.  Doing cleanup."
+
         self.shutdown(final=True)
         self.state.saveState()
+
+        # Cleanly close the IRC connection before terminating
+        if self.ircs:
+            return self.ircs.shutdown()
 
 
     def startConnecting(self):
