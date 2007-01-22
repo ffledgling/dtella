@@ -590,6 +590,8 @@ class BridgeNodeData(object):
             (pktnum < self.last_assembled_pktnum)
             )
 
+        osm = self.main.osm
+
         ptr = 0
 
         while ptr < len(data):
@@ -639,8 +641,9 @@ class BridgeNodeData(object):
                 if text_len > 1024 or len(text) != text_len:
                     raise ChunkError("C: Text length mismatch")
 
-                self.main.osm.cms.addMessage(
-                    self.parent_n.ipp, chat_pktnum, nick, text, flags)
+                if osm.syncd:
+                    osm.cms.addMessage(
+                        self.parent_n.ipp, chat_pktnum, nick, text, flags)
 
             elif data[ptr] == 'M':
                 ptr += 1

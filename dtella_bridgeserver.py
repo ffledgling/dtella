@@ -150,11 +150,15 @@ class IRCServer(LineOnlyReceiver):
     def lineReceived(self, line):
 
         # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
-
+        # TOPIC #dtella darkhorse 1161628983 :Dtella :: Development Stage
+        # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
 
         osm = self.main.osm
         
         prefix, command, args = self.parsemsg(line)
+
+        # TOOD: eventually convert this if-chain into a series of functions
+
         if self.showirc:
             pass
             #print ">:", repr(prefix), repr(command), repr(args)
@@ -195,7 +199,12 @@ class IRCServer(LineOnlyReceiver):
             
             self.data.gotKick(chan, l33t, n00b, reason)
 
-            
+        elif command == "TOPIC":
+            # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
+            chan = args[0]
+            whoset = args[1]
+            text = args[-1]
+            self.data.gotTopic(chan, whoset, text)
 
         elif command == "SERVER":
             # If we receive this, our password was accepted, so broadcast
@@ -393,6 +402,8 @@ class IRCServerData(object):
         def __init__(self, chan):
             self.chan = chan
             self.users = set()
+            self.topic = None
+            self.topic_who = None
     
 
     def __init__(self, ircs):
@@ -489,6 +500,18 @@ class IRCServerData(object):
         return c
 
 
+    def getTopic(self, chan):
+        try:
+            c = self.clist[chan]
+        except KeyError:
+            return ""
+        
+        if c.topic:
+            return c.topic
+
+        return ""
+
+
     def gotJoin(self, nick, chans):
         try:
             u = self.ulist[nick]
@@ -536,6 +559,23 @@ class IRCServerData(object):
                 osm.bsm.sendBridgeChange(chunks)
 
         return chans
+
+
+    def gotTopic(self, chan, whoset, text):
+        c = self.getChan(chan)
+        c.topic = text
+        c.topic_who = whoset
+
+        if chan == cfg.irc_chan:
+            osm = self.ircs.main.osm
+            if (self.ircs.syncd and osm and osm.syncd):
+                chunks = []
+                osm.bsm.addChatChunk(
+                    chunks, cfg.irc_to_dc_bot,
+                    "%s changed the topic to \"%s\"" %
+                    (irc_to_dc(whoset), text)
+                    )
+                osm.bsm.sendBridgeChange(chunks)
 
 
     def getNicksInChan(self, chan):
@@ -804,20 +844,17 @@ class BridgeServerManager(object):
         nicks.sort()
         
         # Build data string, containing all the online nicks
-        data = []
+        chunks = []
         for nick in nicks:
-            nick = irc_to_dc(nick)
-            data.append('N')
-            data.append('\x01')
-            data.append(struct.pack('!B', len(nick)))
-            data.append(nick)
+            mode = 1
+            self.addNickChunk(chunks, irc_to_dc(nick), mode)
 
-        data = ''.join(data)
+        chunks = ''.join(chunks)
 
         # Split data string into 1k blocks
         blocks = []
-        for i in range(0, len(data), 1024):
-            blocks.append(data[i:i+1024])
+        for i in range(0, len(chunks), 1024):
+            blocks.append(chunks[i:i+1024])
 
         block_hashes = [md5.new(b).digest() for b in blocks]
 
@@ -1143,7 +1180,6 @@ class DtellaBridgeMain(object):
 
         return None
         
-
 
     def addMyIPReport(self, from_ad, my_ad):
         return
