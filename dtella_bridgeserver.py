@@ -28,7 +28,7 @@ from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
 import dtella_bridge_config as cfg
 
 
-escape_chars = """!"#%&'()*+,./:;<=?@`~"""
+escape_chars = """!"#%&'()*+,./:;=?@`~"""
 base36_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
@@ -150,7 +150,7 @@ class IRCServer(LineOnlyReceiver):
 
     def lineReceived(self, line):
 
-        # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
+        
         # TOPIC #dtella darkhorse 1161628983 :Dtella :: Development Stage
         # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
 
@@ -201,11 +201,21 @@ class IRCServer(LineOnlyReceiver):
             
             self.data.gotKick(chan, l33t, n00b, reason)
 
+        elif command == "KILL":
+            # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
+            chan = cfg.irc_chan #This should be removed, since KILL is global.
+            l33t = prefix
+            n00b = args[0]
+            reason = args[1]
+            
+            self.data.gotKick(chan, l33t, n00b, reason)
+        
+
         elif command == "TOPIC":
             # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
             chan = args[0]
             whoset = args[1]
-            text = args[-1]
+            text = args[1]
             self.data.gotTopic(chan, whoset, text)
 
         elif command == "SERVER":

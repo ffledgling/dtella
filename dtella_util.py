@@ -24,7 +24,7 @@ def validateNick(nick):
     chars = ("-0123456789"
              "ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`"
              "abcdefghijklmnopqrstuvwxyz{}"
-             "!\"#%&'()*+,./:;<=?@\\~")
+             "!\"#%&'()*+,./:;=?@\\~")
 
     for c in nick:
         if c not in chars:
