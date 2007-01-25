@@ -31,6 +31,18 @@ import dtella_bridge_config as cfg
 escape_chars = """!"#%&'()*+,./:;=?@`~"""
 base36_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+mode_info = [
+    "[~] owner$ $IRC\x01$$0$",
+    "[&] super-op$ $IRC\x01$$0$",
+    "[@] op$ $IRC\x01$$0$",
+    "[%] half-op$ $IRC\x01$$0$",
+    "[+] voice$ $IRC\x01$$0$",
+    "[_]$ $IRC\x01$$0$",
+    "[>] virtual$ $IRC\x01$$0$"
+    ]
+
+chan_umodes = 'qaohv'
+
 
 def base_convert(chars, from_digits, to_digits, min_len=1):
     # Convert chars from one base to another.
@@ -191,7 +203,7 @@ class IRCServer(LineOnlyReceiver):
             self.data.gotPart(prefix, chans)
 
         elif command == "QUIT":
-            self.data.gotPart(prefix, None)
+            self.data.gotQuit(prefix)
 
         elif command == "KICK":
             chan = args[0]
@@ -203,20 +215,29 @@ class IRCServer(LineOnlyReceiver):
 
         elif command == "KILL":
             # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
-            chan = cfg.irc_chan #This should be removed, since KILL is global.
+            # TODO: 'chan' should be removed, since KILL is global.
+            chan = cfg.irc_chan
             l33t = prefix
             n00b = args[0]
             reason = args[1]
             
             self.data.gotKick(chan, l33t, n00b, reason)
+            self.data.gotQuit(n00b)
         
-
         elif command == "TOPIC":
             # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
             chan = args[0]
             whoset = args[1]
             text = args[-1]
             self.data.gotTopic(chan, whoset, text)
+
+        elif command == "MODE":
+            # :Paul MODE #dtella +vv aaahhh Big_Guy
+            chan = args[0]
+            change = args[1]
+            nicks = args[2:]
+            if chan[:1] == '#':
+                self.data.gotChanModes(chan, change, nicks)
 
         elif command == "SERVER":
             # If we receive this, our password was accepted, so broadcast
@@ -459,10 +480,24 @@ class IRCServerData(object):
     class Channel(object):
         def __init__(self, chan):
             self.chan = chan
-            self.users = set()
+            self.users = {}  # nick -> [mode list]
             self.topic = None
             self.topic_who = None
-    
+
+        def getInfoIndex(self, nick):
+            # Get the Dtella info index for this user
+            try:
+                modelist = self.users[nick]
+            except KeyError:
+                 # virtual
+                return 6
+            try:
+                # qaohv
+                return modelist.index(True)
+            except ValueError:
+                # plain user
+                return 5
+
 
     def __init__(self, ircs):
         self.ulist = {}
@@ -490,24 +525,38 @@ class IRCServerData(object):
 
         for chan in u.chans:
             c = self.getChan(chan)
-            c.users.discard(oldnick)
-            c.users.add(newnick)
+            c.users[newnick] = c.users.pop(oldnick)
 
         if cfg.irc_chan in u.chans:
+
             osm = self.ircs.main.osm
             if (self.ircs.syncd and osm and osm.syncd):
+
+                infoindex = self.getChan(cfg.irc_chan).getInfoIndex(newnick)
+                
                 chunks = []
                 osm.bsm.addChatChunk(
                     chunks, cfg.irc_to_dc_bot,
                     "%s is now known as %s" % (irc_to_dc(oldnick),
                                                irc_to_dc(newnick))
                     )
-                osm.bsm.addNickChunk(chunks, irc_to_dc(oldnick), 0)
-                osm.bsm.addNickChunk(chunks, irc_to_dc(newnick), 1)
+                osm.bsm.addNickChunk(
+                    chunks, irc_to_dc(oldnick), 0xFF)
+                osm.bsm.addNickChunk(
+                    chunks, irc_to_dc(newnick), infoindex)
                 osm.bsm.sendBridgeChange(chunks)
 
 
     def gotKick(self, chan, l33t, n00b, reason):
+        try:
+            u = self.ulist[n00b]
+        except KeyError:
+            print "Nick doesn't exist"
+            return
+
+        c = self.getChan(chan)
+        del c.users[n00b]
+        u.chans.remove(chan)
 
         if chan == cfg.irc_chan:
             osm = self.ircs.main.osm
@@ -524,7 +573,7 @@ class IRCServerData(object):
                         "%s has kicked %s: %s" %
                         (irc_to_dc(l33t), irc_to_dc(n00b), reason)
                         )
-                    osm.bsm.addNickChunk(chunks, irc_to_dc(n00b), 0)
+                    osm.bsm.addNickChunk(chunks, irc_to_dc(n00b), 0xFF)
                     osm.bsm.sendBridgeChange(chunks)
                     
                 else:
@@ -538,16 +587,6 @@ class IRCServerData(object):
                     # Forget this nick
                     osm.nkm.removeNode(n)
                     n.nick = n.info = ''
-
-        try:
-            u = self.ulist[n00b]
-        except KeyError:
-            print "Nick doesn't exist"
-            return
-
-        c = self.getChan(chan)
-        c.users.discard(n00b)
-        u.chans.discard(chan)
 
 
     def getChan(self, chan):
@@ -581,14 +620,93 @@ class IRCServerData(object):
 
         for chan in chans:
             c = self.getChan(chan)
-            c.users.add(nick)
+            c.users[nick] = [False] * len(chan_umodes)
             u.chans.add(chan)
 
         if cfg.irc_chan in chans:
             osm = self.ircs.main.osm
             if (self.ircs.syncd and osm and osm.syncd):
+
+                infoindex = self.getChan(cfg.irc_chan).getInfoIndex(nick)
+                
                 chunks = []
-                osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 1)
+                osm.bsm.addNickChunk(
+                    chunks, irc_to_dc(nick), infoindex)
+                osm.bsm.sendBridgeChange(chunks)
+
+
+    def gotChanModes(self, chan, change, nicks):
+
+        val = True
+        i = 0
+
+        ch = self.getChan(chan)
+
+        for c in change:
+            if c == '+':
+                val = True
+            elif c == '-':
+                val = False
+            elif c == 't':
+                # TODO: Topic lock stuff
+                pass
+            elif c == 'k':
+                # Skip over channel key
+                i += 1
+            elif c == 'l':
+                # Skip over channel user limit
+                i += 1
+            else:
+                try:
+                    # Check if this is a user mode
+                    modeidx = chan_umodes.index(c)
+                except ValueError:
+                    # Skip unknown modes
+                    continue
+
+                # Grab affected nick
+                nick = nicks[i]
+                i += 1
+
+                # Skip phantom nicks (i.e. nicks on THIS server)
+                if nick not in self.ulist:
+                    continue
+
+                if chan != cfg.irc_chan:
+                    ch.users[nick][modeidx] = val
+                    continue
+
+                old_infoindex = ch.getInfoIndex(nick)
+                ch.users[nick][modeidx] = val
+                new_infoindex = ch.getInfoIndex(nick)
+
+                if new_infoindex == old_infoindex:
+                    continue
+
+                osm = self.ircs.main.osm
+                if (self.ircs.syncd and osm and osm.syncd):
+                    chunks = []
+                    osm.bsm.addNickChunk(
+                        chunks, irc_to_dc(nick), new_infoindex)
+                    osm.bsm.sendBridgeChange(chunks)
+
+
+    def gotQuit(self, nick):
+        try:
+            u = self.ulist[nick]
+        except KeyError:
+            print "nick %s doesn't exist!" % (nick,)
+            return None
+
+        for chan in u.chans:
+            c = self.getChan(chan)
+            del c.users[nick]
+
+        if cfg.irc_chan in u.chans:
+            osm = self.ircs.main.osm
+            if (self.ircs.syncd and osm and osm.syncd):
+                chunks = []
+                osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
                 osm.bsm.sendBridgeChange(chunks)
 
 
@@ -599,24 +717,17 @@ class IRCServerData(object):
             print "nick %s doesn't exist!" % (nick,)
             return None
 
-        if chans is None:
-            # (QUIT)
-            del self.ulist[nick]
-            chans = u.chans.copy()
-
         for chan in chans:
             c = self.getChan(chan)
-            c.users.discard(nick)
-            u.chans.discard(chan)
+            del c.users[nick]
+            u.chans.remove(chan)
 
         if cfg.irc_chan in chans:
             osm = self.ircs.main.osm
             if (self.ircs.syncd and osm and osm.syncd):
                 chunks = []
-                osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0)
+                osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
                 osm.bsm.sendBridgeChange(chunks)
-
-        return chans
 
 
     def gotTopic(self, chan, whoset, text):
@@ -895,17 +1006,22 @@ class BridgeServerManager(object):
         packet.append(struct.pack("!I", seconds() - osm.me.uptime))
         packet.append(struct.pack("!B", dtella.PERSIST_BIT))
 
+        chunks = []
+
+        # Add info strings
+        self.addInfoChunk(chunks)
+
         # Get IRC nick list
         nicks = set(ircs.data.getNicksInChan(cfg.irc_chan))
         nicks.update(cfg.virtual_nicks)
         nicks = list(nicks)
         nicks.sort()
-        
-        # Build data string, containing all the online nicks
-        chunks = []
+
+        # Add the list of online nicks
+        c = ircs.data.getChan(cfg.irc_chan)
         for nick in nicks:
-            mode = 1
-            self.addNickChunk(chunks, irc_to_dc(nick), mode)
+            self.addNickChunk(
+                chunks, irc_to_dc(nick), c.getInfoIndex(nick))
 
         chunks = ''.join(chunks)
 
@@ -977,6 +1093,13 @@ class BridgeServerManager(object):
         chunks.append('N')
         chunks.append(struct.pack("!BB", mode, len(nick)))
         chunks.append(nick)
+
+
+    def addInfoChunk(self, chunks):
+        chunks.append('I')
+        infos = '|'.join(mode_info)
+        chunks.append(struct.pack("!H", len(infos)))
+        chunks.append(infos)
 
 
     def addKickChunk(self, chunks, n, l33t, reason):

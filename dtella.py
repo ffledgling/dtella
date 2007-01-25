@@ -152,10 +152,10 @@ class NickManager(object):
 
     def setNodeInfo(self, n, info):
 
-        if n.info != info:
-            n.info = info
-        else:
+        if n.info == info:
             return
+
+        n.info = info
 
         try:
             if self.nickmap[n.nick.lower()] is not n:

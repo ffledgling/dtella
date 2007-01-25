@@ -525,7 +525,7 @@ chunks:
     bits 5..0 = subnet length (0..32)
 
 'N' - nick info
-1-byte mode ('\x00' == offline)
+1-byte mode ('\xFF' == offline)
 1-byte nick length
 + N-byte nick
 

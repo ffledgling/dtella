@@ -129,7 +129,7 @@ class DCHandler(LineOnlyReceiver):
         except KeyError:
             return
 
-        if n.nick and n.info:
+        if n.info:
             self.pushInfo(n.nick, n.info)
         
 
@@ -521,7 +521,8 @@ class DCHandler(LineOnlyReceiver):
 
 
     def event_UpdateInfo(self, nick, info):
-        self.pushInfo(nick, info)
+        if info:
+            self.pushInfo(nick, info)
 
 
     def event_ChatMessage(self, nick, text, flags):

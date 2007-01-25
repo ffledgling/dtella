@@ -385,10 +385,10 @@ class NickNode(object):
     __lt__ = lambda self,other: self.nick <  other.nick
     __le__ = lambda self,other: self.nick <= other.nick
     
-    def __init__(self, parent_n, nick, mode, pktnum):
+    def __init__(self, parent_n, nick, info, mode, pktnum):
         self.parent_n = parent_n
         self.nick = nick
-        self.info = ""
+        self.info = info
         self.pktnum = pktnum
         self.mode = mode
 
@@ -438,6 +438,9 @@ class BridgeNodeData(object):
 
         self.last_assembled_pktnum = None
         self.nicks = {} # {nick: NickNode()}
+
+        # Tuple of info strings; indices match up with the nick modes
+        self.infostrings = ()
 
         # Received Private Messages (Bc messages)
         self.msgs = {}
@@ -569,7 +572,7 @@ class BridgeNodeData(object):
         for n in self.nicks.values():
             if n.pktnum < self.status_pktnum:
                 del self.nicks[n.nick]
-                if n.mode:
+                if n.mode != 0xFF:
                     dead_nicks.append(n)
 
         dead_nicks.sort()
@@ -727,20 +730,20 @@ class BridgeNodeData(object):
                 ptr += 1
 
                 try:
-                    (mode, text_len
-                     ) = struct.unpack("!BB", data[ptr:ptr+2])
+                    (info_len,
+                     ) = struct.unpack("!H", data[ptr:ptr+2])
                     ptr += 2
 
-                    text = data[ptr:ptr+text_len]
-                    ptr += text_len
+                    info = data[ptr:ptr+info_len]
+                    ptr += info_len
                     
                 except struct.error:
                     raise ChunkError("I: struct error")
 
-                if len(text) != text_len:
-                    raise ChunkError("I: text length mismatch")
+                if len(info) != info_len:
+                    raise ChunkError("I: info length mismatch")
 
-                # TODO: handle
+                self.handleInfo(info)
 
 
             elif data[ptr] == 'R':
@@ -787,19 +790,25 @@ class BridgeNodeData(object):
 
     def updateNick(self, nick, mode, pktnum):
         osm = self.main.osm
+
+        try:
+            if mode == 0xFF:
+                raise IndexError
+            info = self.infostrings[mode]
+        except IndexError:
+            info = ''
         
         try:
             n = self.nicks[nick]
         except KeyError:
             # New nick
-            n = self.nicks[nick] = NickNode(self.parent_n, nick, mode, pktnum)
+            n = self.nicks[nick] = NickNode(
+                self.parent_n, nick, info, mode, pktnum)
 
-            print "*** Add nick: '%s' mode=%d" % (nick, mode)
-
-            if mode:
+            if mode != 0xFF:
                 if not osm.nkm.addNode(n):
                     # Collision of some sort
-                    n.mode = 0
+                    n.mode = 0xFF
         else:
 
             # Existing nick
@@ -811,16 +820,21 @@ class BridgeNodeData(object):
             if n.mode == mode:
                 return
 
-            if mode:
-                if n.mode:
-                    print "*** Change mode for nick: '%s'" % nick
+            if mode != 0xFF:
+
+                if n.mode != 0xFF:
+                    # Change mode of existing nick
+                    osm.nkm.setNodeInfo(n, info)
+                    
                 else:
-                    print "*** Add nick: '%s'" % nick
+                    # Dead nick coming back online
+                    n.info = info
                     if not osm.nkm.addNode(n):
                         # Collision of some sort
-                        n.mode = 0
-            elif n.mode:
-                print "*** Remove nick: '%s'" % nick
+                        mode = 0xFF
+
+            elif n.mode != 0xFF:
+                # Remove existing nick
                 osm.nkm.removeNode(n)
 
             n.mode = mode
@@ -889,6 +903,33 @@ class BridgeNodeData(object):
 
                 # The next valid broadcast should have pktnum+1
                 n.status_pktnum = pktnum
+
+
+    def handleInfo(self, info):
+        infostrings = tuple(info.split('|'))
+
+        print "infostrings=", infostrings
+
+        if self.infostrings == infostrings:
+            return
+
+        self.infostrings = infostrings
+
+        osm = self.main.osm
+
+        # Scan through all the nicks, and fill in their info strings
+
+        for n in self.nicks.itervalues():
+
+            if n.mode == 0xFF:
+                continue
+
+            try:
+                new_info = infostrings[n.mode]
+            except IndexError:
+                continue
+
+            osm.nkm.setNodeInfo(n, new_info)
 
 
     def nodeExited(self):
