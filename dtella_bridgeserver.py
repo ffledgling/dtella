@@ -233,11 +233,12 @@ class IRCServer(LineOnlyReceiver):
 
         elif command == "MODE":
             # :Paul MODE #dtella +vv aaahhh Big_Guy
+            whoset = prefix
             chan = args[0]
             change = args[1]
             nicks = args[2:]
             if chan[:1] == '#':
-                self.data.gotChanModes(chan, change, nicks)
+                self.data.gotChanModes(whoset, chan, change, nicks)
 
         elif command == "SERVER":
             # If we receive this, our password was accepted, so broadcast
@@ -635,12 +636,15 @@ class IRCServerData(object):
                 osm.bsm.sendBridgeChange(chunks)
 
 
-    def gotChanModes(self, chan, change, nicks):
+    def gotChanModes(self, whoset, chan, change, nicks):
 
         val = True
         i = 0
 
+        osm = self.ircs.main.osm
         ch = self.getChan(chan)
+
+        chunks = []
 
         for c in change:
             if c == '+':
@@ -683,12 +687,24 @@ class IRCServerData(object):
                 if new_infoindex == old_infoindex:
                     continue
 
-                osm = self.ircs.main.osm
                 if (self.ircs.syncd and osm and osm.syncd):
-                    chunks = []
                     osm.bsm.addNickChunk(
                         chunks, irc_to_dc(nick), new_infoindex)
-                    osm.bsm.sendBridgeChange(chunks)
+
+        if chunks:
+            if whoset:
+                # Might want to make this formatted better
+                text = ' '.join([change]+nicks)
+
+                osm.bsm.addChatChunk(
+                    chunks, cfg.irc_to_dc_bot,
+                    "%s set mode: %s" % 
+                    (irc_to_dc(whoset), text)
+                    )
+
+            osm.bsm.sendBridgeChange(chunks)
+            
+
 
 
     def gotQuit(self, nick):
