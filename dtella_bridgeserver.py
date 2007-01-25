@@ -549,15 +549,6 @@ class IRCServerData(object):
 
 
     def gotKick(self, chan, l33t, n00b, reason):
-        try:
-            u = self.ulist[n00b]
-        except KeyError:
-            print "Nick doesn't exist"
-            return
-
-        c = self.getChan(chan)
-        del c.users[n00b]
-        u.chans.remove(chan)
 
         if chan == cfg.irc_chan:
             osm = self.ircs.main.osm
@@ -588,6 +579,16 @@ class IRCServerData(object):
                     # Forget this nick
                     osm.nkm.removeNode(n)
                     n.nick = n.info = ''
+
+        try:
+            u = self.ulist[n00b]
+        except KeyError:
+            print "Nick doesn't exist"
+            return
+
+        c = self.getChan(chan)
+        del c.users[n00b]
+        u.chans.remove(chan)
 
 
     def getChan(self, chan):
