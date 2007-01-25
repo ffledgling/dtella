@@ -1612,7 +1612,7 @@ class Node(object):
         # TODO: put a separator between nick+info
         
         return md5.new(self.sesid + self.flags() +
-                       self.nick + self.info).digest()[:4]
+                       self.nick + '|' + self.info).digest()[:4]
 
 
     def getPMAckKey(self):
@@ -2324,8 +2324,14 @@ class OnlineStateManager(object):
 
         def cb(sendfull):
             print "sending status..."
-            #expire = random.uniform(14*60, 16*60)
-            expire = random.uniform(60,90)
+
+            # Choose an expiration time so that the network handles
+            # approximately 1 status update per second, but set bounds of
+            # about 1-15 minutes
+            
+            expire = max(60.0, min(900.0, len(self.nodes)))
+            expire *= random.uniform(0.9, 1.1)
+
             self.sendStatus_dcall = reactor.callLater(expire, cb, False)
 
             pkt_id = struct.pack('!I', self.mrm.getPacketNumber_status())

@@ -925,11 +925,11 @@ class BridgeNodeData(object):
                 continue
 
             try:
-                new_info = infostrings[n.mode]
+                info = infostrings[n.mode]
             except IndexError:
-                continue
+                info = ''
 
-            osm.nkm.setNodeInfo(n, new_info)
+            osm.nkm.setNodeInfo(n, info)
 
 
     def nodeExited(self):

@@ -1,7 +1,7 @@
 # Dtella site-specific configuration
 import re
 
-network_key = 'PurdueDtella-test8'
+network_key = 'PurdueDtella-test9'
 
 dnshost = 'purdue.config.dtella.org'
 
