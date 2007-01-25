@@ -215,7 +215,7 @@ class IRCServer(LineOnlyReceiver):
             # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
             chan = args[0]
             whoset = args[1]
-            text = args[1]
+            text = args[-1]
             self.data.gotTopic(chan, whoset, text)
 
         elif command == "SERVER":
@@ -979,8 +979,11 @@ class BridgeServerManager(object):
 
         chunks.append('K')
         chunks.append(n.ipp)
-        chunks.append(struct.pack("!IBB", n.status_pktnum, flags, len(l33t)))
+        chunks.append(struct.pack("!IB", n.status_pktnum, flags))
+        chunks.append(struct.pack("!B", len(l33t)))
         chunks.append(l33t)
+        chunks.append(struct.pack("!B", len(n.nick)))
+        chunks.append(n.nick)
         chunks.append(struct.pack("!H", len(reason)))
         chunks.append(reason)
 

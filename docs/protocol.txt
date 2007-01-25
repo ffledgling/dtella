@@ -548,8 +548,10 @@ chunks:
 4-byte pktnum
 1-byte flags:
     bit 0 = automatic rejoin after a while
-1-byte nick len (kicker)
-+ nick
+1-byte nick len
++ nick (l33t)
+1-byte nick len
++ nick (n00b)
 2-byte reason len
 + reason
 

@@ -461,6 +461,10 @@ class DCHandler(LineOnlyReceiver):
 
 
     def goInvisible(self):
+        # Node will become visible again if:
+        # 1. Dtella node loses its connection
+        # 2. User types !REJOIN
+        # 3. DC client reconnects (creates a new DCHandler)
 
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()

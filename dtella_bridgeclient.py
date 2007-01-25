@@ -684,6 +684,12 @@ class BridgeNodeData(object):
                     l33t = data[ptr:ptr+l33t_len]
                     ptr += l33t_len
 
+                    (n00b_len,) = struct.unpack("!B", data[ptr:ptr+1])
+                    ptr += 1
+
+                    n00b = data[ptr:ptr+n00b_len]
+                    ptr += n00b_len
+
                     (reason_len,) = struct.unpack("!H", data[ptr:ptr+2])
                     ptr += 2
 
@@ -696,10 +702,13 @@ class BridgeNodeData(object):
                 if len(l33t) != l33t_len:
                     raise ChunkError("K: l33t length mismatch")
 
+                if len(n00b) != n00b_len:
+                    raise ChunkError("K: n00b length mismatch")
+
                 if reason_len > 1024 or len(reason) != reason_len:
                     raise ChunkError("K: reason length mismatch")
 
-                self.handleKick(ipp, pktnum, flags, l33t, reason)
+                self.handleKick(ipp, pktnum, flags, l33t, n00b, reason)
 
             elif data[ptr] == 'B':
                 ptr += 1
@@ -833,13 +842,14 @@ class BridgeNodeData(object):
                 dch.pushPrivMsg(nick, text)
 
 
-    def handleKick(self, ipp, pktnum, flags, l33t, reason):
+    def handleKick(self, ipp, pktnum, flags, l33t, n00b, reason):
         # Find the node associated with the n00b's ipp
         osm = self.main.osm
         ph = self.main.ph
+        me = osm.me
 
-        if ipp == osm.me.ipp:
-            n = osm.me
+        if ipp == me.ipp:
+            n = me
         else:
             try:
                 n = osm.lookup_ipp[ipp]
@@ -847,29 +857,38 @@ class BridgeNodeData(object):
                 print "handleKick: can't find node"
                 return
 
-        if not n.nick:
-            print "handleKick: node doesn't have a nick"
-            return
-
         # Check if the user has rejoined by the time we got this
-        if ph.isOutdatedStatus(n, pktnum):
-            print "handleKick: outdated."
-            return
+        outdated = ph.isOutdatedStatus(n, pktnum)
 
         dch = self.main.getOnlineDCH()
-        if dch:
-            if n is osm.me:
+
+        if n is me:
+            
+            # Make sure I'm online, and this kick isn't old somehow
+            if dch and not outdated:
+
+                # Yell at user and make them invisible
                 dch.kickMe(l33t, reason)
-                # TODO: handle reconnect flag
-            else:
-                dch.pushStatus("%s has kicked %s: %s" % (l33t, n.nick, reason))
 
-        # Drop this node from the nick list (if it's there)
-        osm.nkm.removeNode(n)
-        n.nick = n.info = ''
+                # Broadcast an update so nodes who aren't bridge-aware
+                # will also see us disappear.
+                me.status_pktnum = pktnum
+                osm.updateMyInfo()
 
-        # The next valid broadcast should have pktnum+1
-        n.status_pktnum = pktnum
+        else:
+            # Display text even for outdated messages, because the
+            # Updated status message from the kicked node is racing
+            # against the kick packet.
+            if dch:
+                dch.pushStatus("%s has kicked %s: %s" % (l33t, n00b, reason))
+
+            if not outdated:
+                # Drop this node from the nick list (if it's there)
+                osm.nkm.removeNode(n)
+                n.nick = n.info = ''
+
+                # The next valid broadcast should have pktnum+1
+                n.status_pktnum = pktnum
 
 
     def nodeExited(self):
