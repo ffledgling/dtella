@@ -510,7 +510,7 @@ class DCHandler(LineOnlyReceiver):
         return (nick.lower() in (self.nick.lower(), self.bot.nick.lower()))
 
 
-    def event_AddNick(self, nick, ipp):
+    def event_AddNick(self, nick, n):
         if not self.isProtectedNick(nick):
             self.pushHello(nick)
     

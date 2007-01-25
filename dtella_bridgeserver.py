@@ -374,10 +374,22 @@ class IRCServer(LineOnlyReceiver):
         self.sendLine(":%s NOTICE %s :%s" % (nick, target, text))
 
 
-    def event_AddNick(self, nick, ipp):
+    def event_AddNick(self, nick, n):
         nick = dc_to_irc(nick)
-        host = Ad().setRawIPPort(ipp).getTextIP()
+        host = Ad().setRawIPPort(n.ipp).getTextIP()
         self.pushFullJoin(nick, "dtnode", host)
+
+        # Send welcome message
+        osm = self.main.osm
+        chunks = []
+        flags = dtella.NOTICE_BIT
+        text = ("The topic for %s is \"%s\""
+                % (cfg.irc_chan, self.data.getTopic(cfg.irc_chan))
+                )
+
+        osm.bsm.addMessageChunk(
+            chunks, cfg.irc_to_dc_bot, text, flags)
+        osm.bsm.sendPrivateBridgeChange(n, chunks)
 
 
     def event_RemoveNick(self, nick, reason):

@@ -141,16 +141,10 @@ class NickManager(object):
 
         self.nickmap[n.nick.lower()] = n
 
-        try:
-            ipp = n.ipp
-        except AttributeError:
-            # NickNode() doesn't have this field
-            ipp = None
-
         so = self.main.getStateObserver()
 
         if so:
-            so.event_AddNick(n.nick, ipp)
+            so.event_AddNick(n.nick, n)
             so.event_UpdateInfo(n.nick, n.info)
 
         return True
@@ -2489,7 +2483,7 @@ class PingManager(object):
         # asked for.
 
         if not (osm.syncd or iwant):
-            raise BadTimingError("Not ready to accept pings yet")
+            return
 
         # Save list of neighbors
         if nbs is not None:
