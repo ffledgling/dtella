@@ -117,7 +117,7 @@ class NickManager(object):
         return self.nickmap[nick.lower()]
 
 
-    def removeNode(self, n):
+    def removeNode(self, n, reason=""):
         try:
             if self.nickmap[n.nick.lower()] is not n:
                 raise KeyError
@@ -129,7 +129,7 @@ class NickManager(object):
         so = self.main.getStateObserver()
 
         if so:
-            so.event_RemoveNick(n.nick, "User Exited")
+            so.event_RemoveNick(n.nick, reason)
 
 
     def addNode(self, n):
@@ -176,7 +176,7 @@ class NickManager(object):
 
         if so:
             for n in self.nickmap.itervalues():
-                so.event_RemoveNick(n.nick, "Bridge Shutdown")
+                so.event_RemoveNick(n.nick, "Removing All Nicks")
 
 
 ##############################################################################
@@ -854,7 +854,7 @@ class PeerHandler(DatagramProtocol):
                 return None
 
             def new_cb():
-                osm.nodeExited(src_n)
+                osm.nodeExited(src_n, "Received NX")
 
             return new_cb
 
@@ -2146,7 +2146,7 @@ class OnlineStateManager(object):
 
         if nick != n.nick:
             if n.nick:
-                self.nkm.removeNode(n)
+                self.nkm.removeNode(n, "Status Changed")
                 n.nick = n.info = ''
 
             n.nick = nick
@@ -2186,7 +2186,7 @@ class OnlineStateManager(object):
         return n
 
 
-    def nodeExited(self, n):
+    def nodeExited(self, n, reason=""):
         # Node n dropped off the network
 
         dcall_discard(n, 'expire_dcall')
@@ -2208,7 +2208,7 @@ class OnlineStateManager(object):
             n.bridge_data = None
 
         # Remove from the nick mapping
-        self.nkm.removeNode(n)
+        self.nkm.removeNode(n, reason)
         n.nick = ''
         n.info = ''
 
@@ -2238,7 +2238,7 @@ class OnlineStateManager(object):
 
         def cb(n):
             n.expire_dcall = None
-            self.nodeExited(n)
+            self.nodeExited(n, "Node Timeout")
 
         n.expire_dcall = reactor.callLater(when, cb, n)
 
