@@ -769,7 +769,7 @@ class BridgeNodeData(object):
                 if topic_len > 1024 or len(topic) != topic_len:
                     raise ChunkError("T: topic length mismatch")
 
-                osm.bcm.handleTopic(nick, topic, outdated)
+                osm.tm.updateTopic(self.parent_n, nick, topic, outdated)
 
             elif data[ptr] == 'R':
                 ptr += 1
@@ -997,10 +997,6 @@ class BridgeClientManager(object):
         self.bridge_time = 0
         self.unclaimed_blocks = {}
 
-        # Which node set the topic last
-        self.topic_node = None
-        self.topic = ""
-
 
     def signatureExpired(self, pktnum):
         # Return True if the given timestamp has expired.
@@ -1049,24 +1045,6 @@ class BridgeClientManager(object):
         else:
             if not bdata.addDataBlock(bhash, data):
                 self.addUnclaimedDataBlock(key, data)
-
-
-    def handleTopic(self, nick, topic, outdated):
-        # Topic set/change event came from a bridge
-
-        dch = self.main.getOnlineDCH()
-
-        # Update stored topic, and title bar
-        if (topic != self.topic) and (not outdated):
-            self.topic = topic
-            if dch:
-                dch.pushTopic(topic)
-
-        # Even if it's outdated, display the event as text
-        if dch and nick:
-            dch.pushChatMessage(
-                dch.bot.nick,
-                "%s changed the topic to \"%s\"" % (nick, topic))
 
 
     def addUnclaimedDataBlock(self, key, data):

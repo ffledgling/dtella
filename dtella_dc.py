@@ -181,6 +181,7 @@ class DCHandler(LineOnlyReceiver):
             # then send the full Dtella nick list.
             if logging_in:
                 self.d_GetNickList()
+                self.grabDtellaTopic()
 
 
     def formatMyInfo(self):
@@ -396,6 +397,8 @@ class DCHandler(LineOnlyReceiver):
         else:
             self.sendLine("$HubName %s" % dtella_local.hub_name)
 
+        self.pushStatus("DEBUG: topic set to '%s'" % topic)
+
 
     def pushHello(self, nick):
         self.sendLine('$Hello %s' % nick)
@@ -477,8 +480,15 @@ class DCHandler(LineOnlyReceiver):
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()
 
+        self.pushTopic()
+
         self.state = 'invisible'
         del self.chatq[:]
+
+
+    def grabDtellaTopic(self):
+        if self.main.getOnlineDCH():
+            self.pushTopic(self.main.osm.tm.topic)
 
 
     def nickCollision(self):
@@ -506,6 +516,9 @@ class DCHandler(LineOnlyReceiver):
 
         if self.state == 'invisible':
             self.state = 'ready'
+
+        # Wipe out the topic
+        self.pushTopic()
 
         # If this were meant to be called from anywhere but shutdown(),
         # then we'd want to call updateMyInfo and d_GetNickList here.
@@ -677,10 +690,11 @@ class DtellaBot(object):
 
     
     minihelp = [
-        ("REJOIN", "Hop back online after a kick or collision"),
-        ("UDP", "Change Dtella's peer communication port"),
-        ("REBOOT", "Exit from the network and immediately reconnect"),
-        ("ADDPEER", "Add the address of another node to your cache"),
+        ("REJOIN",     "Hop back online after a kick or collision"),
+        ("TOPIC",      "View or change the global topic"),
+        ("UDP",        "Change Dtella's peer communication port"),
+        ("REBOOT",     "Exit from the network and immediately reconnect"),
+        ("ADDPEER",    "Add the address of another node to your cache"),
         ("PERSISTENT", "View or toggle persistent mode")
         ]
 
@@ -694,6 +708,11 @@ class DtellaBot(object):
             "If this happens, you can use the REJOIN command to hop back "
             "online.  Note that this is only useful after a nick collision "
             "if the conflicting nick has left the network."
+            ),
+
+        "TOPIC":(
+            "<text>",
+            "TODO: put help here"
             ),
         
         "UDP":(
@@ -872,8 +891,22 @@ class DtellaBot(object):
                 
                 # Maybe send a full nicklist (if the update succeeded)
                 self.dch.d_GetNickList()
+                self.dch.grabDtellaTopic()
 
             return
         
         self.syntaxHelp(out, 'REJOIN', prefix)
 
+
+    def handleCmd_TOPIC(self, out, args, prefix):
+
+        text = ' '.join(args)
+
+        if self.main.getOnlineDCH():
+            self.main.osm.tm.broadcastNewTopic(text)
+            return
+        else:
+            out("You must be online to set the topic!")
+            return
+
+        self.syntaxHelp(out, 'TOPIC', prefix)

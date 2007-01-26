@@ -41,6 +41,8 @@ except ImportError:
 
 # TODO: Clean up duplicated code between DtellaMain and DtellaBridgeMain
 
+# TODO: Might be able to get rid of the new_cb() mess.
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -2217,6 +2219,7 @@ class OnlineStateManager(object):
         dch = self.main.getOnlineDCH()
         if dch:
             dch.d_GetNickList()
+            dcg.grabDtellaTopic()
 
         self.main.showLoginStatus("Sync Complete; You're Online!",
                                   counter='inc')
@@ -3642,7 +3645,7 @@ class TopicManager(object):
 
 
     def gotTopic(self, n, topic):
-        pass
+        self.updateTopic(n, n.nick, topic)
 
 
     def gotSyncTopic(self, src_ipp, ack_key, topic):
@@ -3664,7 +3667,7 @@ class TopicManager(object):
             
             if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
-                pass
+                self.updateTopic(n, n.nick, topic)
 
             # Forget about this message in a minute
             n.schedulePMKeyExpire(ack_key)
@@ -3675,7 +3678,49 @@ class TopicManager(object):
         self.main.ph.sendAckPacket(src_ipp, dtella.ACK_PRIVATE,
                                    ack_flags, ack_key)
 
-        
+
+    def updateTopic(self, n, nick, topic, outdated=False):
+
+        dch = self.main.getOnlineDCH()
+
+        # Don't allow a non-bridge node to override a bridge's topic
+        if self.topic_node:
+            if self.topic_node.bridge_data and (not n.bridge_data):
+                return False
+
+        # Update stored topic, and title bar
+        if (topic != self.topic) and (not outdated):
+            self.topic = topic
+            if dch:
+                dch.pushTopic(topic)
+
+        # Display the event as text (even if it's outdated)
+        if dch and nick:
+            dch.pushChatMessage(
+                dch.bot.nick,
+                "%s changed the topic to \"%s\"" % (nick, topic))
+
+        return True
+
+
+    def broadcastNewTopic(self, topic):
+        osm = self.main.osm
+
+        if len(topic) > 255:
+            topic = topic[:255]
+
+        # TODO: cleanup
+        if not self.updateTopic(osm.me, osm.me.nick, topic):
+            return
+
+        packet = osm.mrm.broadcastHeader('TP', osm.me.ipp)
+        packet.append(struct.pack('!I', osm.mrm.getPacketNumber_search()))
+
+        packet.append(osm.me.nickHash())
+        packet.append(struct.pack('!B', len(topic)))
+        packet.append(topic)
+
+        osm.mrm.newMessage(''.join(packet), tries=4)
 
 
 ##############################################################################            
