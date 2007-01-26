@@ -2219,7 +2219,7 @@ class OnlineStateManager(object):
         dch = self.main.getOnlineDCH()
         if dch:
             dch.d_GetNickList()
-            dcg.grabDtellaTopic()
+            dch.grabDtellaTopic()
 
         self.main.showLoginStatus("Sync Complete; You're Online!",
                                   counter='inc')
