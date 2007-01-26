@@ -2289,6 +2289,10 @@ class OnlineStateManager(object):
                 self.nodes.append(n)
             n.inlist = True
 
+        # Tell the topic manager if a new node signs on
+        if self.syncd and not n.expire_dcall:
+            self.tm.checkNewNode(n)
+
         # Expire this node after the expected retransmit
         self.scheduleNodeExpire(n, expire + NODE_EXPIRE_EXTEND)
 
@@ -3667,7 +3671,7 @@ class TopicManager(object):
             
             if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
-                self.updateTopic(n, n.nick, topic)
+                self.updateTopic(n, None, topic)
 
             # Forget about this message in a minute
             n.schedulePMKeyExpire(ack_key)
@@ -3691,6 +3695,7 @@ class TopicManager(object):
         # Update stored topic, and title bar
         if (topic != self.topic) and (not outdated):
             self.topic = topic
+            self.topic_node = n
             if dch:
                 dch.pushTopic(topic)
 
@@ -3721,6 +3726,36 @@ class TopicManager(object):
         packet.append(topic)
 
         osm.mrm.newMessage(''.join(packet), tries=4)
+
+
+    def checkNewNode(self, n):
+        osm = self.main.osm
+        
+        # Check if I'm in charge of the topic
+        if self.topic_node is not osm.me:
+            print "Topic's not mine"
+            return
+
+        # If no topic is set, then don't bother.
+        if not self.topic:
+            print "Topic's empty"
+            return
+
+        ack_key = n.getPMAckKey()
+
+        # Send a Topic Sync message to the new node
+        packet = ['YT']
+        packet.append(osm.me.ipp)
+        packet.append(ack_key)
+        packet.append(struct.pack('!B', len(self.topic)))
+        packet.append(self.topic)
+        packet = ''.join(packet)
+
+        def fail_cb():
+            print "YT failed"
+
+        ph = self.main.ph
+        n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 
 
 ##############################################################################            

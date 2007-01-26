@@ -657,6 +657,15 @@ class DtellaBot(object):
         if not cmd:
             return
 
+        # This needs to be handled specially
+        if cmd[0] == "TOPIC":
+            try:
+                topic = line.split(' ', 1)[1]
+            except IndexError:
+                topic = None
+            self.handleTopic(out, topic, prefix)
+            return True
+
         def format_out(line):
             for l in word_wrap(line):
                 if l:
@@ -898,15 +907,16 @@ class DtellaBot(object):
         self.syntaxHelp(out, 'REJOIN', prefix)
 
 
-    def handleCmd_TOPIC(self, out, args, prefix):
+    def handleTopic(self, out, topic, prefix):
 
-        text = ' '.join(args)
-
-        if self.main.getOnlineDCH():
-            self.main.osm.tm.broadcastNewTopic(text)
+        if not self.main.getOnlineDCH():
+            out("You must be online to use TOPIC.")
             return
+
+        tm = self.main.osm.tm
+
+        if topic is None:
+            out("The topic is \"%s\"" % tm.topic)
         else:
-            out("You must be online to set the topic!")
-            return
+            tm.broadcastNewTopic(topic)
 
-        self.syntaxHelp(out, 'TOPIC', prefix)
