@@ -3,7 +3,7 @@ import re
 
 network_key = 'PurdueDtella-test9'
 
-hub_name = "dtella@purdue"
+hub_name = "Dtella@Purdue"
 
 dnshost = 'purdue.config.dtella.org'
 
