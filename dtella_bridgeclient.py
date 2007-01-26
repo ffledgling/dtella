@@ -754,8 +754,8 @@ class BridgeNodeData(object):
                     nick = data[ptr:ptr+nick_len]
                     ptr += nick_len
 
-                    (topic_len,) = struct.unpack("!H", data[ptr:ptr+2])
-                    ptr += 2
+                    (topic_len,) = struct.unpack("!B", data[ptr:ptr+1])
+                    ptr += 1
 
                     topic = data[ptr:ptr+topic_len]
                     ptr += topic_len
