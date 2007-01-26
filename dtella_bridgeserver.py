@@ -707,8 +707,6 @@ class IRCServerData(object):
                     )
 
             osm.bsm.sendBridgeChange(chunks)
-            
-
 
 
     def gotQuit(self, nick):
@@ -771,6 +769,9 @@ class IRCServerData(object):
         nicks = list(self.getChan(chan).users)
         nicks.sort()
         return nicks
+
+
+##############################################################################
 
 
 class IRCFactory(ReconnectingClientFactory):
