@@ -2319,6 +2319,10 @@ class OnlineStateManager(object):
         
         n.inlist = False
 
+        # Tell the TopicManager this node is leaving
+        if self.tm:
+            self.tm.checkLeavingNode(n)
+
         # If it's a bridge node, clean up the extra data
         if n.bridge_data:
             n.bridge_data.nodeExited()
@@ -3756,6 +3760,12 @@ class TopicManager(object):
 
         ph = self.main.ph
         n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
+
+
+    def checkLeavingNode(self, n):
+        # If the node who set the topic leaves, wipe out the topic
+        if self.topic_node is n:
+            self.updateTopic("<NOT_A_NODE>", "", "")
 
 
 ##############################################################################            
