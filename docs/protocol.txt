@@ -67,10 +67,16 @@ packet_id = chat packet number
 2-byte length (max 1024)
 + chat_text
 
+* [TP] set topic
+packet_id = general packet number
+4-byte nickhash
+1-byte length
++ topic_text
+
 * [SQ] search request
 packet_id = general packet number
 1-byte length
-       + search_string
+  + search_string
 
 ================ UNICAST TYPES
 
@@ -224,6 +230,17 @@ Every ? seconds:
 A contacted neighbor is either:
     - the neighbor I received your YQ from
     - a neighbor I forwarded your YQ to
+
+
+* [YT] sync topic
+6-byte source ipport
+8-byte ack key
+1-byte topic length
++ topic_text
+
+YT is sent to any new node, from the node who believes that it set the topic
+last.  Nodes will just accept the first YT that arrives, and ignore all
+others.
 
 =============================================
 
@@ -501,9 +518,9 @@ Bridge Private Stuff
 1-byte dest nick length
   + dest nick
 1-byte flags:
-    ?
+  ?
 2-byte length
-       + message_text
+  + message_text
 
 
 ==============
@@ -530,9 +547,14 @@ chunks:
 + N-byte nick
 
 'I' - mode info
-1-byte mode byte
-1-byte description length
-+ N-byte description
+2-byte infostrings length
++ '|'.join(info_strings)
+
+'T' - topic
+1-byte nick length
++ nick (may be 0-length)
+1-byte topic length
++ topic text
 
 'M' - private message:
 1-byte flags:

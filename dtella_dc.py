@@ -5,6 +5,7 @@ from twisted.internet import reactor
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard)
 import dtella
+import dtella_local
 import struct
 
 
@@ -46,7 +47,7 @@ class DCHandler(LineOnlyReceiver):
         self.state = 'login'
 
         self.sendLine("$Lock FOO Pk=BAR")
-        self.sendLine("$HubName Dtella")
+        self.pushTopic()
 
         self.scheduleChatRateControl()
 
@@ -387,6 +388,13 @@ class DCHandler(LineOnlyReceiver):
 
     def pushInfo(self, nick, info):
         self.sendLine('$MyINFO $ALL %s %s' % (nick, info))
+
+
+    def pushTopic(self, topic=None):
+        if topic:
+            self.sendLine("$HubName %s - %s" % (dtella_local.hub_name, topic))
+        else:
+            self.sendLine("$HubName %s" % dtella_local.hub_name)
 
 
     def pushHello(self, nick):

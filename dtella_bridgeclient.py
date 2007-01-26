@@ -413,7 +413,7 @@ class NickNode(object):
         packet.append(text)
         packet = ''.join(packet)
 
-        osm.pmm.sendMessage(self.parent_n, ack_key, packet, fail_cb)
+        self.parent_n.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
     def event_ConnectToMe(self, main, port, fail_cb):
@@ -441,9 +441,6 @@ class BridgeNodeData(object):
 
         # Tuple of info strings; indices match up with the nick modes
         self.infostrings = ()
-
-        # Received Private Messages (Bc messages)
-        self.msgs = {}
 
         self.req_blocks = RandSet()
         self.requestBlocks_dcall = None
@@ -743,8 +740,36 @@ class BridgeNodeData(object):
                 if len(info) != info_len:
                     raise ChunkError("I: info length mismatch")
 
-                self.handleInfo(info)
+                if not outdated:
+                    self.handleInfo(info)
 
+            elif data[ptr] == 'T':
+                ptr += 1
+
+                try:
+                    (nick_len,
+                     ) = struct.unpack("!B", data[ptr:ptr+1])
+                    ptr += 1
+
+                    nick = data[ptr:ptr+nick_len]
+                    ptr += nick_len
+
+                    (topic_len,) = struct.unpack("!H", data[ptr:ptr+2])
+                    ptr += 2
+
+                    topic = data[ptr:ptr+topic_len]
+                    ptr += topic_len
+
+                except struct.error:
+                    raise ChunkError("T: Struct Error")
+
+                if len(nick) != nick_len:
+                    raise ChunkError("T: nick length mismatch")
+
+                if topic_len > 1024 or len(topic) != topic_len:
+                    raise ChunkError("T: topic length mismatch")
+
+                osm.bcm.handleTopic(nick, topic, outdated)
 
             elif data[ptr] == 'R':
                 ptr += 1
@@ -765,7 +790,7 @@ class BridgeNodeData(object):
             if dst_nhash != osm.me.nickHash():
                 raise dtella.Reject
 
-            if ack_key not in self.msgs:
+            if ack_key not in self.parent_n.msgkeys_in:
                 # Haven't seen this message before, so handle it.
 
                 try:
@@ -773,13 +798,7 @@ class BridgeNodeData(object):
                 except ChunkError:
                     raise dtella.Reject
 
-            # Forget about this message in a minute
-            try:
-                self.msgs[ack_key].reset(60.0)
-            except KeyError:
-                def cb():
-                    self.msgs.pop(ack_key)
-                self.msgs[ack_key] = reactor.callLater(60.0, cb)
+            self.parent_n.schedulePMKeyExpire(ack_key)
 
         except dtella.Reject:
             ack_flags |= dtella.ACK_REJECT_BIT
@@ -967,7 +986,7 @@ class BridgeClientManager(object):
             def cb(blocks, key):
                 del blocks[key]
 
-            self.expire_dcall = reactor.callLater(15.0, cb, blocks, key)    
+            self.expire_dcall = reactor.callLater(15.0, cb, blocks, key)
 
 
     def __init__(self, main):
@@ -976,8 +995,11 @@ class BridgeClientManager(object):
         # Keep track of the latest bridge packet number, so that older
         # signed messages can be discarded.
         self.bridge_time = 0
-        
         self.unclaimed_blocks = {}
+
+        # Which node set the topic last
+        self.topic_node = None
+        self.topic = ""
 
 
     def signatureExpired(self, pktnum):
@@ -1027,6 +1049,24 @@ class BridgeClientManager(object):
         else:
             if not bdata.addDataBlock(bhash, data):
                 self.addUnclaimedDataBlock(key, data)
+
+
+    def handleTopic(self, nick, topic, outdated):
+        # Topic set/change event came from a bridge
+
+        dch = self.main.getOnlineDCH()
+
+        # Update stored topic, and title bar
+        if (topic != self.topic) and (not outdated):
+            self.topic = topic
+            if dch:
+                dch.pushTopic(topic)
+
+        # Even if it's outdated, display the event as text
+        if dch and nick:
+            dch.pushChatMessage(
+                dch.bot.nick,
+                "%s changed the topic to \"%s\"" % (nick, topic))
 
 
     def addUnclaimedDataBlock(self, key, data):

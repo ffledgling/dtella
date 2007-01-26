@@ -961,9 +961,46 @@ class PeerHandler(DatagramProtocol):
 
             raise Reject
 
-
         self.handleBroadcast(ad, data, check_cb)
 
+
+    def handlePacket_TP(self, ad, data):
+        # Broadcast: Set topic
+
+        osm = self.main.osm
+
+        def check_cb(src_n, src_ipp, rest):
+
+            (pktnum, nhash, rest
+             ) = self.decodePacket('!I4s+', rest)
+
+            topic, rest = self.decodeString1(rest)
+            if rest:
+                raise BadPacketError("Extra data")
+
+            if src_ipp == osm.me.ipp:
+                # Weird...
+                raise BadBroadcast
+
+            if not osm.syncd:
+                # Not syncd, forward blindly
+                return None
+
+            if src_n and src_n.bridge_data:
+                # Bridge can't set the topic like this
+                raise BadBroadcast
+            
+            if src_n and src_n.expire_dcall:
+                
+                def new_cb():
+                    osm.tm.gotTopic(src_n, topic)
+                
+                return new_cb
+
+            raise Reject
+
+        self.handleBroadcast(ad, data, check_cb)
+        
 
     def handlePacket_SQ(self, ad, data):
         # Broadcast: Search Request
@@ -1026,8 +1063,13 @@ class PeerHandler(DatagramProtocol):
             if not osm.syncd:
                 raise BadTimingError("Not ready for PM AK packet")
 
-            osm.pmm.receivedAck(src_ipp, ack_key, reject)
-            
+            try:
+                n = osm.lookup_ipp[src_ipp]
+            except KeyError:
+                raise BadTimingError("AK: Unknown PM ACK node")
+            else:
+                n.receivedPrivateMessageAck(ack_key, reject)
+
         elif mode == ACK_BROADCAST:
             # Handle a broadcast ack
 
@@ -1094,6 +1136,26 @@ class PeerHandler(DatagramProtocol):
 
         osm.pmm.receivedMessage(kind, src_ipp, ack_key,
                                 src_nhash, dst_nhash, notice, text)
+
+
+    def handlePacket_YT(self, ad, data):
+        # Direct: Sync Topic
+
+        (kind, src_ipp, ack_key, rest
+         ) = self.decodePacket('!2s6s8s+', data)
+
+        osm = self.main.osm
+        if not (osm and osm.syncd):
+            raise BadTimingError("Not ready for YT")
+
+        self.checkSource(src_ipp, ad)
+
+        topic, rest = self.decodeString1(rest)
+
+        if rest:
+            raise BadPacketError("Extra data")
+
+        osm.tm.gotSyncTopic(src_ipp, ack_key, topic)
 
 
     def handlePacket_PG(self, ad, data):
@@ -1557,8 +1619,9 @@ class Node(object):
         self.expire_dcall = None  # dcall for expiring stale nodes
         self.status_pktnum = None # Pktnum of last status update
 
-        # PrivateMessageManager stuff
-        self.privmsgs = {}
+        # ack_key -> timeout DelayedCall
+        self.msgkeys_out = {}
+        self.msgkeys_in = {}
 
         # Ping stuff
         self.reqs = {}                # {ack_key: time sent}
@@ -1614,22 +1677,73 @@ class Node(object):
 
 
     def getPMAckKey(self):
-        # Generate random packet ID
+        # Generate random packet ID for messages going TO this node
         while 1:
             ack_key = randbytes(8)
-            if ack_key not in self.privmsgs:
+            if ack_key not in self.msgkeys_out:
                 break
 
         return ack_key
 
 
+    def schedulePMKeyExpire(self, ack_key):
+        # Schedule expiration of a PM ack key, for messages we
+        # receive _FROM_ this node.
+    
+        try:
+            self.msgkeys_in[ack_key].reset(60.0)
+        except KeyError:
+            def cb():
+                self.msgkeys_in.pop(ack_key)
+            self.msgkeys_in[ack_key] = reactor.callLater(60.0, cb)
+    
+
+
     def cancelPrivMsgs(self):
         # Cancel all pending privmsg timeouts
+
+        for dcall in self.msgkeys_in.itervalues():
+            dcall.cancel()
         
-        for dcall in self.privmsgs.itervalues():
+        for dcall in self.msgkeys_out.itervalues():
             dcall.cancel()
 
-        self.privmsgs.clear()
+        self.msgkeys_in.clear()
+        self.msgkeys_out.clear()
+
+
+    def sendPrivateMessage(self, ph, ack_key, packet, fail_cb):
+        # Send an ACK-able direct message to this node
+
+        def cb(tries):
+
+            if tries == 0:
+                del self.msgkeys_out[ack_key]
+
+                if fail_cb:
+                    fail_cb()
+                return
+
+            ad = Ad().setRawIPPort(self.ipp)
+            ph.sendPacket(packet, ad.getAddrTuple())
+
+            # Set timeout for outbound message
+            # This will be cancelled if we receive an AK in time.
+            self.msgkeys_out[ack_key] = reactor.callLater(1.0, cb, tries-1)
+
+        # Send it 3 times, then fail.
+        cb(3)
+
+
+    def receivedPrivateMessageAck(self, ack_key, reject):
+        # Got an ACK for a private message
+        try:
+            if reject:
+                self.msgkeys_out[ack_key].reset(0)
+            else:
+                self.msgkeys_out.pop(ack_key).cancel()
+        except KeyError:
+            pass
 
 
     def stillAlive(self):
@@ -1662,7 +1776,7 @@ class Node(object):
         packet.append(text)
         packet = ''.join(packet)
 
-        osm.pmm.sendMessage(self, ack_key, packet, fail_cb)
+        self.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
     def event_ConnectToMe(self, main, port, fail_cb):
@@ -1679,7 +1793,7 @@ class Node(object):
         packet.append(struct.pack('!H', port))
         packet = ''.join(packet)
 
-        osm.pmm.sendMessage(self, ack_key, packet, fail_cb)
+        self.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
     def event_RevConnectToMe(self, main, fail_cb):
@@ -1695,7 +1809,7 @@ class Node(object):
         packet.append(self.nickHash())
         packet = ''.join(packet)
 
-        osm.pmm.sendMessage(self, ack_key, packet, fail_cb)
+        self.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
     def shutdown(self):
@@ -2003,14 +2117,11 @@ class OnlineStateManager(object):
         # SyncManager (init after contacting the first neighbor)
         self.sm = None
 
-        # SyncRequestRoutingManager (init when sync is established)
-        self.yqrm = None
-
-        # ChatMessageSequencer (init when sync is established)
-        self.cms = None
-
-        # PrivateMessageManager (init when sync is established)
-        self.pmm = None
+        # Init all these when sync is established:
+        self.yqrm = None        # SyncRequestRoutingManager
+        self.cms = None         # ChatMessageSequencer
+        self.pmm = None         # PrivateMessageManager
+        self.tm = None          # TopicManager
 
         self.sendStatus_dcall = None
 
@@ -2091,6 +2202,7 @@ class OnlineStateManager(object):
         self.yqrm = SyncRequestRoutingManager(self.main)
         self.cms = ChatMessageSequencer(self.main)
         self.pmm = PrivateMessageManager(self.main)
+        self.tm = TopicManager(self.main)
         self.syncd = True
 
         if self.bsm:
@@ -3434,52 +3546,10 @@ class ChatMessageSequencer(object):
 
 
 class PrivateMessageManager(object):
-    # Keep track of private messaegs and connection requests
+    # Handles incoming private messages and connection requests
 
     def __init__(self, main):
         self.main = main
-
-        # Inbound messages
-        self.msgs = {}  # {ack_key -> expire_dcall}
-
-
-    def receivedAck(self, src_ipp, ack_key, reject):
-
-        osm = self.main.osm
-
-        try:
-            if reject:
-                osm.lookup_ipp[src_ipp].privmsgs[ack_key].reset(0)
-            else:
-                osm.lookup_ipp[src_ipp].privmsgs.pop(ack_key).cancel()
-        except KeyError:
-            print "PM ack: no match"
-
-
-    def sendMessage(self, n, ack_key, packet, fail_cb):
-        # Send a PrivMsg, ConnectToMe, or RevConnectToMe
-
-        osm = self.main.osm
-
-        def cb(n, tries):
-
-            if tries == 0:
-                del n.privmsgs[ack_key]
-
-                if fail_cb:
-                    fail_cb()
-                return
-
-            ph = self.main.ph
-            ad = Ad().setRawIPPort(n.ipp)
-            ph.sendPacket(packet, ad.getAddrTuple())
-
-            # Set timeout for outbound message
-            # This will be cancelled if we receive an AK in time.
-            n.privmsgs[ack_key] = reactor.callLater(1.0, cb, n, tries-1)
-
-        # Send it 3 times, then fail.
-        cb(n, 3)
 
 
     def receivedMessage(self, kind, src_ipp, ack_key,
@@ -3512,18 +3582,13 @@ class PrivateMessageManager(object):
                 # Dest nickhash mismatch
                 raise Reject
 
-            if ack_key not in self.msgs:
+            if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
                 f = getattr(self, 'handleMessage_%s' % kind)
                 f(n, *args)
 
             # Forget about this message in a minute
-            try:
-                self.msgs[ack_key].reset(60.0)
-            except KeyError:
-                def cb():
-                    self.msgs.pop(ack_key)
-                self.msgs[ack_key] = reactor.callLater(60.0, cb)
+            n.schedulePMKeyExpire(ack_key)
 
         except Reject:
             ack_flags |= ACK_REJECT_BIT
@@ -3565,11 +3630,52 @@ class PrivateMessageManager(object):
         dch.pushRevConnectToMe(n.nick)
 
 
-    def shutdown(self):
-        for dcall in self.msgs.values():
-            dcall.cancel()
+##############################################################################
 
-        self.msgs.clear()
+
+class TopicManager(object):
+
+    def __init__(self, main):
+        self.main = main
+        self.topic = ""
+        self.topic_node = None
+
+
+    def gotTopic(self, n, topic):
+        pass
+
+
+    def gotSyncTopic(self, src_ipp, ack_key, topic):
+
+        osm = self.main.osm
+
+        ack_flags = 0
+
+        try:
+            try:
+                n = osm.lookup_ipp[src_ipp]
+            except KeyError:
+                # Never heard of this node
+                raise dtella.Reject
+
+            if not n.expire_dcall:
+                # Node isn't online
+                raise dtella.Reject
+            
+            if ack_key not in n.msgkeys_in:
+                # Haven't seen this message before, so handle it
+                pass
+
+            # Forget about this message in a minute
+            n.schedulePMKeyExpire(ack_key)
+
+        except dtella.Reject:
+            ack_flags |= dtella.ACK_REJECT_BIT
+
+        self.main.ph.sendAckPacket(src_ipp, dtella.ACK_PRIVATE,
+                                   ack_flags, ack_key)
+
+        
 
 
 ##############################################################################            

@@ -1134,6 +1134,7 @@ class BridgeServerManager(object):
 
         osm = self.main.osm
         ircs = self.main.ircs
+        ph = self.main.ph
 
         assert (osm and osm.syncd and ircs and ircs.syncd)
 
@@ -1153,7 +1154,7 @@ class BridgeServerManager(object):
         def fail_cb():
             print "bC failed."
 
-        osm.pmm.sendMessage(n, ack_key, packet, fail_cb)
+        n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 
 
     def addNickChunk(self, chunks, nick, mode):
@@ -1275,12 +1276,7 @@ class BridgeServerManager(object):
                               (dc_to_irc(n.nick), dst_nick, text))
 
             # Forget about this message in a minute
-            try:
-                self.msgs[ack_key].reset(60.0)
-            except KeyError:
-                def cb():
-                    self.msgs.pop(ack_key)
-                self.msgs[ack_key] = reactor.callLater(60.0, cb)
+            n.schedulePMKeyExpire(ack_key)
 
         except dtella.Reject:
             ack_flags |= dtella.ACK_REJECT_BIT

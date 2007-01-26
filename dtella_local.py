@@ -3,6 +3,8 @@ import re
 
 network_key = 'PurdueDtella-test9'
 
+hub_name = "dtella@purdue"
+
 dnshost = 'purdue.config.dtella.org'
 
 def validateIP(ip):
