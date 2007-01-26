@@ -1068,7 +1068,8 @@ class PeerHandler(DatagramProtocol):
             except KeyError:
                 raise BadTimingError("AK: Unknown PM ACK node")
             else:
-                n.receivedPrivateMessageAck(ack_key, reject)
+                pass
+                #n.receivedPrivateMessageAck(ack_key, reject)
 
         elif mode == ACK_BROADCAST:
             # Handle a broadcast ack

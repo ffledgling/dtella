@@ -903,9 +903,6 @@ class BridgeServerManager(object):
 
         self.sendState_dcall = None
 
-        # Incoming private messages:
-        self.msgs = {} # {ack_key -> expire_dcall}
-
         self.cached_blocks = {}  # hash -> CachedBlock()
 
 
@@ -1260,7 +1257,7 @@ class BridgeServerManager(object):
                 # Source nickhash mismatch
                 raise dtella.Reject
 
-            if ack_key not in self.msgs:
+            if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
 
                 try:
@@ -1287,11 +1284,6 @@ class BridgeServerManager(object):
 
     def shutdown(self):
         dcall_discard(self, 'sendState_dcall')
-
-        for dcall in self.msgs.itervalues():
-            dcall.cancel()
-
-        self.msgs.clear()
 
         for b in self.cached_blocks.itervalues():
             dcall_discard(b, 'expire_dcall')
