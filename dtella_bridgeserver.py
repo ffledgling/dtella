@@ -6,7 +6,7 @@
 
 import fixtwistedtime
 
-from twisted.internet.protocol import ClientFactory, ServerFactory
+from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet import reactor, defer
 from twisted.python.runtime import seconds
@@ -149,7 +149,7 @@ class IRCServer(LineOnlyReceiver):
 
 
     def connectionMade(self):
-        self.main.ircs = self
+        self.main.addIRCServer(self)
         self.sendLine("PASS :%s" % (cfg.irc_password,))
         self.sendLine("SERVER %s 1 :%s" % (cfg.my_host, cfg.my_name))
 
@@ -252,6 +252,9 @@ class IRCServer(LineOnlyReceiver):
 
             if not self.readytosend:
                 self.readytosend = True
+
+                # Tell the ReconnectingClientFactory that we're cool
+                self.factory.resetDelay()
 
                 # Send my own bridge nick
                 self.pushFullJoin(cfg.dc_to_irc_bot, "bridge", "dtella.net")
@@ -460,7 +463,7 @@ class IRCServer(LineOnlyReceiver):
 
 
     def connectionLost(self, result):
-        self.main.ircs = None
+        self.main.removeIRCServer(self)
         
         if self.shutdown_deferred:
             self.shutdown_deferred.callback("Bye!")
@@ -770,7 +773,12 @@ class IRCServerData(object):
         return nicks
 
 
-class IRCFactory(ClientFactory):
+class IRCFactory(ReconnectingClientFactory):
+
+    initialDelay = 10
+    maxDelay = 60*20
+    factor = 1.5
+    
     def __init__(self, main):
         self.main = main
 
@@ -894,8 +902,9 @@ class BridgeServerManager(object):
         if ircs and ircs.readytosend:
             ircs.sendState()
 
-        if ircs and ircs.syncd:
-            osm.bsm.sendState()
+        # Broadcast the bridge state into Dtella.
+        # (This may have no IRC nicks if ircs isn't sycnd yet)
+        osm.bsm.sendState()
 
 
     def signPacket(self, packet, broadcast):
@@ -973,9 +982,8 @@ class BridgeServerManager(object):
             self.sendState_dcall = None
 
             osm = self.main.osm
-            ircs = self.main.ircs
 
-            assert (osm and osm.syncd and ircs and ircs.syncd)
+            assert (osm and osm.syncd)
 
             # Decide when to retransmit next
             when = 60 * 5
@@ -1009,7 +1017,12 @@ class BridgeServerManager(object):
         # All the state info common between BS and Br packets
 
         osm = self.main.osm
+        assert (osm and osm.syncd)
+
+        # Get the IRC Server, if it's ready
         ircs = self.main.ircs
+        if ircs and (not ircs.syncd):
+            ircs = None
 
         # Sequence number
         packet.append(self.nextPktNum())
@@ -1028,17 +1041,18 @@ class BridgeServerManager(object):
         # Add info strings
         self.addInfoChunk(chunks)
 
-        # Get IRC nick list
-        nicks = set(ircs.data.getNicksInChan(cfg.irc_chan))
-        nicks.update(cfg.virtual_nicks)
-        nicks = list(nicks)
-        nicks.sort()
+        if ircs:
+            # Get IRC nick list
+            nicks = set(ircs.data.getNicksInChan(cfg.irc_chan))
+            nicks.update(cfg.virtual_nicks)
+            nicks = list(nicks)
+            nicks.sort()
 
-        # Add the list of online nicks
-        c = ircs.data.getChan(cfg.irc_chan)
-        for nick in nicks:
-            self.addNickChunk(
-                chunks, irc_to_dc(nick), c.getInfoIndex(nick))
+            # Add the list of online nicks
+            c = ircs.data.getChan(cfg.irc_chan)
+            for nick in nicks:
+                self.addNickChunk(
+                    chunks, irc_to_dc(nick), c.getInfoIndex(nick))
 
         chunks = ''.join(chunks)
 
@@ -1391,10 +1405,21 @@ class DtellaBridgeMain(object):
         return
 
 
-#def main():
-#    ircfactory = IrcFactory()
-#    reactor.connectTCP(cfg.irc_server, cfg.irc_port, ircfactory)
-#    reactor.run()
+    def addIRCServer(self, ircs):
+        assert (not self.ircs)
+        self.ircs = ircs
+
+
+    def removeIRCServer(self, ircs):
+        assert ircs and (self.ircs is ircs)
+
+        self.ircs = None
+
+        # If the IRC server had been syncd, then broadcast a mostly-empty
+        # status update to Dtella, to show that all the nicks are gone.
+        osm = self.osm
+        if (osm and osm.syncd and ircs.syncd):
+            osm.bsm.sendState()
 
 
 if __name__ == '__main__':
