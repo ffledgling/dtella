@@ -3672,11 +3672,11 @@ class TopicManager(object):
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
                 # Never heard of this node
-                raise dtella.Reject
+                raise Reject
 
             if not n.expire_dcall:
                 # Node isn't online
-                raise dtella.Reject
+                raise Reject
 
             if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
@@ -3688,10 +3688,10 @@ class TopicManager(object):
             # Forget about this message in a minute
             n.schedulePMKeyExpire(ack_key)
 
-        except dtella.Reject:
-            ack_flags |= dtella.ACK_REJECT_BIT
+        except Reject:
+            ack_flags |= ACK_REJECT_BIT
 
-        self.main.ph.sendAckPacket(src_ipp, dtella.ACK_PRIVATE,
+        self.main.ph.sendAckPacket(src_ipp, ACK_PRIVATE,
                                    ack_flags, ack_key)
 
 
