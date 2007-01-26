@@ -3651,6 +3651,11 @@ class TopicManager(object):
         self.topic = ""
         self.topic_node = None
 
+        # After I sign on, wait 10 seconds for someone to send me a topic.
+        def cb():
+            self.sync_timeout = None
+        self.sync_timeout = reactor.callLater(10.0, cb)
+
 
     def gotTopic(self, n, topic):
         self.updateTopic(n, n.nick, topic)
@@ -3672,10 +3677,13 @@ class TopicManager(object):
             if not n.expire_dcall:
                 # Node isn't online
                 raise dtella.Reject
-            
+
             if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
-                self.updateTopic(n, None, topic)
+
+                if self.sync_timeout:
+                    dcall_discard(self, 'sync_timeout')
+                    self.updateTopic(n, None, topic)
 
             # Forget about this message in a minute
             n.schedulePMKeyExpire(ack_key)
@@ -3692,7 +3700,7 @@ class TopicManager(object):
         dch = self.main.getOnlineDCH()
 
         # Don't allow a non-bridge node to override a bridge's topic
-        if self.topic_node:
+        if self.topic_node and n:
             if self.topic_node.bridge_data and (not n.bridge_data):
                 return False
 
@@ -3765,7 +3773,7 @@ class TopicManager(object):
     def checkLeavingNode(self, n):
         # If the node who set the topic leaves, wipe out the topic
         if self.topic_node is n:
-            self.updateTopic("<NOT_A_NODE>", "", "")
+            self.updateTopic(None, None, "")
 
 
 ##############################################################################            
