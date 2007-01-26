@@ -148,6 +148,9 @@ class IRCServer(LineOnlyReceiver):
         self.readytosend = False
         self.shutdown_deferred = None
 
+        self.ping_dcall = None
+        self.ping_waiting = False
+
 
     def connectionMade(self):
         self.main.addIRCServer(self)
@@ -180,7 +183,15 @@ class IRCServer(LineOnlyReceiver):
 
         if command == "PING":
             print "PING? PONG!"
-            self.sendLine("PONG :%s" % (args[0]))
+            if len(args) == 1:
+                self.sendLine("PONG %s :%s" % (cfg.my_host, args[0]))
+            elif len(args) == 2:
+                self.sendLine("PONG %s :%s" % (args[1], args[0]))
+
+        elif command == "PONG":
+            if self.ping_waiting:
+                self.ping_waiting = False
+                self.schedulePing()
 
         elif command == "NICK":
 
@@ -280,6 +291,8 @@ class IRCServer(LineOnlyReceiver):
                 osm = self.main.osm
                 if osm and osm.syncd:
                     osm.bsm.sendState()
+
+                self.schedulePing()
 
 
         elif command == "PRIVMSG":
@@ -398,6 +411,27 @@ class IRCServer(LineOnlyReceiver):
         if target is None:
             target = cfg.irc_chan
         self.sendLine(":%s NOTICE %s :%s" % (nick, target, text))
+
+
+    def schedulePing(self):
+
+        if self.ping_dcall:
+            self.ping_dcall.reset(60.0)
+            return
+        
+        def cb():
+            print "PING cb():", time.time()
+            self.ping_dcall = None
+
+            if self.ping_waiting:
+                print "Ping timeout!"
+                self.transport.loseConnection()
+            else:
+                self.sendLine("PING :%s" % cfg.my_host)
+                self.ping_waiting = True
+                self.ping_dcall = reactor.callLater(15.0, cb)
+
+        self.ping_dcall = reactor.callLater(60.0, cb)
 
 
     def event_AddNick(self, nick, n):
