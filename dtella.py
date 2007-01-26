@@ -35,13 +35,11 @@ except ImportError:
 
 # TODO: notification of a remote nick collision
 
-# TODO: Add a REJOIN (?) command to let the user retry a collided nick
-
-# TODO: Make the delay between NH updates grow with the size of the network
-
 # TODO: Ping ack delay should affect the retransmit time for broadcasts?
 
 # TODO: Make the sending of status updates more time conscious.
+
+# TODO: Clean up duplicated code between DtellaMain and DtellaBridgeMain
 
 
 # Miscellaneous Exceptions

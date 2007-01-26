@@ -17,6 +17,7 @@ from Crypto.PublicKey import RSA
 import time
 import struct
 import md5
+import random
 
 import dtella
 import dtella_state
@@ -1285,6 +1286,7 @@ class DtellaBridgeMain(object):
         self.osm = None
 
         self.reconnect_dcall = None
+        self.reconnect_interval = dtella.RECONNECT_RANGE[0]
 
         # State Manager
         self.state = dtella_state.StateManager(self, 'dtella_bridge.state')
@@ -1321,8 +1323,9 @@ class DtellaBridgeMain(object):
     def startConnecting(self):
         # If all the conditions are right, start connection procedure
 
-        if self.icm or self.osm:
-            raise dtella.WhoopsError("Can't start connecting in this state")
+        assert not (self.icm or self.osm)
+
+        dcall_discard(self, 'reconnect_dcall')
 
         def cb():
             icm = self.icm
@@ -1349,9 +1352,12 @@ class DtellaBridgeMain(object):
 
     def startNodeSync(self, node_ipps=()):
         # Determine my IP address and enable the osm
-        
-        if self.icm or self.osm:
-            raise dtella.WhoopsError("Can't start syncing in this state")
+
+        assert not (self.icm or self.osm)
+
+        # Reset the reconnect interval
+        self.reconnect_interval = dtella.RECONNECT_RANGE[0]
+        dcall_discard(self, 'reconnect_dcall')
 
         ad = Ad().setTextIP(cfg.my_ip)
         ad.port = self.state.udp_port
@@ -1374,6 +1380,8 @@ class DtellaBridgeMain(object):
         if self.icm or self.osm:
             self.showLoginStatus("Shutting down.")
 
+        dcall_discard(self, 'reconnect_dcall')
+
         # Shut down InitialContactManager
         if self.icm:
             self.icm.shutdown()
@@ -1383,6 +1391,25 @@ class DtellaBridgeMain(object):
         if self.osm:
             self.osm.shutdown()
             self.osm = None
+
+        if final:
+            # Final shutdown, don't reconnect.
+            return
+
+        # Decide how long to wait before reconnecting
+        when = self.reconnect_interval * random.uniform(0.8, 1.2)
+
+        # Increase the reconnect interval logarithmically
+        self.reconnect_interval = min(self.reconnect_interval * 1.5,
+                                      dtella.RECONNECT_RANGE[1])
+
+        self.showLoginStatus("Reconnecting in %d seconds." % when)
+
+        def cb():
+            self.reconnect_dcall = None
+            self.startConnecting()
+
+        self.reconnect_dcall = reactor.callLater(when, cb)
 
 
     def getOnlineDCH(self):
