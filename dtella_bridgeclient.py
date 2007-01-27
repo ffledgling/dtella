@@ -92,35 +92,34 @@ class BridgeClientProtocol(dtella.PeerHandler):
             if self.isOutdatedBridgeStatus(src_n, pktnum):
                 raise BadBroadcast
 
-            def new_cb():
-                # Make sure public key matches a hash in DNS
-                pkhash = md5.new(pubkey).digest()
-                if pkhash not in self.main.dnsh.pkhashes:
-                    return
+            # Make sure public key matches a hash in DNS
+            pkhash = md5.new(pubkey).digest()
+            if pkhash not in self.main.dnsh.pkhashes:
+                # Not useful to me, but still forward it
+                return
 
-                # Generate RSA object from public key
-                try:
-                    rsa_obj = RSA.construct((bytes_to_long(pubkey), 65537L))
-                except:
-                    return
+            # Generate RSA object from public key
+            try:
+                rsa_obj = RSA.construct((bytes_to_long(pubkey), 65537L))
+            except:
+                return
 
-                # Verify signature
-                if not self.verifySignature(
-                    rsa_obj, data, signature, broadcast=True):
-                    return
+            # Verify signature
+            if not self.verifySignature(
+                rsa_obj, data, signature, broadcast=True):
+                # Useless...
+                raise BadBroadcast
 
-                # Keep track of the timestamp
-                osm.bcm.updateBridgeTime(pktnum)
+            # Keep track of the timestamp
+            osm.bcm.updateBridgeTime(pktnum)
 
-                # Update basic status
-                n = osm.refreshNodeStatus(
-                    src_ipp, None, expire, sesid, uptime, persist, '', '')
+            # Update basic status
+            n = osm.refreshNodeStatus(
+                src_ipp, None, expire, sesid, uptime, persist, '', '')
 
-                # Update bridge-specific status
-                osm.bcm.refreshBridgeNodeStatus(
-                    n, pktnum, rsa_obj, hashes, do_request=False)
-
-            return new_cb
+            # Update bridge-specific status
+            osm.bcm.refreshBridgeNodeStatus(
+                n, pktnum, rsa_obj, hashes, do_request=False)
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -226,10 +225,7 @@ class BridgeClientProtocol(dtella.PeerHandler):
             if osm.bcm.signatureExpired(pktnum):
                 raise BadBroadcast
 
-            def new_cb():
-                osm.bcm.handleDataBlock(src_ipp, blockdata)
-
-            return new_cb
+            osm.bcm.handleDataBlock(src_ipp, blockdata)
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -254,24 +250,20 @@ class BridgeClientProtocol(dtella.PeerHandler):
             if not (src_n and src_n.bridge_data):
                 return None
 
-            def new_cb():
-                bdata = src_n.bridge_data
+            bdata = src_n.bridge_data
 
-                # Verify signature
-                if not self.verifySignature(
-                    bdata.rsa_obj, data, signature, broadcast=True):
-                    print "BC: Invalid signature"
-                    return
+            # Verify signature
+            if not self.verifySignature(
+                bdata.rsa_obj, data, signature, broadcast=True):
+                return
+            
+            # Keep track of the timestamp
+            osm.bcm.updateBridgeTime(pktnum)
 
-                # Keep track of the timestamp
-                osm.bcm.updateBridgeTime(pktnum)
-
-                try:
-                    bdata.processChunks(chunks, pktnum)
-                except ChunkError:
-                    print "BC: bad chunks"
-
-            return new_cb
+            try:
+                bdata.processChunks(chunks, pktnum)
+            except ChunkError:
+                print "BC: bad chunks"
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -297,22 +289,18 @@ class BridgeClientProtocol(dtella.PeerHandler):
             if not (src_n and src_n.bridge_data):
                 return None
 
-            def new_cb():
-                bdata = src_n.bridge_data
-                
-                # Verify signature
-                if not self.verifySignature(
-                    bdata.rsa_obj, data, signature, broadcast=True):
-                    print "BX: Invalid signature"
-                    return
+            bdata = src_n.bridge_data
+            
+            # Verify signature
+            if not self.verifySignature(
+                bdata.rsa_obj, data, signature, broadcast=True):
+                return
 
-                # Keep track of the timestamp
-                osm.bcm.updateBridgeTime(pktnum)
+            # Keep track of the timestamp
+            osm.bcm.updateBridgeTime(pktnum)
 
-                # Exit the node
-                osm.nodeExited(src_n)
-
-            return new_cb
+            # Exit the node
+            osm.nodeExited(src_n)
 
         self.handleBroadcast(ad, data, check_cb)
         

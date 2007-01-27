@@ -41,8 +41,6 @@ except ImportError:
 
 # TODO: Clean up duplicated code between DtellaMain and DtellaBridgeMain
 
-# TODO: Might be able to get rid of the new_cb() mess.
-
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -391,7 +389,7 @@ class PeerHandler(DatagramProtocol):
 
         # Callback the check_cb function
         try:
-            new_cb = check_cb(src_n, src_ipp, rest)
+            check_cb(src_n, src_ipp, rest)
 
         except BadBroadcast:
             # Mark that we've seen this message, but don't forward it.
@@ -403,8 +401,6 @@ class PeerHandler(DatagramProtocol):
 
         except Reject:
             # check_cb told us to reject this broadcast
-            new_cb = None
-
             if src_ipp == nb_ipp:
                 # If this is from a neighbor, just set the flag.
                 # We'll send the ack later.
@@ -436,10 +432,6 @@ class PeerHandler(DatagramProtocol):
         # Update the original sender's age in the peer cache
         src_ad = Ad().setRawIPPort(src_ipp)
         self.main.state.refreshPeer(src_ad, 0)
-
-        # Callback the new_cb function
-        if new_cb:
-            new_cb()
 
 
     def sendAckPacket(self, ipp, mode, flags, ack_key):
@@ -747,12 +739,9 @@ class PeerHandler(DatagramProtocol):
             if self.isOutdatedStatus(src_n, pktnum):
                 raise BadBroadcast
 
-            def new_cb():
-                self.main.osm.refreshNodeStatus(
-                    src_ipp, pktnum, expire, sesid, uptime,
-                    persist, nick, info)
-
-            return new_cb
+            self.main.osm.refreshNodeStatus(
+                src_ipp, pktnum, expire, sesid, uptime,
+                persist, nick, info)
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -779,18 +768,15 @@ class PeerHandler(DatagramProtocol):
                 print "Outdated NH message"
                 raise BadBroadcast
 
-            def new_cb():
-                src_n.status_pktnum = pktnum
-                osm.scheduleNodeExpire(
-                    src_n, expire + NODE_EXPIRE_EXTEND)
-
             if osm.syncd:
                 if (src_n and src_n.expire_dcall and
                     src_n.infoHash() == infohash
                     ):
                     # We are syncd, and this node matches, so extend the
                     # expire timeout and keep forwarding.
-                    return new_cb
+                    src_n.status_pktnum = pktnum
+                    osm.scheduleNodeExpire(src_n, expire + NODE_EXPIRE_EXTEND)
+                    return
                 
                 else:
                     # Syncd, and we don't recognize it
@@ -800,12 +786,14 @@ class PeerHandler(DatagramProtocol):
                 if not (src_n and src_n.expire_dcall):
                     # Not syncd, don't know enough about this node yet,
                     # so just forward blindly.
-                    return None
+                    return
 
                 elif src_n.infoHash() == infohash:
                     # We know about this node already, and the infohash
                     # matches, so extend timeout and keep forwarding
-                    return new_cb
+                    src_n.status_pktnum = pktnum
+                    osm.scheduleNodeExpire(src_n, expire + NODE_EXPIRE_EXTEND)
+                    return
                 
                 else:
                     # Not syncd, but we know the infoHash is wrong.
@@ -852,12 +840,10 @@ class PeerHandler(DatagramProtocol):
             elif not src_n:
                 # Not syncd, and haven't seen this node yet.
                 # Forward blindly
-                return None
+                return
 
-            def new_cb():
-                osm.nodeExited(src_n, "Received NX")
-
-            return new_cb
+            # Remove node
+            osm.nodeExited(src_n, "Received NX")
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -888,14 +874,10 @@ class PeerHandler(DatagramProtocol):
                 print "NF is outdated"
                 raise BadBroadcast
 
-            def new_cb():
-                # Reduce the expiration time.  If that node isn't actually
-                # dead, it will rebroadcast a status update to correct it.
-                
-                if (dcall_timeleft(src_n.expire_dcall) > NODE_EXPIRE_EXTEND):
-                    osm.scheduleNodeExpire(src_n, NODE_EXPIRE_EXTEND)
-                    
-            return new_cb
+            # Reduce the expiration time.  If that node isn't actually
+            # dead, it will rebroadcast a status update to correct it.
+            if (dcall_timeleft(src_n.expire_dcall) > NODE_EXPIRE_EXTEND):
+                osm.scheduleNodeExpire(src_n, NODE_EXPIRE_EXTEND)
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -944,25 +926,20 @@ class PeerHandler(DatagramProtocol):
 
             if src_ipp == osm.me.ipp:
                 # Possibly a spoofed chat from me
-                # TOOD: post some sort of warning?
                 raise BadBroadcast
 
             if not osm.syncd:
                 # Not syncd, forward blindly
-                return None
+                return
 
             if src_n and src_n.bridge_data:
                 raise BadBroadcast
             
-            if src_n and src_n.expire_dcall and nhash == src_n.nickHash():
-                
-                def new_cb():
-                    osm.cms.addMessage(src_ipp, pktnum,
-                                       src_n.nick, text, flags)
-                
-                return new_cb
+            elif src_n and src_n.expire_dcall and nhash == src_n.nickHash():
+                osm.cms.addMessage(src_ipp, pktnum, src_n.nick, text, flags)
 
-            raise Reject
+            else:
+                raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -993,14 +970,11 @@ class PeerHandler(DatagramProtocol):
                 # Bridge can't set the topic like this
                 raise BadBroadcast
             
-            if src_n and src_n.expire_dcall:
-                
-                def new_cb():
-                    osm.tm.gotTopic(src_n, topic)
-                
-                return new_cb
+            if src_n and src_n.expire_dcall and nhash == src_n.nickHash():
+                osm.tm.gotTopic(src_n, topic)
 
-            raise Reject
+            else:
+                raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
         
@@ -1028,20 +1002,19 @@ class PeerHandler(DatagramProtocol):
 
             if not osm.syncd:
                 # Not syncd, forward blindly
-                return None
+                return
 
             if src_n and src_n.expire_dcall:
                 # Looks good
 
-                def new_cb():
-                    dch = self.main.getOnlineDCH()
+                dch = self.main.getOnlineDCH()
 
-                    if dch:
-                        dch.pushSearchRequest(src_ipp, string)
-                
-                return new_cb
+                if dch:
+                    dch.pushSearchRequest(src_ipp, string)
 
-            raise Reject
+            else:
+                # From an invalid node
+                raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -3198,7 +3171,7 @@ class MessageRoutingManager(object):
             if self.mystatus_msg:
                 self.mystatus_msg.tries = 0
 
-        if data[10:16] == osm.me.ipp and data[0:2] in ('NH','CH','SQ'):
+        if data[10:16] == osm.me.ipp and data[0:2] in ('NH','CH','SQ','TP'):
             # Save the current status_pktnum for this message, because it's
             # useful if we receive a Reject message later.
             m.status_pktnum = osm.me.status_pktnum
@@ -3693,9 +3666,7 @@ class TopicManager(object):
 
         # Display the event as text (even if it's outdated)
         if dch and nick:
-            dch.pushChatMessage(
-                dch.bot.nick,
-                "%s changed the topic to \"%s\"" % (nick, topic))
+            dch.pushStatus("%s changed the topic to \"%s\"" % (nick, topic))
 
         return True
 

@@ -346,7 +346,6 @@ class DCHandler(LineOnlyReceiver):
                     self.pushStatus(out_text)
             
             if self.bot.commandInput(out, text[1:], '!'):
-                out(None)
                 return
 
         if not self.main.getOnlineDCH():
@@ -662,6 +661,7 @@ class DtellaBot(object):
 
         # This needs to be handled specially
         if cmd[0] == "TOPIC":
+            out(None)  # make sure input gets echo'd
             try:
                 topic = line.split(' ', 1)[1]
             except IndexError:

@@ -1120,7 +1120,6 @@ class BridgeServerManager(object):
                     chunks, irc_to_dc(nick), c.getInfoIndex(nick))
 
             self.addTopicChunk(chunks, "", c.topic)
-            self.addNoTopicChunk(chunks)
 
         else:
             # Release control of the topic
