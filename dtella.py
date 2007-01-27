@@ -2112,6 +2112,9 @@ class OnlineStateManager(object):
         # PingManager
         self.pgm = PingManager(main)
 
+        # TopicManager
+        self.tm = TopicManager(main)
+
         # BridgeClientManager / BridgeServerManager
         self.bcm = bcm
         self.bsm = bsm
@@ -2123,8 +2126,7 @@ class OnlineStateManager(object):
         self.yqrm = None        # SyncRequestRoutingManager
         self.cms = None         # ChatMessageSequencer
         self.pmm = None         # PrivateMessageManager
-        self.tm = None          # TopicManager
-
+        
         self.sendStatus_dcall = None
 
         self.sendLoginEcho()
@@ -2204,7 +2206,6 @@ class OnlineStateManager(object):
         self.yqrm = SyncRequestRoutingManager(self.main)
         self.cms = ChatMessageSequencer(self.main)
         self.pmm = PrivateMessageManager(self.main)
-        self.tm = TopicManager(self.main)
         self.syncd = True
 
         if self.bsm:
@@ -2320,8 +2321,7 @@ class OnlineStateManager(object):
         n.inlist = False
 
         # Tell the TopicManager this node is leaving
-        if self.tm:
-            self.tm.checkLeavingNode(n)
+        self.tm.checkLeavingNode(n)
 
         # If it's a bridge node, clean up the extra data
         if n.bridge_data:
@@ -3650,11 +3650,7 @@ class TopicManager(object):
         self.main = main
         self.topic = ""
         self.topic_node = None
-
-        # After I sign on, wait 10 seconds for someone to send me a topic.
-        def cb():
-            self.sync_timeout = None
-        self.sync_timeout = reactor.callLater(10.0, cb)
+        self.waiting = True
 
 
     def gotTopic(self, n, topic):
@@ -3681,8 +3677,7 @@ class TopicManager(object):
             if ack_key not in n.msgkeys_in:
                 # Haven't seen this message before, so handle it
 
-                if self.sync_timeout:
-                    dcall_discard(self, 'sync_timeout')
+                if self.waiting:
                     self.updateTopic(n, None, topic)
 
             # Forget about this message in a minute
@@ -3696,6 +3691,9 @@ class TopicManager(object):
 
 
     def updateTopic(self, n, nick, topic, outdated=False):
+
+        # Don't want any more SyncTopics
+        self.waiting = False
 
         dch = self.main.getOnlineDCH()
 

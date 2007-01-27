@@ -439,18 +439,6 @@ class IRCServer(LineOnlyReceiver):
         host = Ad().setRawIPPort(n.ipp).getTextIP()
         self.pushFullJoin(nick, "dtnode", host)
 
-        # Send welcome message
-        osm = self.main.osm
-        chunks = []
-        flags = dtella.NOTICE_BIT
-        text = ("The topic for %s is \"%s\""
-                % (cfg.irc_chan, self.data.getTopic(cfg.irc_chan))
-                )
-
-        osm.bsm.addMessageChunk(
-            chunks, cfg.irc_to_dc_bot, text, flags)
-        osm.bsm.sendPrivateBridgeChange(n, chunks)
-
 
     def event_RemoveNick(self, nick, reason):
         inick = dc_to_irc(nick)
@@ -1087,6 +1075,8 @@ class BridgeServerManager(object):
                 self.addNickChunk(
                     chunks, irc_to_dc(nick), c.getInfoIndex(nick))
 
+        #self.addTopicChunk(chunks, "", "test topic")
+
         chunks = ''.join(chunks)
 
         # Split data string into 1k blocks
@@ -1200,6 +1190,17 @@ class BridgeServerManager(object):
         text = text[:512]
         chunks.append(struct.pack('!H', len(text)))
         chunks.append(text)
+
+
+    def addTopicChunk(self, chunks, nick, topic):
+
+        chunks.append('T')
+        chunks.append(struct.pack('!B', len(nick)))
+        chunks.append(nick)
+
+        topic = topic[:255]
+        chunks.append(struct.pack('!B', len(topic)))
+        chunks.append(topic)
 
 
     def addMessageChunk(self, chunks, nick, text, flags=0):
