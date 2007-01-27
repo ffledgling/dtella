@@ -549,6 +549,8 @@ chunks:
 't' - release topic
 
 'T' - topic
+1-byte flags:
+    bit 0 = topic is being changed (not just a refresh)
 1-byte nick length
 + nick (may be 0-length)
 1-byte topic length

@@ -39,7 +39,7 @@ except ImportError:
 
 # TODO: Clean up duplicated code between DtellaMain and DtellaBridgeMain
 
-# TODO: Implement bans
+# TODO: bans, stats, hall suffixing, minshare, minversion
 
 
 # Miscellaneous Exceptions
@@ -94,6 +94,9 @@ NOTICE_BIT = 0x2
 # ACK Modes
 ACK_PRIVATE = 1
 ACK_BROADCAST = 2
+
+# Bridge topic change
+CHANGE_BIT = 1
 
 
 ##############################################################################
@@ -3628,21 +3631,22 @@ class TopicManager(object):
     def __init__(self, main):
         self.main = main
         self.topic = ""
+        self.topic_whoset = ""
         self.topic_node = None
         self.waiting = True
 
 
     def gotTopic(self, n, topic):
-        self.updateTopic(n, n.nick, topic)
+        self.updateTopic(n, n.nick, topic, changed=True)
 
 
     def receivedSyncTopic(self, n, topic):
         # Topic arrived from a YR packet
         if self.waiting:
-            self.updateTopic(n, None, topic)
+            self.updateTopic(n, n.nick, topic, changed=False)
 
 
-    def updateTopic(self, n, nick, topic, outdated=False):
+    def updateTopic(self, n, nick, topic, changed, outdated=False):
 
         # Don't want any more SyncTopics
         self.waiting = False
@@ -3658,14 +3662,29 @@ class TopicManager(object):
         dch = self.main.getOnlineDCH()
 
         # Update stored topic, and title bar
-        if (topic != self.topic) and (not outdated):
-            self.topic = topic
-            self.topic_node = n
-            if dch:
+        if not outdated:
+
+            show_formatted = False
+
+            # If it's changed, push it to the title bar
+            if dch and (topic != self.topic):
                 dch.pushTopic(topic)
 
+                if topic and not changed:
+                    show_formatted = True
+
+            # Store stuff
+            self.topic = topic
+            self.topic_whoset = nick
+            self.topic_node = n
+
+            # If the topic hasn't officially changed, but it's different
+            # from what we had before, then show it.
+            if show_formatted:
+                dch.pushStatus(self.getFormattedTopic())
+
         # Display the event as text (even if it's outdated)
-        if dch and nick:
+        if dch and nick and changed:
             dch.pushStatus("%s changed the topic to \"%s\"" % (nick, topic))
 
         return True
@@ -3678,7 +3697,7 @@ class TopicManager(object):
             topic = topic[:255]
 
         # Update topic locally
-        if not self.updateTopic(osm.me, osm.me.nick, topic):
+        if not self.updateTopic(osm.me, osm.me.nick, topic, changed=True):
             
             # Topic is controlled by a bridge node
             self.topic_node.bridge_data.sendTopicChange(topic)
@@ -3692,6 +3711,22 @@ class TopicManager(object):
         packet.append(topic)
 
         osm.mrm.newMessage(''.join(packet), tries=4)
+
+
+    def getFormattedTopic(self):
+
+        text = "The topic is \"%s\"" % self.topic
+
+        if self.topic:
+            if self.topic_node and self.topic_node.nick:
+                whoset = self.topic_node.nick
+            else:
+                whoset = self.topic_whoset
+
+            if whoset:
+                text += " (set by %s)" % whoset
+
+        return text
 
 
     def checkLeavingNode(self, n):

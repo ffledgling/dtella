@@ -735,9 +735,9 @@ class BridgeNodeData(object):
                 ptr += 1
 
                 try:
-                    (nick_len,
-                     ) = struct.unpack("!B", data[ptr:ptr+1])
-                    ptr += 1
+                    (flags, nick_len,
+                     ) = struct.unpack("!BB", data[ptr:ptr+2])
+                    ptr += 2
 
                     nick = data[ptr:ptr+nick_len]
                     ptr += nick_len
@@ -757,7 +757,10 @@ class BridgeNodeData(object):
                 if topic_len > 1024 or len(topic) != topic_len:
                     raise ChunkError("T: topic length mismatch")
 
-                osm.tm.updateTopic(self.parent_n, nick, topic, outdated)
+                changed = bool(flags & dtella.CHANGE_BIT)
+
+                osm.tm.updateTopic(
+                    self.parent_n, nick, topic, changed, outdated)
 
             elif data[ptr] == 't':
                 ptr += 1

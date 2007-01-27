@@ -487,10 +487,10 @@ class DCHandler(LineOnlyReceiver):
 
     def grabDtellaTopic(self):
         if self.main.getOnlineDCH():
-            topic = self.main.osm.tm.topic
-            self.pushTopic(topic)
-            if topic:
-                self.pushStatus("The topic is \"%s\"" % topic)
+            tm = self.main.osm.tm
+            self.pushTopic(tm.topic)
+            if tm.topic:
+                self.pushStatus(tm.getFormattedTopic())
 
 
     def nickCollision(self):
@@ -933,7 +933,7 @@ class DtellaBot(object):
         tm = self.main.osm.tm
 
         if topic is None:
-            out("The topic is \"%s\"" % tm.topic)
+            out(tm.getFormattedTopic())
         else:
             tm.broadcastNewTopic(topic)
 

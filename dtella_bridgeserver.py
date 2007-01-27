@@ -456,7 +456,7 @@ class IRCServer(LineOnlyReceiver):
 
         # Broadcast change
         chunks = []
-        osm.bsm.addTopicChunk(chunks, dnick, topic)
+        osm.bsm.addTopicChunk(chunks, dnick, topic, changed=True)
         osm.bsm.sendBridgeChange(chunks)
 
         return True
@@ -536,7 +536,8 @@ class IRCServerData(object):
         def __init__(self, chan):
             self.chan = chan
             self.users = {}  # nick -> [mode list]
-            self.topic = None
+            self.topic = ""
+            self.topic_whoset = ""
             self.topic_locked = False
 
         def getInfoIndex(self, nick):
@@ -799,15 +800,22 @@ class IRCServerData(object):
 
 
     def gotTopic(self, chan, whoset, topic):
+
+        try:
+            whoset = dc_from_irc(whoset)
+        except ValueError:
+            whoset = irc_to_dc(whoset)
+        
         c = self.getChan(chan)
         c.topic = topic
+        c.topic_whoset = whoset
 
         if chan == cfg.irc_chan:
             osm = self.ircs.main.osm
             if (self.ircs.syncd and osm and osm.syncd):
                 chunks = []
                 osm.bsm.addTopicChunk(
-                    chunks, irc_to_dc(whoset), topic)
+                    chunks, whoset, topic, changed=True)
                 osm.bsm.sendBridgeChange(chunks)
 
 
@@ -1119,7 +1127,7 @@ class BridgeServerManager(object):
                 self.addNickChunk(
                     chunks, irc_to_dc(nick), c.getInfoIndex(nick))
 
-            self.addTopicChunk(chunks, "", c.topic)
+            self.addTopicChunk(chunks, c.topic_whoset, c.topic, changed=False)
 
         else:
             # Release control of the topic
@@ -1240,10 +1248,12 @@ class BridgeServerManager(object):
         chunks.append(text)
 
 
-    def addTopicChunk(self, chunks, nick, topic):
+    def addTopicChunk(self, chunks, nick, topic, changed):
+
+        flags = (changed and dtella.CHANGE_BIT)
 
         chunks.append('T')
-        chunks.append(struct.pack('!B', len(nick)))
+        chunks.append(struct.pack('!BB', flags, len(nick)))
         chunks.append(nick)
 
         topic = topic[:255]
