@@ -391,6 +391,12 @@ class IRCServer(LineOnlyReceiver):
         self.sendLine("NICK %s 0 %d %s %s %s 1 :Dtella Peer" %
             (nick, time.time(), user, host, cfg.my_host))
         self.sendLine(":%s JOIN %s" % (nick, cfg.irc_chan))
+
+
+    def pushTopic(self, nick, topic):
+        self.sendLine(
+            ":%s TOPIC %s %s %d :%s" %
+            (nick, cfg.irc_chan, nick, int(time.time()), topic))
         
 
     def pushQuit(self, nick, reason=""):
@@ -432,6 +438,28 @@ class IRCServer(LineOnlyReceiver):
                 self.ping_dcall = reactor.callLater(15.0, cb)
 
         self.ping_dcall = reactor.callLater(60.0, cb)
+
+
+    def updateTopic(self, dnick, topic):
+
+        osm = self.main.osm
+        assert self.syncd and osm and osm.syncd
+
+        # Check if the topic is locked
+        c = self.data.getChan(cfg.irc_chan)
+        if c.topic_locked:
+            return False
+
+        # Update IRC topic
+        c.topic = topic
+        self.pushTopic(dc_to_irc(dnick), topic)
+
+        # Broadcast change
+        chunks = []
+        osm.bsm.addTopicChunk(chunks, dnick, topic)
+        osm.bsm.sendBridgeChange(chunks)
+
+        return True
 
 
     def event_AddNick(self, nick, n):
@@ -509,7 +537,7 @@ class IRCServerData(object):
             self.chan = chan
             self.users = {}  # nick -> [mode list]
             self.topic = None
-            self.topic_who = None
+            self.topic_locked = False
 
         def getInfoIndex(self, nick):
             # Get the Dtella info index for this user
@@ -679,8 +707,7 @@ class IRCServerData(object):
             elif c == '-':
                 val = False
             elif c == 't':
-                # TODO: Topic lock stuff
-                pass
+                ch.topic_locked = val
             elif c == 'k':
                 # Skip over channel key
                 i += 1
@@ -771,20 +798,16 @@ class IRCServerData(object):
                 osm.bsm.sendBridgeChange(chunks)
 
 
-    def gotTopic(self, chan, whoset, text):
+    def gotTopic(self, chan, whoset, topic):
         c = self.getChan(chan)
-        c.topic = text
-        c.topic_who = whoset
+        c.topic = topic
 
         if chan == cfg.irc_chan:
             osm = self.ircs.main.osm
             if (self.ircs.syncd and osm and osm.syncd):
                 chunks = []
-                osm.bsm.addChatChunk(
-                    chunks, cfg.irc_to_dc_bot,
-                    "%s changed the topic to \"%s\"" %
-                    (irc_to_dc(whoset), text)
-                    )
+                osm.bsm.addTopicChunk(
+                    chunks, irc_to_dc(whoset), topic)
                 osm.bsm.sendBridgeChange(chunks)
 
 
@@ -843,6 +866,27 @@ class BridgeServerProtocol(dtella.PeerHandler):
 
         osm.bsm.receivedPrivateMessage(src_ipp, ack_key, src_nhash,
                                        dst_nick, text)
+
+
+    def handlePacket_bT(self, ad, data):
+        # Topic change request
+
+        (kind, src_ipp, ack_key, src_nhash, rest
+         ) = self.decodePacket('!2s6s8s4s+', data)
+
+        self.checkSource(src_ipp, ad)
+
+        (topic, rest
+         ) = self.decodeString1(rest)
+
+        if rest:
+            raise BadPacketError("Extra data")
+
+        osm = self.main.osm
+        if not (osm and osm.syncd):
+            raise BadTimingError("Not ready for bT")
+
+        osm.bsm.receivedTopicChange(src_ipp, ack_key, src_nhash, topic)
 
 
     def handlePacket_bQ(self, ad, data):
@@ -1075,7 +1119,11 @@ class BridgeServerManager(object):
                 self.addNickChunk(
                     chunks, irc_to_dc(nick), c.getInfoIndex(nick))
 
-        #self.addTopicChunk(chunks, "", "test topic")
+            self.addTopicChunk(chunks, "", c.topic)
+
+        else:
+            # Release control of the topic
+            self.addNoTopicChunk(chunks)
 
         chunks = ''.join(chunks)
 
@@ -1203,6 +1251,10 @@ class BridgeServerManager(object):
         chunks.append(topic)
 
 
+    def addNoTopicChunk(self, chunks):
+        chunks.append('t')
+
+
     def addMessageChunk(self, chunks, nick, text, flags=0):
         chunks.append('M')
         chunks.append(struct.pack('!BB', flags, len(nick)))
@@ -1240,47 +1292,73 @@ class BridgeServerManager(object):
         ack_flags = 0
 
         try:
-            # Make sure we're ready to receive it
             if not (osm and osm.syncd and ircs and ircs.readytosend):
-                raise dtella.Reject
+                raise dtella.Reject("Not ready for bridge PM")
 
             try:
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
-                # Never heard of this node
-                raise dtella.Reject
+                raise dtella.Reject("Unknown source node")
 
             if not n.expire_dcall:
-                # Node isn't online
-                raise dtella.Reject
+                raise dtella.Reject("Source node not online")
             
             if src_nhash != n.nickHash():
-                # Source nickhash mismatch
-                raise dtella.Reject
+                raise dtella.Reject("Source nickhash mismatch")
 
-            if ack_key not in n.msgkeys_in:
+            if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
 
                 try:
                     dst_nick = irc_from_dc(dst_nick)
                 except ValueError:
-                    raise dtella.Reject
+                    raise dtella.Reject("Invalid dest nick")
                 
                 if dst_nick not in ircs.data.ulist:
-                    # User isn't on IRC
-                    raise dtella.Reject
+                    raise dtella.Reject("Dest not on IRC")
 
                 ircs.sendLine(":%s PRIVMSG %s :%s" %
                               (dc_to_irc(n.nick), dst_nick, text))
-
-            # Forget about this message in a minute
-            n.schedulePMKeyExpire(ack_key)
 
         except dtella.Reject:
             ack_flags |= dtella.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(src_ipp, dtella.ACK_PRIVATE,
                                    ack_flags, ack_key)
+
+
+    def receivedTopicChange(self, src_ipp, ack_key, src_nhash, topic):
+        osm = self.main.osm
+        ircs = self.main.ircs
+
+        ack_flags = 0
+
+        try:
+            if not (osm and osm.syncd and ircs and ircs.syncd):
+                raise dtella.Reject("Not ready for topic change")
+
+            try:
+                n = osm.lookup_ipp[src_ipp]
+            except KeyError:
+                raise dtella.Reject("Unknown node")
+
+            if not n.expire_dcall:
+                raise dtella.Reject("Node isn't online")
+            
+            if src_nhash != n.nickHash():
+                raise dtella.Reject("Source nickhash mismatch")
+
+            if n.pokePMKey(ack_key):
+                # Haven't seen this message before, so handle it
+
+                if not ircs.updateTopic(n.nick, topic):
+                    raise dtella.Reject("Topic locked")
+
+        except dtella.Reject:
+            ack_flags |= dtella.ACK_REJECT_BIT
+
+        self.main.ph.sendAckPacket(
+            src_ipp, dtella.ACK_PRIVATE, ack_flags, ack_key)
 
 
     def shutdown(self):

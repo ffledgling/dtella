@@ -342,9 +342,11 @@ class DCHandler(LineOnlyReceiver):
                     self.pushChatMessage(self.nick, text)
                     flag[0] = False
 
-                self.pushStatus(out_text)
+                if out_text is not None:
+                    self.pushStatus(out_text)
             
             if self.bot.commandInput(out, text[1:], '!'):
+                out(None)
                 return
 
         if not self.main.getOnlineDCH():

@@ -1688,16 +1688,21 @@ class Node(object):
         return ack_key
 
 
-    def schedulePMKeyExpire(self, ack_key):
+    def pokePMKey(self, ack_key):
         # Schedule expiration of a PM ack key, for messages we
         # receive _FROM_ this node.
+
+        # Return True if this is a new key
     
         try:
             self.msgkeys_in[ack_key].reset(60.0)
+            return False
+
         except KeyError:
             def cb():
                 self.msgkeys_in.pop(ack_key)
             self.msgkeys_in[ack_key] = reactor.callLater(60.0, cb)
+            return True
     
 
 
@@ -1717,13 +1722,11 @@ class Node(object):
     def sendPrivateMessage(self, ph, ack_key, packet, fail_cb):
         # Send an ACK-able direct message to this node
 
-        def cb(tries):
+        def cb(fail_cb, tries):
 
             if tries == 0:
                 del self.msgkeys_out[ack_key]
-
-                if fail_cb:
-                    fail_cb()
+                fail_cb()
                 return
 
             ad = Ad().setRawIPPort(self.ipp)
@@ -1731,21 +1734,25 @@ class Node(object):
 
             # Set timeout for outbound message
             # This will be cancelled if we receive an AK in time.
-            self.msgkeys_out[ack_key] = reactor.callLater(1.0, cb, tries-1)
+            self.msgkeys_out[ack_key] = reactor.callLater(
+                1.0, cb, fail_cb, tries-1)
 
         # Send it 3 times, then fail.
-        cb(3)
+        cb(fail_cb, 3)
 
 
     def receivedPrivateMessageAck(self, ack_key, reject):
         # Got an ACK for a private message
+
         try:
-            if reject:
-                self.msgkeys_out[ack_key].reset(0)
-            else:
-                self.msgkeys_out.pop(ack_key).cancel()
+            dcall = self.msgkeys_out.pop(ack_key)
         except KeyError:
-            pass
+            return
+
+        if reject:
+            dcall.args[0]()  # Call fail_cb
+
+        dcall.cancel()
 
 
     def stillAlive(self):
@@ -3593,13 +3600,10 @@ class PrivateMessageManager(object):
                 # Dest nickhash mismatch
                 raise Reject
 
-            if ack_key not in n.msgkeys_in:
+            if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
                 f = getattr(self, 'handleMessage_%s' % kind)
                 f(n, *args)
-
-            # Forget about this message in a minute
-            n.schedulePMKeyExpire(ack_key)
 
         except Reject:
             ack_flags |= ACK_REJECT_BIT
@@ -3674,14 +3678,11 @@ class TopicManager(object):
                 # Node isn't online
                 raise Reject
 
-            if ack_key not in n.msgkeys_in:
+            if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
 
                 if self.waiting:
                     self.updateTopic(n, None, topic)
-
-            # Forget about this message in a minute
-            n.schedulePMKeyExpire(ack_key)
 
         except Reject:
             ack_flags |= ACK_REJECT_BIT
@@ -3724,8 +3725,11 @@ class TopicManager(object):
         if len(topic) > 255:
             topic = topic[:255]
 
-        # TODO: cleanup
+        # Update topic locally
         if not self.updateTopic(osm.me, osm.me.nick, topic):
+            
+            # Topic is controlled by a bridge node
+            self.topic_node.bridge_data.sendTopicChange(topic)
             return
 
         packet = osm.mrm.broadcastHeader('TP', osm.me.ipp)

@@ -421,7 +421,7 @@ class NickNode(object):
 
 
     def event_RevConnectToMe(self, main, fail_cb):
-        fail_cb()            
+        fail_cb()
 
 
 ##############################################################################
@@ -771,6 +771,12 @@ class BridgeNodeData(object):
 
                 osm.tm.updateTopic(self.parent_n, nick, topic, outdated)
 
+            elif data[ptr] == 't':
+                ptr += 1
+
+                # Release control of the topic
+                osm.tm.checkLeavingNode(self.parent_n)
+
             elif data[ptr] == 'R':
                 ptr += 1
 
@@ -790,15 +796,13 @@ class BridgeNodeData(object):
             if dst_nhash != osm.me.nickHash():
                 raise dtella.Reject
 
-            if ack_key not in self.parent_n.msgkeys_in:
+            if self.parent_n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it.
 
                 try:
                     self.processChunks(chunks, pktnum)
                 except ChunkError:
                     raise dtella.Reject
-
-            self.parent_n.schedulePMKeyExpire(ack_key)
 
         except dtella.Reject:
             ack_flags |= dtella.ACK_REJECT_BIT
@@ -959,6 +963,31 @@ class BridgeNodeData(object):
 
         self.nicks.clear()
         self.shutdown()
+
+
+    def sendTopicChange(self, topic):
+        osm = self.main.osm
+        me = osm.me
+
+        topic = topic[:255]
+
+        ack_key = self.parent_n.getPMAckKey()
+        
+        packet = ['bT']
+        packet.append(osm.me.ipp)
+        packet.append(ack_key)
+        packet.append(me.nickHash())
+        packet.append(struct.pack('!B', len(topic)))
+        packet.append(topic)
+        packet = ''.join(packet)
+
+        def fail_cb():
+            dch = self.main.getOnlineDCH()
+            if dch:
+                dch.pushStatus("Sorry, the topic is locked.")
+
+        ph = self.main.ph
+        self.parent_n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 
 
     def shutdown(self):
