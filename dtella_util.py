@@ -87,7 +87,7 @@ def dcall_discard(obj, attr):
 
 
 def dcall_timeleft(d):
-    return d.getTime() - seconds()
+    return max(0, d.getTime() - seconds())
 
 
 def get_os():

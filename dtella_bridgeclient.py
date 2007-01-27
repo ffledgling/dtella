@@ -81,8 +81,8 @@ class BridgeClientProtocol(dtella.PeerHandler):
             (pubkey, signature
              ) = self.decodeString2(rest)
 
-            if expire > 30*60:
-                raise BadPacketError("Expire time > 30 minutes")
+            if not (expire <= 30*60):
+                raise BadPacketError("Expire time out of range")
 
             # If the signed message is too old, discard it.
             if osm.bcm.signatureExpired(pktnum):
@@ -152,8 +152,8 @@ class BridgeClientProtocol(dtella.PeerHandler):
 
         signature = rest
 
-        if expire > 30*60:
-            raise BadPacketError("Expire time > 30 minutes")
+        if not (expire <= 30*60):
+            raise BadPacketError("Expire time out of range")
 
         class Skip(Exception):
             pass

@@ -1,7 +1,8 @@
 # Dtella site-specific configuration
 import re
 
-network_key = 'PurdueDtella-test9'
+# TODO: before next protocol change, move topic into the YR
+network_key = 'PurdueDtella-test10'
 
 hub_name = "Dtella@Purdue"
 

@@ -221,6 +221,7 @@ Every ? seconds:
     bit0 = Node is persisitent
 1-byte length + nick
 1-byte length + info_string
+1-byte length + topic (only nonzero if I set the topic last)
 
 1-byte contacted neighbor count
 ( 6-byte neighbor's IPPort ) *
@@ -230,17 +231,6 @@ Every ? seconds:
 A contacted neighbor is either:
     - the neighbor I received your YQ from
     - a neighbor I forwarded your YQ to
-
-
-* [YT] sync topic
-6-byte source ipport
-8-byte ack key
-1-byte topic length
-+ topic_text
-
-YT is sent to any new node, from the node who believes that it set the topic
-last.  Nodes will just accept the first YT that arrives, and ignore all
-others.
 
 =============================================
 
@@ -502,7 +492,7 @@ Bridge Private Stuff
 
 ??-byte signature
 
-* [bQ] - Bridge block request (private)
+* [bQ] - block request (to bridge)
 6-byte source IPPort
 16-byte block hash
 
@@ -522,6 +512,12 @@ Bridge Private Stuff
 2-byte length
   + message_text
 
+* [bT] topic change request (to bridge)
+6-byte source ipport
+8-byte ack key
+4-byte source nickhash
+1-byte length
+  + topic
 
 ==============
 

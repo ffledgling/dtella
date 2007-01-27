@@ -737,8 +737,8 @@ class PeerHandler(DatagramProtocol):
             if rest:
                 raise BadPacketError("Extra data")
 
-            if expire > 30*60:
-                raise BadPacketError("Expire time > 30 minutes")
+            if not (5 <= expire <= 30*60):
+                raise BadPacketError("Expire time out of range")
             
             # Make sure this isn't about me
             if self.isMyStatus(src_ipp, pktnum, sendfull=True):
@@ -767,8 +767,8 @@ class PeerHandler(DatagramProtocol):
             (pktnum, expire, infohash
              ) = self.decodePacket('!IH4s', rest)
 
-            if expire > 30*60:
-                raise BadPacketError("Expire timer > 30 minutes")
+            if not (5 <= expire <= 30*60):
+                raise BadPacketError("Expire time out of range")
            
             # Make sure this isn't about me
             if self.isMyStatus(src_ipp, pktnum, sendfull=True):
@@ -791,24 +791,25 @@ class PeerHandler(DatagramProtocol):
                     # We are syncd, and this node matches, so extend the
                     # expire timeout and keep forwarding.
                     return new_cb
+                
+                else:
+                    # Syncd, and we don't recognize it
+                    raise Reject
             
             else:
                 if not (src_n and src_n.expire_dcall):
                     # Not syncd, don't know enough about this node yet,
-                    # so just forward blindly
-
-                    # TODO: I think a race condition still exists here.
-                    #       What if a sync reply arrives shortly after this,
-                    #       with an expire time of a couple seconds?
-                    
+                    # so just forward blindly.
                     return None
 
-                if src_n.infoHash() == infohash:
+                elif src_n.infoHash() == infohash:
                     # We know about this node already, and the infohash
                     # matches, so extend timeout and keep forwarding
                     return new_cb
-
-            raise Reject
+                
+                else:
+                    # Not syncd, but we know the infoHash is wrong.
+                    raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -1140,25 +1141,6 @@ class PeerHandler(DatagramProtocol):
                                 src_nhash, dst_nhash, notice, text)
 
 
-    def handlePacket_YT(self, ad, data):
-        # Direct: Sync Topic
-
-        (kind, src_ipp, ack_key, rest
-         ) = self.decodePacket('!2s6s8s+', data)
-
-        osm = self.main.osm
-        if not (osm and osm.syncd):
-            raise BadTimingError("Not ready for YT")
-
-        self.checkSource(src_ipp, ad)
-
-        topic, rest = self.decodeString1(rest)
-
-        if rest:
-            raise BadPacketError("Extra data")
-
-        osm.tm.gotSyncTopic(src_ipp, ack_key, topic)
-
 
     def handlePacket_PG(self, ad, data):
         # Direct: Local Ping
@@ -1233,7 +1215,7 @@ class PeerHandler(DatagramProtocol):
         # Sync Reply
 
         osm = self.main.osm
-        if not osm:
+        if not (osm and osm.sm):
             raise BadTimingError("Not ready for sync reply")
 
         (kind, src_ipp, pktnum, expire, sesid, uptime, flags, rest
@@ -1245,6 +1227,7 @@ class PeerHandler(DatagramProtocol):
 
         nick, rest = self.decodeString1(rest)
         info, rest = self.decodeString1(rest)
+        topic, rest = self.decodeString1(rest)
 
         c_nbs, rest = self.decodeNodeList(rest)
         u_nbs, rest = self.decodeNodeList(rest)
@@ -1252,8 +1235,8 @@ class PeerHandler(DatagramProtocol):
         if rest:
             raise BadPacketError("Extra data")
 
-        if expire > 30*60:
-            raise BadPacketError("Expire time > 30 minutes")
+        if not (5 <= expire <= 30*60):
+            raise BadPacketError("Expire time out of range")
 
         try:
             n = osm.lookup_ipp[src_ipp]
@@ -1262,11 +1245,13 @@ class PeerHandler(DatagramProtocol):
 
         # Check for outdated status, in case an NS already arrived.
         if not self.isOutdatedStatus(n, pktnum):
-            osm.refreshNodeStatus(
+            n = osm.refreshNodeStatus(
                 src_ipp, pktnum, expire, sesid, uptime, persist, nick, info)
 
-        if osm.sm:
-            osm.sm.receivedSyncReply(src_ipp, c_nbs, u_nbs)
+        if topic:
+            osm.tm.receivedSyncTopic(n, topic)
+
+        osm.sm.receivedSyncReply(src_ipp, c_nbs, u_nbs)
 
 
     def handlePacket_EC(self, ad, data):
@@ -2375,10 +2360,6 @@ class OnlineStateManager(object):
 
         status = []
 
-        # Exact time left before my status expires.
-        # (The receiver will add a few buffer seconds.)
-        status.append(struct.pack('!H', self.getMyExpireTime()))
-
         # My Session ID
         status.append(self.me.sesid)
 
@@ -2395,11 +2376,6 @@ class OnlineStateManager(object):
         status.append(self.me.info)
 
         return status
-
-
-    def getMyExpireTime(self):
-        # Find out how long we have before my own node expires
-        return max(0, int(dcall_timeleft(self.sendStatus_dcall)))
 
 
     def updateMyInfo(self, send=False):
@@ -2467,6 +2443,7 @@ class OnlineStateManager(object):
             if sendfull:
                 packet = self.mrm.broadcastHeader('NS', self.me.ipp)
                 packet.append(pkt_id)
+                packet.append(struct.pack('!H', int(expire)))
                 packet.extend(self.getStatus())
 
             else:
@@ -3409,6 +3386,8 @@ class SyncRequestRoutingManager(object):
         ad = Ad().setRawIPPort(src_ipp)
         osm = self.main.osm
 
+        assert (osm and osm.syncd)
+
         # Build Packet
         packet = ['YR']
 
@@ -3418,8 +3397,33 @@ class SyncRequestRoutingManager(object):
         # My last pktnum
         packet.append(struct.pack('!I', osm.me.status_pktnum))
 
-        # Expire Time, Session ID, Uptime, Flags, Nick, Info
+        # If we send a YR which is almost expired, followed closely by
+        # an NH with an extended expire time, then a race condition exists,
+        # because the target could discard the NH before receiving the YR.
+        
+        # So, if we're about to expire, go send a status update NOW so that
+        # we'll have a big expire time to give to the target.
+
+        expire = dcall_timeleft(self.sendStatus_dcall)
+        if expire <= 5.0:
+            self.sendMyStatus(sendfull=False)
+            expire = dcall_timeleft(self.sendStatus_dcall)
+
+        # Exact time left before my status expires.
+        # (The receiver will add a few buffer seconds.)
+        status.append(struct.pack('!H', int(expire)))
+
+        # Session ID, Uptime, Flags, Nick, Info
         packet.extend(osm.getStatus())
+
+        # If I think I set the topic last, then put it in here.
+        # It's up to the receiving end whether they'll believe me.
+        if osm.tm.topic_node is osm.me:
+            topic = osm.tm.topic
+        else:
+            topic = ""
+        packet.append(struct.pack('!B', len(topic)))
+        packet.append(topic)
 
         # Contacted Nodes
         packet.append(struct.pack('!B', len(cont)))
@@ -3661,34 +3665,10 @@ class TopicManager(object):
         self.updateTopic(n, n.nick, topic)
 
 
-    def gotSyncTopic(self, src_ipp, ack_key, topic):
-
-        osm = self.main.osm
-
-        ack_flags = 0
-
-        try:
-            try:
-                n = osm.lookup_ipp[src_ipp]
-            except KeyError:
-                # Never heard of this node
-                raise Reject
-
-            if not n.expire_dcall:
-                # Node isn't online
-                raise Reject
-
-            if n.pokePMKey(ack_key):
-                # Haven't seen this message before, so handle it
-
-                if self.waiting:
-                    self.updateTopic(n, None, topic)
-
-        except Reject:
-            ack_flags |= ACK_REJECT_BIT
-
-        self.main.ph.sendAckPacket(src_ipp, ACK_PRIVATE,
-                                   ack_flags, ack_key)
+    def receivedSyncTopic(self, n, topic):
+        # Topic arrived from a YR packet
+        if self.waiting:
+            self.updateTopic(n, None, topic)
 
 
     def updateTopic(self, n, nick, topic, outdated=False):
@@ -3696,12 +3676,15 @@ class TopicManager(object):
         # Don't want any more SyncTopics
         self.waiting = False
 
-        dch = self.main.getOnlineDCH()
-
         # Don't allow a non-bridge node to override a bridge's topic
         if self.topic_node and n:
             if self.topic_node.bridge_data and (not n.bridge_data):
                 return False
+
+        # Keep the length sane
+        topic = topic[:255]
+
+        dch = self.main.getOnlineDCH()
 
         # Update stored topic, and title bar
         if (topic != self.topic) and (not outdated):
@@ -3740,36 +3723,6 @@ class TopicManager(object):
         packet.append(topic)
 
         osm.mrm.newMessage(''.join(packet), tries=4)
-
-
-    def checkNewNode(self, n):
-        osm = self.main.osm
-        
-        # Check if I'm in charge of the topic
-        if self.topic_node is not osm.me:
-            print "Topic's not mine"
-            return
-
-        # If no topic is set, then don't bother.
-        if not self.topic:
-            print "Topic's empty"
-            return
-
-        ack_key = n.getPMAckKey()
-
-        # Send a Topic Sync message to the new node
-        packet = ['YT']
-        packet.append(osm.me.ipp)
-        packet.append(ack_key)
-        packet.append(struct.pack('!B', len(self.topic)))
-        packet.append(self.topic)
-        packet = ''.join(packet)
-
-        def fail_cb():
-            print "YT failed"
-
-        ph = self.main.ph
-        n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 
 
     def checkLeavingNode(self, n):
