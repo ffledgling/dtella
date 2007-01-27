@@ -503,6 +503,20 @@ class DCHandler(LineOnlyReceiver):
             "Please change your nick, or type !REJOIN to try again.")
 
 
+    def remoteNickCollision(self):
+
+        text = (
+            "*** Another node on the network has reported that your nick "
+            "seems to be in a conflicting state.  This could prevent your "
+            "chat and search messages from reaching everyone, so it'd be "
+            "a good idea to try changing your nick.  Or you could wait "
+            "and see if the problem resolves itself."
+            )
+
+        for line in word_wrap(text):
+            self.pushStatus(line)
+
+
     def kickMe(self, l33t, reason):
 
         self.goInvisible()

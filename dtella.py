@@ -739,9 +739,15 @@ class PeerHandler(DatagramProtocol):
             if self.isOutdatedStatus(src_n, pktnum):
                 raise BadBroadcast
 
-            self.main.osm.refreshNodeStatus(
-                src_ipp, pktnum, expire, sesid, uptime,
-                persist, nick, info)
+            n = self.main.osm.refreshNodeStatus(
+                src_ipp, pktnum, expire, sesid, uptime, persist, nick, info)
+
+            # Nick problem, stop forwarding and notify the sender
+            if nick and not n.nick:
+                raise Reject
+
+            # TODO: DEBUG!!!
+            raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -1050,7 +1056,7 @@ class PeerHandler(DatagramProtocol):
             # Handle a broadcast ack
 
             if osm.syncd and reject:
-                osm.mrm.receivedRejection(ack_key)
+                osm.mrm.receivedRejection(ack_key, src_ipp)
 
             # Tell MRM to stop retransmitting message to this neighbor
             osm.mrm.pokeMessage(ack_key, src_ipp)
@@ -2235,15 +2241,11 @@ class OnlineStateManager(object):
 
             reason = validateNick(n.nick)
             if reason:
-                # TODO: report
                 n.nick = n.info = ''
-                print "Nick '%s' did not validate!" % n.nick
 
             elif n.nick:
                 if not self.nkm.addNode(n):
-                    # TODO: report
                     n.nick = n.info = ''
-                    print "Nick collision for '%s'" % n.nick
 
         else:
             self.nkm.setNodeInfo(n, info)
@@ -2426,7 +2428,7 @@ class OnlineStateManager(object):
                 packet.append(struct.pack('!H', expire))
                 packet.append(infohash)
 
-            self.mrm.newMessage(''.join(packet), mystatus=True)
+            self.mrm.newMessage(''.join(packet), tries=4)
 
         dcall_discard(self, 'sendStatus_dcall')
         cb(sendfull)
@@ -3069,7 +3071,8 @@ class MessageRoutingManager(object):
         self.outbox = []
         self.msgs = {}
 
-        self.mystatus_msg = None
+        self.rcollide_last_NS = None
+        self.rcollide_ipps = set()
 
         r = random.randint(0, 0xFFFFFFFF)
         self.search_pktnum = r
@@ -3131,11 +3134,6 @@ class MessageRoutingManager(object):
         if not nb_ipp:
             return True
 
-        # If we just received an ack for one of my status messages, then
-        # Reduce the number of retries for the other neighbors.
-        if m is self.mystatus_msg:
-            m.tries = min(m.tries, 1)
-
         # Tell the message that this neighbor acknowledged it.
         try:
             m.nbs[nb_ipp].cancel()
@@ -3146,7 +3144,7 @@ class MessageRoutingManager(object):
         return True
 
 
-    def newMessage(self, data, nb_ipp=None, tries=2, mystatus=False):
+    def newMessage(self, data, nb_ipp=None, tries=2):
         # Forward a new message to my neighbors
 
         ack_key = self.generateKey(data)
@@ -3160,21 +3158,16 @@ class MessageRoutingManager(object):
 
         osm = self.main.osm
 
-        # Try extra hard to make sure my own status messages get delivered.
-        if mystatus:
-            # Use an absurd number of retries for now.
-            # This number will be reduced if another node acks the message,
-            # or if I replace it with another status message.
-            tries = 100
-            
-            # Cancel retry attempts for the previous status message
-            if self.mystatus_msg:
-                self.mystatus_msg.tries = 0
+        if data[10:16] == osm.me.ipp:
+            if data[0:2] in ('NH','CH','SQ','TP'):
+                # Save the current status_pktnum for this message, because
+                # it's useful if we receive a Reject message later.
+                m.status_pktnum = osm.me.status_pktnum
 
-        if data[10:16] == osm.me.ipp and data[0:2] in ('NH','CH','SQ','TP'):
-            # Save the current status_pktnum for this message, because it's
-            # useful if we receive a Reject message later.
-            m.status_pktnum = osm.me.status_pktnum
+            elif data[0:2] == 'NS':
+                # Save my last NS message, so that if it gets rejected,
+                # it can be interpreted as a remote nick collision.
+                self.rcollide_last_NS = m
 
         if tries > 0:
             # Put message into the outbox
@@ -3182,7 +3175,7 @@ class MessageRoutingManager(object):
             self.scheduleSendMessages()
 
 
-    def receivedRejection(self, ack_key):
+    def receivedRejection(self, ack_key, ipp):
         # Broadcast rejection, sent in response to a previous broadcast if
         # another node doesn't recognize us on the network.
 
@@ -3198,14 +3191,24 @@ class MessageRoutingManager(object):
         except KeyError:
             raise BadTimingError("Reject refers to an unknown broadcast")
 
-        if m.status_pktnum is None:
-            raise BadTimingError("Reject refers to a nonrejectable broadcast")
-        
-        if osm.me.status_pktnum != m.status_pktnum:
-            raise BadTimingError("Reject matches an outdated status_pktnum.")
+        if (m is self.rcollide_last_NS) and ipp:
+            # Remote nick collision might have occurred
+            
+            self.rcollide_ipps.add(ipp)
 
-        # Looks ok, so rebroadcast my status
-        osm.sendMyStatus()
+            # TODO: change to 2
+            if len(self.rcollide_ipps) > 0:
+                dch = self.main.getOnlineDCH()
+                if dch:
+                    dch.remoteNickCollision()
+
+                self.rcollide_last_NS = None
+                self.rcollide_ipps.clear()
+        
+        if osm.me.status_pktnum == m.status_pktnum:
+            # One of my hash-containing broadcasts has been rejected, so
+            # send my full status to refresh everyone
+            osm.sendMyStatus()
 
 
     def getPacketNumber_search(self):
