@@ -3715,16 +3715,18 @@ class TopicManager(object):
 
     def getFormattedTopic(self):
 
+        if not self.topic:
+            return "There is currently no topic set."
+
         text = "The topic is \"%s\"" % self.topic
 
-        if self.topic:
-            if self.topic_node and self.topic_node.nick:
-                whoset = self.topic_node.nick
-            else:
-                whoset = self.topic_whoset
+        if self.topic_node and self.topic_node.nick:
+            whoset = self.topic_node.nick
+        else:
+            whoset = self.topic_whoset
 
-            if whoset:
-                text += " (set by %s)" % whoset
+        if whoset:
+            text += " (set by %s)" % whoset
 
         return text
 
