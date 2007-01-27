@@ -2282,10 +2282,6 @@ class OnlineStateManager(object):
                 self.nodes.append(n)
             n.inlist = True
 
-        # Tell the topic manager if a new node signs on
-        if self.syncd and not n.expire_dcall:
-            self.tm.checkNewNode(n)
-
         # Expire this node after the expected retransmit
         self.scheduleNodeExpire(n, expire + NODE_EXPIRE_EXTEND)
 
@@ -3404,14 +3400,14 @@ class SyncRequestRoutingManager(object):
         # So, if we're about to expire, go send a status update NOW so that
         # we'll have a big expire time to give to the target.
 
-        expire = dcall_timeleft(self.sendStatus_dcall)
+        expire = dcall_timeleft(osm.sendStatus_dcall)
         if expire <= 5.0:
-            self.sendMyStatus(sendfull=False)
-            expire = dcall_timeleft(self.sendStatus_dcall)
+            osm.sendMyStatus(sendfull=False)
+            expire = dcall_timeleft(osm.sendStatus_dcall)
 
         # Exact time left before my status expires.
         # (The receiver will add a few buffer seconds.)
-        status.append(struct.pack('!H', int(expire)))
+        packet.append(struct.pack('!H', int(expire)))
 
         # Session ID, Uptime, Flags, Nick, Info
         packet.extend(osm.getStatus())
