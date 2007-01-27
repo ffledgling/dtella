@@ -33,13 +33,13 @@ except ImportError:
 #       If any circumstances cause way too many status updates in a short time,
 #       then flip out and put the node to sleep for a few minutes.
 
-# TODO: notification of a remote nick collision
-
 # TODO: Ping ack delay should affect the retransmit time for broadcasts?
 
 # TODO: Make the sending of status updates more time conscious.
 
 # TODO: Clean up duplicated code between DtellaMain and DtellaBridgeMain
+
+# TODO: Implement bans
 
 
 # Miscellaneous Exceptions
@@ -740,12 +740,10 @@ class PeerHandler(DatagramProtocol):
             n = self.main.osm.refreshNodeStatus(
                 src_ipp, pktnum, expire, sesid, uptime, persist, nick, info)
 
-            # Nick problem, stop forwarding and notify the sender
+            # They had a nick, now they don't.  This indicates a problem.
+            # Stop forwarding and notify the user.
             if nick and not n.nick:
                 raise Reject
-
-            # TODO: DEBUG!!!
-            raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -3194,12 +3192,13 @@ class MessageRoutingManager(object):
             
             self.rcollide_ipps.add(ipp)
 
-            # TODO: change to 2
-            if len(self.rcollide_ipps) > 0:
+            if len(self.rcollide_ipps) > 1:
+                # Multiple nodes have reported a problem, so tell the user.
                 dch = self.main.getOnlineDCH()
                 if dch:
                     dch.remoteNickCollision()
 
+                # No more reports until next time
                 self.rcollide_last_NS = None
                 self.rcollide_ipps.clear()
         

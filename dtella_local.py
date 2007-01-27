@@ -1,7 +1,7 @@
 # Dtella site-specific configuration
 import re
 
-network_key = 'PurdueDtella-test10'
+network_key = 'PurdueDtella-10'
 
 hub_name = "Dtella@Purdue"
 

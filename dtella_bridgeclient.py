@@ -972,7 +972,7 @@ class BridgeNodeData(object):
         def fail_cb():
             dch = self.main.getOnlineDCH()
             if dch:
-                dch.pushStatus("Sorry, the topic is locked.")
+                dch.pushStatus("Sorry, the topic has been locked.")
 
         ph = self.main.ph
         self.parent_n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
