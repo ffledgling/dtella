@@ -399,8 +399,6 @@ class DCHandler(LineOnlyReceiver):
         else:
             self.sendLine("$HubName %s" % dtella_local.hub_name)
 
-        self.pushStatus("DEBUG: topic set to '%s'" % topic)
-
 
     def pushHello(self, nick):
         self.sendLine('$Hello %s' % nick)
@@ -490,7 +488,10 @@ class DCHandler(LineOnlyReceiver):
 
     def grabDtellaTopic(self):
         if self.main.getOnlineDCH():
-            self.pushTopic(self.main.osm.tm.topic)
+            topic = self.main.osm.tm.topic
+            self.pushTopic(topic)
+            if topic:
+                self.pushStatus("The topic is \"%s\"" % topic)
 
 
     def nickCollision(self):

@@ -2212,10 +2212,12 @@ class OnlineStateManager(object):
         dch = self.main.getOnlineDCH()
         if dch:
             dch.d_GetNickList()
-            dch.grabDtellaTopic()
 
         self.main.showLoginStatus("Sync Complete; You're Online!",
                                   counter='inc')
+
+        if dch:
+            dch.grabDtellaTopic()
 
 
     def refreshNodeStatus(self, src_ipp, pktnum, expire, sesid, uptime,
