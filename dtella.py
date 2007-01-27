@@ -3732,7 +3732,7 @@ class TopicManager(object):
     def checkLeavingNode(self, n):
         # If the node who set the topic leaves, wipe out the topic
         if self.topic_node is n:
-            self.updateTopic(None, None, "")
+            self.updateTopic(None, None, "", changed=False)
 
 
 ##############################################################################            
