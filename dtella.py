@@ -592,7 +592,7 @@ class PeerHandler(DatagramProtocol):
         for when,ipp in state.getYoungestPeers(IR_LEN):
 
             # Add packet data to the outlist
-            age = max(now - when, 0)
+            age = max(int(now - when), 0)
 
             pc_entry = struct.pack('!6sI', ipp, age)
 
