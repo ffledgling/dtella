@@ -251,10 +251,8 @@ class PeerHandler(DatagramProtocol):
             # arg2: The unencrypted packet
             method(ad, data)
 
-        except BadPacketError, e:
-            print "Bad Packet:", e
-        except BadTimingError, e:
-            print "Bad Timing:", e
+        except (BadPacketError, BadTimingError), e:
+            print "Bad Packet/Timing:", e
         
 
     def decodePacket(self, fmt, data):
@@ -2428,7 +2426,7 @@ class OnlineStateManager(object):
                 packet.append(struct.pack('!H', expire))
                 packet.append(infohash)
 
-            self.mrm.newMessage(''.join(packet), tries=4)
+            self.mrm.newMessage(''.join(packet), tries=8)
 
         dcall_discard(self, 'sendStatus_dcall')
         cb(sendfull)

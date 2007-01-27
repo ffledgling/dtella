@@ -1064,7 +1064,7 @@ class BridgeServerManager(object):
             self.signPacket(packet, broadcast=True)
 
             # Broadcast status message
-            osm.mrm.newMessage(''.join(packet), mystatus=True)
+            osm.mrm.newMessage(''.join(packet), tries=8)
 
             # Broadcast data blocks
             # This could potentially be a bottleneck for slow connections
