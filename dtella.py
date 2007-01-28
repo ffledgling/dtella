@@ -3646,7 +3646,7 @@ class TopicManager(object):
             self.updateTopic(n, n.nick, topic, changed=False)
 
 
-    def updateTopic(self, n, nick, topic, changed, outdated=False):
+    def updateTopic(self, n, nick, topic, changed):
 
         # Don't want any more SyncTopics
         self.waiting = False
@@ -3659,33 +3659,31 @@ class TopicManager(object):
         # Keep the length sane
         topic = topic[:255]
 
+        # Get old topic
+        old_topic = self.topic
+
+        # Store stuff
+        self.topic = topic
+        self.topic_whoset = nick
+        self.topic_node = n
+
+        # Without DC, there's nothing to say
         dch = self.main.getOnlineDCH()
+        if not dch:
+            return True
+        
+        # If it's changed, push it to the title bar
+        if topic != old_topic:
+            dch.pushTopic(topic)
 
-        # Update stored topic, and title bar
-        if not outdated:
-
-            show_formatted = False
-
-            # If it's changed, push it to the title bar
-            if dch and (topic != self.topic):
-                dch.pushTopic(topic)
-
-                if topic and not changed:
-                    show_formatted = True
-
-            # Store stuff
-            self.topic = topic
-            self.topic_whoset = nick
-            self.topic_node = n
-
-            # If the topic hasn't officially changed, but it's different
-            # from what we had before, then show it.
-            if show_formatted:
-                dch.pushStatus(self.getFormattedTopic())
-
-        # Display the event as text (even if it's outdated)
-        if dch and nick and changed:
+        # If a change was reported, tell the user that it changed.
+        if changed and nick:
             dch.pushStatus("%s changed the topic to \"%s\"" % (nick, topic))
+
+        # If a change wasn't reported, but it's new to us, then just say
+        # what the topic is.
+        if not changed and topic != old_topic:
+            dch.pushStatus(self.getFormattedTopic())
 
         return True
 
@@ -3734,7 +3732,7 @@ class TopicManager(object):
     def checkLeavingNode(self, n):
         # If the node who set the topic leaves, wipe out the topic
         if self.topic_node is n:
-            self.updateTopic(None, None, "", changed=False)
+            self.updateTopic(None, "", "", changed=False)
 
 
 ##############################################################################            

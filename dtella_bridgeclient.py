@@ -572,6 +572,7 @@ class BridgeNodeData(object):
 
     def processChunks(self, data, pktnum):
 
+        # Here, outdated means that we've received a 
         outdated = (
             (self.last_assembled_pktnum is not None)
             and
@@ -759,8 +760,9 @@ class BridgeNodeData(object):
 
                 changed = bool(flags & dtella.CHANGE_BIT)
 
-                osm.tm.updateTopic(
-                    self.parent_n, nick, topic, changed, outdated)
+                if not outdated:
+                    osm.tm.updateTopic(
+                        self.parent_n, nick, topic, changed)
 
             elif data[ptr] == 't':
                 ptr += 1
