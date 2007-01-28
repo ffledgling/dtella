@@ -20,7 +20,9 @@ import dtella_core
 import dtella_state
 import dtella_crypto
 import dtella_local
+
 from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
+from dtella_core import Reject
 
 
 import dtella_bridge_config as cfg
@@ -1300,18 +1302,18 @@ class BridgeServerManager(object):
 
         try:
             if not (osm and osm.syncd and ircs and ircs.readytosend):
-                raise dtella_core.Reject("Not ready for bridge PM")
+                raise Reject("Not ready for bridge PM")
 
             try:
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
-                raise dtella_core.Reject("Unknown source node")
+                raise Reject("Unknown source node")
 
             if not n.expire_dcall:
-                raise dtella_core.Reject("Source node not online")
+                raise Reject("Source node not online")
             
             if src_nhash != n.nickHash():
-                raise dtella_core.Reject("Source nickhash mismatch")
+                raise Reject("Source nickhash mismatch")
 
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
@@ -1319,15 +1321,15 @@ class BridgeServerManager(object):
                 try:
                     dst_nick = irc_from_dc(dst_nick)
                 except ValueError:
-                    raise dtella_core.Reject("Invalid dest nick")
+                    raise Reject("Invalid dest nick")
                 
                 if dst_nick not in ircs.data.ulist:
-                    raise dtella_core.Reject("Dest not on IRC")
+                    raise Reject("Dest not on IRC")
 
                 ircs.sendLine(":%s PRIVMSG %s :%s" %
                               (dc_to_irc(n.nick), dst_nick, text))
 
-        except dtella_core.Reject:
+        except Reject:
             ack_flags |= dtella_core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(src_ipp, dtella_core.ACK_PRIVATE,
@@ -1342,26 +1344,26 @@ class BridgeServerManager(object):
 
         try:
             if not (osm and osm.syncd and ircs and ircs.syncd):
-                raise dtella_core.Reject("Not ready for topic change")
+                raise Reject("Not ready for topic change")
 
             try:
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
-                raise dtella_core.Reject("Unknown node")
+                raise Reject("Unknown node")
 
             if not n.expire_dcall:
-                raise dtella_core.Reject("Node isn't online")
+                raise Reject("Node isn't online")
             
             if src_nhash != n.nickHash():
-                raise dtella_core.Reject("Source nickhash mismatch")
+                raise Reject("Source nickhash mismatch")
 
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
 
                 if not ircs.updateTopic(n.nick, topic):
-                    raise dtella_core.Reject("Topic locked")
+                    raise Reject("Topic locked")
 
-        except dtella_core.Reject:
+        except Reject:
             ack_flags |= dtella_core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(

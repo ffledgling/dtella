@@ -1,6 +1,6 @@
 from twisted.internet import reactor
 
-from dtella_core import BadTimingError, BadPacketError, BadBroadcast
+from dtella_core import BadTimingError, BadPacketError, BadBroadcast, Reject
 import dtella_core
 
 from dtella_util import RandSet, Ad, dcall_discard
@@ -787,7 +787,7 @@ class BridgeNodeData(object):
 
         try:
             if dst_nhash != osm.me.nickHash():
-                raise dtella_core.Reject
+                raise Reject
 
             if self.parent_n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it.
@@ -795,9 +795,9 @@ class BridgeNodeData(object):
                 try:
                     self.processChunks(chunks, pktnum)
                 except ChunkError:
-                    raise dtella_core.Reject
+                    raise Reject
 
-        except dtella_core.Reject:
+        except Reject:
             ack_flags |= dtella_core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(
