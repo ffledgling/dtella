@@ -1,3 +1,5 @@
+VERSION = "DEV"
+
 import fixtwistedtime
 
 import struct
@@ -24,11 +26,6 @@ import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap)
 
-try:
-    import dtella_bridgeclient
-except ImportError:
-    dtella_bridgeclient = None
-
 # TODO: Put a panic timer into sendMyStatus.
 #       If any circumstances cause way too many status updates in a short time,
 #       then flip out and put the node to sleep for a few minutes.
@@ -36,8 +33,6 @@ except ImportError:
 # TODO: Ping ack delay should affect the retransmit time for broadcasts?
 
 # TODO: Make the sending of status updates more time conscious.
-
-# TODO: Clean up duplicated code between DtellaMain and DtellaBridgeMain
 
 # TODO: bans, stats, hall suffixing, minshare, minversion
 
@@ -1415,7 +1410,7 @@ class InitialContactManager(DatagramProtocol):
         def cb(p):
             print "peerContactTimeout"
             p.timeout_dcall = None
-            self.waitreply.discard(p)
+            self.waitreply.remove(p)
 
             if p.alt_reply:
                 self.recordResultType('dead_port')
@@ -1423,6 +1418,15 @@ class InitialContactManager(DatagramProtocol):
             self.doneCheck()
 
         p.timeout_dcall = reactor.callLater(5.0, cb, p)
+
+
+    def cancelPeerContactTimeout(self, p):
+        try:
+            self.waitreply.remove(p)
+        except KeyError:
+            return False
+
+        dcall_discard(p, 'timeout_dcall')
 
 
     def receivedInitResponse(self, src_ipp, myip, code, pc, nd=None):
@@ -1446,13 +1450,10 @@ class InitialContactManager(DatagramProtocol):
             
         else:
             # IR packet
-            try:
-                self.waitreply.remove(p)
-            except KeyError:
+
+            if not self.cancelPeerContatctTimeout(p):
                 # Wasn't waiting for this reply
                 return
-    
-            dcall_discard(p, 'timeout_dcall')
 
         # Add some new peers to our cache
         if pc:
@@ -1468,6 +1469,9 @@ class InitialContactManager(DatagramProtocol):
             if not p.bad_ip:
                 p.bad_ip = True
                 self.recordResultType('bad_ip')
+
+                # Forget about checking for 'dead_port' now
+                self.cancelPeerContactTimeout(p)
             return
 
         # Add my own IP to the list
@@ -1795,8 +1799,11 @@ class Node(object):
 
 class MeNode(Node):
     def event_PrivateMessage(self, main, text, fail_cb):
-        dch = main.dch
-        dch.pushPrivMsg(dch.nick, text)
+        dch = self.main.getOnlineDCH()
+        if dch:
+            dch.pushPrivMsg(dch.nick, text)
+        else:
+            fail_cb()
 
     def event_ConnectToMe(self, main, port, fail_cb):
         fail_cb()
@@ -2496,10 +2503,6 @@ class OnlineStateManager(object):
         # Tell the DC client that all nicks are gone
         if self.nkm:
             self.nkm.quitEverybody()
-
-        # Reset the kick/collision state (if any)
-        if self.main.dch:
-            self.main.dch.dtellaShutdown()
 
         # If I'm still syncing, shutdown the SyncManager
         if self.sm:
@@ -3738,7 +3741,8 @@ class TopicManager(object):
 ##############################################################################            
 
         
-class DtellaMain(object):
+class DtellaMain_Base(object):
+
     def __init__(self):
        
         self.myip_reports = []
@@ -3756,100 +3760,21 @@ class DtellaMain(object):
         # Neighbor Connection Manager
         self.osm = None
 
-        # Login counter (just for eye candy)
-        self.login_counter = 0
-        self.login_text = ""
-
-        # DC Handler(s)
-        self.dch = None
-        self.pending_dch = None
-
-        # Location map: ipp->string, usually only contains 1 entry
-        self.location = {}
-
-        # State Manager
-        self.state = dtella_state.StateManager(self, 'dtella.state')
-
         # Pakcet Encoder
         self.pk_enc = dtella_crypto.PacketEncoder(dtella_local.network_key)
 
-        # DNS Handler
-        self.dnsh = dtella_dnslookup.DNSHandler(self)
-
-        # Peer Handler
-        if dtella_bridgeclient:
-            self.ph = dtella_bridgeclient.BridgeClientProtocol(self)
-        else:
-            self.ph = PeerHandler(self)
-
-        self.bindUDPPort()
 
         # Register a function that runs before shutting down
         reactor.addSystemEventTrigger('before', 'shutdown',
                                       self.cleanupOnExit)
 
-        if self.state.persistent:
-            self.newConnectionRequest()
+
+    def bindUDPPort(self):
+        raise NotImplemented("Override me!")
 
 
     def cleanupOnExit(self):
-        print "Reactor is shutting down.  Doing cleanup."
-        if self.dch:
-            self.dch.state = 'shutdown'
-        self.shutdown(final=True)
-        self.state.saveState()
-
-
-    def changeUDPPort(self, udp_port):
-        # Shut down the node, and start up with a different UDP port
-
-        if 'udp_change' in self.blockers:
-            return False
-
-        self.addBlocker('udp_change')
-
-        self.state.udp_port = udp_port
-        self.state.saveState()
-
-        def cb(result):
-            self.bindUDPPort()
-            self.removeBlocker('udp_change')
-
-        if self.ph.transport:
-            self.ph.transport.stopListening().addCallback(cb)
-        else:
-            reactor.callLater(0, cb, None)
-
-        return True
-
-
-    def bindUDPPort(self):
-        try:
-            reactor.listenUDP(self.state.udp_port, self.ph)
-        except twisted.internet.error.BindError:
-            # TODO: more informative
-
-            self.showLoginStatus("*** FAILED TO BIND UDP PORT ***")
-
-            text = (
-                "Dtella was not able to listen on UDP port %d. One possible "
-                "reason for this is that you've tried to make your DC "
-                "client use the same UDP port as Dtella. Two programs "
-                "are not allowed listen on the same port.  To tell Dtella "
-                "to use a different port, type !UDP followed by a number. "
-                "Note that if you have a firewall or router, you will have "
-                "to tell it to let traffic through on this port."
-                % self.state.udp_port
-                )
-
-            for line in word_wrap(text):
-                self.showLoginStatus(line)
-            
-            if 'udp_bind' not in self.blockers:
-                self.addBlocker('udp_bind')
-        else:
-            if 'udp_bind' in self.blockers:
-                self.removeBlocker('udp_bind')
+        raise NotImplemented("Override me!")
 
 
     def addBlocker(self, name):
@@ -3865,30 +3790,8 @@ class DtellaMain(object):
         self.startConnecting()
 
 
-    def newConnectionRequest(self):
-        # This fires when the DC client connects and wants to be online
-
-        dcall_discard(self, 'disconnect_dcall')
-
-        # Reset reconnect timer
-        self.reconnect_interval = RECONNECT_RANGE[0]
-        dcall_discard(self, 'reconnect_dcall')
-
-        if self.icm or self.osm:
-            # Already connecting, just wait.
-            return
-
-        # If an update is necessary, this will add a blocker
-        self.dnsh.updateIfStale()
-
-        # If we don't have the UDP port, then try again now.
-        if 'udp_bind' in self.blockers:
-            self.bindUDPPort()
-            return
-
-        # Start connecting now if there are no blockers
-        
-        self.startConnecting()
+    def connectionPermitted(self):
+        raise NotImplemented("Override me!")
 
 
     def startConnecting(self):
@@ -3897,11 +3800,8 @@ class DtellaMain(object):
         assert not (self.icm or self.osm)
 
         dcall_discard(self, 'reconnect_dcall')
-        
-        if self.blockers:
-            return
 
-        if not (self.dch or self.state.persistent):
+        if not self.connectionPermitted():
             return
 
         def cb():
@@ -3930,7 +3830,7 @@ class DtellaMain(object):
     def startNodeSync(self, node_ipps=()):
         # Determine my IP address and enable the osm
 
-        assert not (self.icm or self.osm or self.blockers)
+        assert not (self.icm or self.osm)
             
         # Reset the reconnect interval
         self.reconnect_interval = RECONNECT_RANGE[0]
@@ -3943,62 +3843,22 @@ class DtellaMain(object):
             print "I don't know who I am!"
             return
 
+        # Look up my location string
         self.queryLocation(my_ipp)
 
-        if dtella_bridgeclient:
-            bcm = dtella_bridgeclient.BridgeClientManager(self)
-        else:
-            bcm = None
+        # Get Bridge Client/Server Manager, or nothing.
+        b = self.getBridgeManager()
 
         # Enable the object that keeps us online
-        self.osm = OnlineStateManager(self, my_ipp, node_ipps, bcm=bcm)
+        self.osm = OnlineStateManager(self, my_ipp, node_ipps, **b)
+
+
+    def getBridgeManager(self):
+        raise NotImplemented("Override me!")
 
 
     def queryLocation(self, my_ipp):
-        # Try to convert the IP address into a human-readable location name.
-        # This might be slightly more complicated than it really needs to be.
-
-        ad = Ad().setRawIPPort(my_ipp)
-        my_ip = ad.getTextIP()
-
-        skip = False
-        for ip,loc in self.location.items():
-            if ip == my_ip:
-                skip = True
-            elif loc:
-                # Forget old entries
-                del self.location[ip]
-
-        # If we already had an entry for this IP, then don't start
-        # another lookup.
-        if skip:
-            return
-
-        # A location of None indicates that a lookup is in progress
-        self.location[my_ip] = None
-
-        def cb(hostname):
-            
-            # Use dtella_local to transform this hostname into a
-            # human-readable location
-            if hostname:
-                loc = dtella_local.hostnameToLocation(hostname)
-            else:
-                loc = None
-
-            # If we got a location, save it, otherwise dump the
-            # dictionary entry
-            if loc:
-                self.location[my_ip] = loc
-            else:
-                del self.location[my_ip]
-
-            # Maybe send an info update
-            if self.osm:
-                self.osm.updateMyInfo()
-
-        # Start lookup
-        self.dnsh.ipToHostname(ad, cb)
+        raise NotImplemented("Override me!")
 
 
     def reportDeadPort(self):
@@ -4023,27 +3883,7 @@ class DtellaMain(object):
 
 
     def showLoginStatus(self, text, counter=None):
-
-        # counter can be:
-        # - int: set the counter to this value
-        # - 'inc': increment from the previous counter value
-        # - None: don't show a counter
-
-        if type(counter) is int:
-            self.login_counter = counter
-        elif counter == 'inc':
-            self.login_counter += 1
-
-        if counter is not None:
-            # Prepend a number
-            text = "%d. %s" % (self.login_counter, text)
-
-            # This text will be remembered for new DC clients
-            self.login_text = text
-        
-        dch = self.dch
-        if dch:
-            dch.pushStatus(text)
+        raise NotImplemented("Override me!")
 
 
     def shutdown(self, final=False):
@@ -4065,19 +3905,18 @@ class DtellaMain(object):
             self.osm.shutdown()
             self.osm = None
 
+        # Notify dch/ircs of the shutdown
+        self.shutdown_NotifyObservers()
+
         # Schedule a Reconnect (maybe) ...
         
         if final:
             # Final shutdown, don't reconnect.
             return
-        
-        if self.blockers:
-            # Reconnect will happen after the blockers are done
-            return
 
-        if not (self.dch or self.state.persistent):
-            # No use for this connection; don't reconnect.
-            return
+        # Check if a reconnect makes sense right now
+        if not self.connectionPermitted():
+            return        
 
         # Decide how long to wait before reconnecting
         when = self.reconnect_interval * random.uniform(0.8, 1.2)
@@ -4095,73 +3934,17 @@ class DtellaMain(object):
         self.reconnect_dcall = reactor.callLater(when, cb)
 
 
-    def addDCHandler(self, dch):
-        self.dch = dch
-
-        oldtext = self.login_text
-        self.login_text = ""
-
-        self.newConnectionRequest()
-
-        if self.osm and oldtext and not self.login_text:
-            # The connection request didn't trigger any text, so show
-            # the previous status to this new DC client.
-            self.login_text = oldtext
-            dch.pushStatus(oldtext)
-
-
-    def removeDCHandler(self):
-        # DC client has left.
-        
-        self.dch = None
-
-        if self.osm:
-            # Announce the DC client's departure
-            self.osm.updateMyInfo()
-
-            # Cancel all private message timeouts
-            for n in self.osm.nodes:
-                n.cancelPrivMsgs()
-
-        # If another handler is waiting, let it on.
-        if self.pending_dch:
-            self.pending_dch.accept()
-            return
-
-        # Maybe skip the disconnect
-        if self.state.persistent or not (self.icm or self.osm):
-            return
-
-        # Client left, so shut down in a while
-        when = NO_CLIENT_TIMEOUT
-
-        print "Shutting down in %d seconds." % when
-
-        if self.disconnect_dcall:
-            self.disconnect_dcall.reset(when)
-            return
-
-        def cb():
-            self.disconnect_dcall = None
-            self.shutdown()
-
-        self.disconnect_dcall = reactor.callLater(when, cb)
+    def shutdown_NotifyObservers(self):
+        raise NotImplemented("Override me!")
 
 
     def getOnlineDCH(self):
-        # Return DCH, iff it's fully online.
-
-        if not (self.osm and self.osm.syncd):
-            return None
-        
-        if self.dch and self.dch.state=='ready':
-            return self.dch
-
+        # Maybe overriden
         return None
 
 
     def getStateObserver(self):
-        return self.getOnlineDCH()
+        raise NotImplemented("Override me!")
 
 
     def addMyIPReport(self, from_ad, my_ad):
@@ -4216,25 +3999,3 @@ class DtellaMain(object):
         raise ValueError
 
 
-VERSION = "DEV"
-
-if __name__=='__main__':
-        
-    dtMain = DtellaMain()
-
-    #def kill():
-    #    print "20-sec timeout"
-    #    reactor.stop()
-    #reactor.callLater(20.0, kill)
-    #import profile
-    #profile.run('reactor.run()')
-
-    import dtella_dc
-    dfactory = dtella_dc.DCFactory(dtMain)
-
-    tcp_port = 7314
-    reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
-
-    print "Dtella Experimental %s" % VERSION
-    print "Listening on 127.0.0.1:%d" % tcp_port
-    reactor.run()

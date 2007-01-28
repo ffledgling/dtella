@@ -1381,41 +1381,28 @@ class BridgeServerManager(object):
 ##############################################################################
 
 
-class DtellaBridgeMain(object):
+class DtellaBridgeMain(dtella.DtellaMain_Base):
     def __init__(self):
 
-        # IRC Server
-        self.ircs = None
-
-        # DC Handler (always None)
-        self.dch = None
-
-        # Initial Connection Manager
-        self.icm = None
-
-        # Neighbor Connection Manager
-        self.osm = None
-
-        self.reconnect_dcall = None
-        self.reconnect_interval = dtella.RECONNECT_RANGE[0]
+        # Bind UDP Port
+        try:
+            reactor.listenUDP(cfg.udp_port, self.ph)
+        except twisted.internet.error.BindError:
+            print "Failed to bind UDP port!"
+            reactor.stop()
+            raise SystemExit
 
         # State Manager
         self.state = dtella_state.StateManager(self, 'dtella_bridge.state')
-
-        # Pakcet Encoder
-        self.pk_enc = dtella_crypto.PacketEncoder(dtella_local.network_key)
+        self.state.persistent = True
+        self.state.udp_port = cfg.udp_port
 
         # Peer Handler
-        self.ph = BridgeServerProtocol(self)
+        self.ph = BridgeServerProtocol(self)        
 
-        reactor.listenUDP(cfg.udp_port, self.ph)
-
-        # Register a function that runs before shutting down
-        reactor.addSystemEventTrigger('before', 'shutdown',
-                                      self.cleanupOnExit)
-
-        ircfactory = IRCFactory(self)
-        reactor.connectTCP(cfg.irc_server, cfg.irc_port, ircfactory)
+        # IRC Server
+        self.ircs = None
+        reactor.connectTCP(cfg.irc_server, cfg.irc_port, IRCFactory(self))
 
         self.startConnecting()
 
@@ -1431,101 +1418,25 @@ class DtellaBridgeMain(object):
             return self.ircs.shutdown()
 
 
-    def startConnecting(self):
-        # If all the conditions are right, start connection procedure
-
-        assert not (self.icm or self.osm)
-
-        dcall_discard(self, 'reconnect_dcall')
-
-        def cb():
-            icm = self.icm
-            self.icm = None
-            
-            if icm.node_ipps:
-                self.startNodeSync(icm.node_ipps)
-            else:
-                if not (icm.stats_bad_ip or icm.stats_dead_port):
-                    self.showLoginStatus("No online nodes found.")
-                    self.shutdown()
-
-                elif icm.stats_bad_ip >= icm.stats_dead_port:
-                    self.shutdown(final=True)
-                    self.showLoginStatus("Your IP address is not authorized to use this network.")
-
-                else:
-                    self.showLoginStatus("Port not forwarded.")
-                    self.shutdown(final=True)
-
-        self.ph.remap_ip = None
-        self.icm = dtella.InitialContactManager(self, cb)
+    def connectionPermitted(self):
+        return True
 
 
-    def startNodeSync(self, node_ipps=()):
-        # Determine my IP address and enable the osm
-
-        assert not (self.icm or self.osm)
-
-        # Reset the reconnect interval
-        self.reconnect_interval = dtella.RECONNECT_RANGE[0]
-        dcall_discard(self, 'reconnect_dcall')
-
-        ad = Ad().setTextIP(cfg.my_ip)
-        ad.port = self.state.udp_port
-
-        my_ipp = ad.getRawIPPort()
-
-        bsm = BridgeServerManager(self)
-
-        # Enable the object that keeps us online
-        self.osm = dtella.OnlineStateManager(self, my_ipp, node_ipps, bsm=bsm)
+    def getBridgeManager(self):
+        return {'bsm': BridgeServerManager(self)}
 
 
     def showLoginStatus(self, text, counter=None):
         print text
 
 
-    def shutdown(self, final=False):
-        # Do a total shutdown of this Dtella node
-
-        if self.icm or self.osm:
-            self.showLoginStatus("Shutting down.")
-
-        dcall_discard(self, 'reconnect_dcall')
-
-        # Shut down InitialContactManager
-        if self.icm:
-            self.icm.shutdown()
-            self.icm = None
-
-        # Shut down OnlineStateManager
-        if self.osm:
-            self.osm.shutdown()
-            self.osm = None
-
-        if final:
-            # Final shutdown, don't reconnect.
-            return
-
-        # Decide how long to wait before reconnecting
-        when = self.reconnect_interval * random.uniform(0.8, 1.2)
-
-        # Increase the reconnect interval logarithmically
-        self.reconnect_interval = min(self.reconnect_interval * 1.5,
-                                      dtella.RECONNECT_RANGE[1])
-
-        self.showLoginStatus("Reconnecting in %d seconds." % when)
-
-        def cb():
-            self.reconnect_dcall = None
-            self.startConnecting()
-
-        self.reconnect_dcall = reactor.callLater(when, cb)
+    def queryLocation(self, my_ipp):
+        pass
 
 
-    def getOnlineDCH(self):
-        # Return DCH, iff it's fully online.
-        return None
+    def shutdown_NotifyObservers(self):
+        # TODO: maybe print a message to IRC saying Dtella sync was lost
+        pass
 
 
     def getStateObserver(self):
@@ -1538,10 +1449,6 @@ class DtellaBridgeMain(object):
             return self.ircs
 
         return None
-        
-
-    def addMyIPReport(self, from_ad, my_ad):
-        return
 
 
     def addIRCServer(self, ircs):
