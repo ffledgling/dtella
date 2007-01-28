@@ -304,9 +304,8 @@ if __name__=='__main__':
     #import profile
     #profile.run('reactor.run()')
 
-    dfactory = dtella_dc.DCFactory(dtMain)
-
     tcp_port = 7314
+    dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
     reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
 
     print "Dtella Experimental %s" % dtella_core.VERSION

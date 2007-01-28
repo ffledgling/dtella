@@ -10,7 +10,6 @@ import time
 import random
 import bisect
 import weakref
-import re
 import socket
 from binascii import hexlify
 
@@ -210,7 +209,9 @@ class PeerHandler(DatagramProtocol):
 
         # Special handler for search results directly from DC
         if rawdata[:4] == '$SR ':
-            self.handleDCSearchResult(ad, rawdata)
+            dch = self.main.getOnlineDCH()
+            if dch and ad.validate():
+                dch.pushSearchResult(rawdata)
             return
         
         try:
@@ -1236,42 +1237,6 @@ class PeerHandler(DatagramProtocol):
          ) = self.decodePacket('!2s8s', data)
 
         osm.receivedLoginEcho(ad, rand)
-
-
-    searchreply_re = re.compile(r"^\$SR ([^ ]+) (.*) \([^ ]+\)\|?$")
-    
-    def handleDCSearchResult(self, ad, data):
-        # UDP search reply packet came directly from another DC client
-
-        if not ad.validate():
-            print "Search result from invalid IP"
-            return
-
-        m = self.searchreply_re.match(data)
-
-        if not m:
-            print "Search doesn't match pattern"
-            return
-
-        nick = m.group(1)
-        data = m.group(2)
-
-        if '|' in nick or '|' in data:
-            print "Search result contains a pipe"
-            return
-
-        dch = self.main.getOnlineDCH()
-        if not dch:
-            return
-
-        if nick == dch.nick:
-            nick = dch.bot.nick
-
-        # TODO: Don't hard-code port 7314
-        data = "$SR %s %s (127.0.0.1:7314)" % (nick, data)
-
-        dch.sendLine(data)
-        
 
 
 ##############################################################################

@@ -1387,6 +1387,8 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         self.state = dtella_state.StateManager(self, 'dtella_bridge.state')
         self.state.persistent = True
         self.state.udp_port = cfg.udp_port
+        for addr in cfg.ip_cache:
+            self.state.refreshPeer(Ad().setTextIPPort(addr), 0)
 
         # Peer Handler
         self.ph = BridgeServerProtocol(self)        
@@ -1401,7 +1403,6 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
         # IRC Server
         self.ircs = None
-        reactor.connectTCP(cfg.irc_server, cfg.irc_port, IRCFactory(self))
 
         self.startConnecting()
 
@@ -1468,12 +1469,11 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
 
 if __name__ == '__main__':
-    dtMain = DtellaMain_Bridge()
-    dtMain.state.udp_port = cfg.udp_port
-
-    for addr in cfg.ip_cache:
-        dtMain.state.refreshPeer(Ad().setTextIPPort(addr), 0)
     
+    dtMain = DtellaMain_Bridge()
+
+    ifactory = IRCFactory(dtMain)
+    reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
     reactor.run()
 
 

@@ -7,7 +7,7 @@ from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
 import dtella_core
 import dtella_local
 import struct
-
+import re
 
 
 class DCHandler(LineOnlyReceiver):
@@ -485,6 +485,28 @@ class DCHandler(LineOnlyReceiver):
         del self.chatq[:]
 
 
+    # Precompile a regex for pushSearchResult
+    searchreply_re = re.compile(r"^\$SR ([^ |]+) ([^|]*) \([^ |]+\)\|?$")
+
+    def pushSearchResult(self, data):
+
+        m = self.searchreply_re.match(data)
+        if not m:
+            print "Search result doesn't match pattern"
+            # Doesn't look like a search reply
+            return
+
+        nick = m.group(1)
+        data = m.group(2)
+
+        # TODO: maybe make this replacement optional?
+        if nick == self.nick:
+            nick = self.bot.nick
+
+        self.sendLine("$SR %s %s (127.0.0.1:%d)"
+                      % (nick, data, self.factory.listen_port))
+
+
     def grabDtellaTopic(self):
         if self.main.getOnlineDCH():
             tm = self.main.osm.tm
@@ -634,8 +656,10 @@ class DCPurgatory(Protocol):
 
 
 class DCFactory(ServerFactory):
-    def __init__(self, main):
+    
+    def __init__(self, main, listen_port):
         self.main = main
+        self.listen_port = listen_port # spliced into search results
         
     def buildProtocol(self, addr):
         if addr.host != '127.0.0.1':
