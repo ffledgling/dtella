@@ -17,11 +17,9 @@ from binascii import hexlify
 from twisted.internet.protocol import Protocol, DatagramProtocol
 from twisted.internet import reactor
 from twisted.python.runtime import seconds
-import twisted.internet.error
 
 import dtella_local
 import dtella_crypto
-import dtella_dnslookup
 import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap)
@@ -1427,6 +1425,7 @@ class InitialContactManager(DatagramProtocol):
             return False
 
         dcall_discard(p, 'timeout_dcall')
+        return True
 
 
     def receivedInitResponse(self, src_ipp, myip, code, pc, nd=None):
@@ -1451,7 +1450,7 @@ class InitialContactManager(DatagramProtocol):
         else:
             # IR packet
 
-            if not self.cancelPeerContatctTimeout(p):
+            if not self.cancelPeerContactTimeout(p):
                 # Wasn't waiting for this reply
                 return
 
@@ -3848,6 +3847,8 @@ class DtellaMain_Base(object):
 
         # Get Bridge Client/Server Manager, or nothing.
         b = self.getBridgeManager()
+
+        print "Bridge Manager =", b
 
         # Enable the object that keeps us online
         self.osm = OnlineStateManager(self, my_ipp, node_ipps, **b)

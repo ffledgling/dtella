@@ -1,9 +1,19 @@
-import dtella
+import dtella_core
+import twisted.internet.error
+from twisted.internet import reactor
+
+import dtella_state
+import dtella_dc
+import dtella_dnslookup
+import dtella_local
+
+from dtella_util import dcall_discard, Ad, word_wrap
 
 
-class DtellaMain_Client(dtella.DtellaMain_Base):
+class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
     def __init__(self):
+        dtella_core.DtellaMain_Base.__init__(self)
 
         # Location map: ipp->string, usually only contains 1 entry
         self.location = {}
@@ -20,7 +30,7 @@ class DtellaMain_Client(dtella.DtellaMain_Base):
         try:
             import dtella_bridgeclient
         except ImportError:
-            self.ph = PeerHandler(self)
+            self.ph = dtella_core.PeerHandler(self)
         else:
             self.ph = dtella_bridgeclient.BridgeClientProtocol(self)
 
@@ -30,6 +40,7 @@ class DtellaMain_Client(dtella.DtellaMain_Base):
         # DNS Handler
         self.dnsh = dtella_dnslookup.DNSHandler(self)
 
+        # Bind UDP Port
         self.bindUDPPort()
 
         if self.state.persistent:
@@ -108,12 +119,6 @@ class DtellaMain_Client(dtella.DtellaMain_Base):
 
     def newConnectionRequest(self):
         # This fires when the DC client connects and wants to be online
-
-        dcall_discard(self, 'disconnect_dcall')
-
-        # Reset reconnect timer
-        self.reconnect_interval = RECONNECT_RANGE[0]
-        dcall_discard(self, 'reconnect_dcall')
 
         if self.icm or self.osm:
             # Already connecting, just wait.
@@ -290,7 +295,7 @@ class DtellaMain_Client(dtella.DtellaMain_Base):
 
 if __name__=='__main__':
         
-    dtMain = DtellaMain()
+    dtMain = DtellaMain_Client()
 
     #def kill():
     #    print "20-sec timeout"
@@ -299,12 +304,11 @@ if __name__=='__main__':
     #import profile
     #profile.run('reactor.run()')
 
-    import dtella_dc
     dfactory = dtella_dc.DCFactory(dtMain)
 
     tcp_port = 7314
     reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
 
-    print "Dtella Experimental %s" % VERSION
+    print "Dtella Experimental %s" % dtella_core.VERSION
     print "Listening on 127.0.0.1:%d" % tcp_port
     reactor.run()

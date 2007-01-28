@@ -1,7 +1,7 @@
 from twisted.internet import reactor
 
-from dtella import BadTimingError, BadPacketError, BadBroadcast
-import dtella
+from dtella_core import BadTimingError, BadPacketError, BadBroadcast
+import dtella_core
 
 from dtella_util import RandSet, Ad, dcall_discard
 
@@ -14,7 +14,7 @@ import random
 class ChunkError(Exception):
     pass
 
-class BridgeClientProtocol(dtella.PeerHandler):
+class BridgeClientProtocol(dtella_core.PeerHandler):
 
     def verifySignature(self, rsa_obj, data, sig, broadcast):
         # 0:2 = kind
@@ -71,7 +71,7 @@ class BridgeClientProtocol(dtella.PeerHandler):
             (pktnum, expire, sesid, uptime, flags, rest
              ) = self.decodePacket('!QH4sIB+', rest)
 
-            persist = bool(flags & dtella.PERSIST_BIT)
+            persist = bool(flags & dtella_core.PERSIST_BIT)
 
             (hashes, rest
              ) = self.decodeString1(rest, 16)
@@ -136,7 +136,7 @@ class BridgeClientProtocol(dtella.PeerHandler):
 
         self.checkSource(src_ipp, ad)
 
-        persist = bool(flags & dtella.PERSIST_BIT)
+        persist = bool(flags & dtella_core.PERSIST_BIT)
 
         (hashes, rest
          ) = self.decodeString1(rest, 16)
@@ -758,7 +758,7 @@ class BridgeNodeData(object):
                 if topic_len > 1024 or len(topic) != topic_len:
                     raise ChunkError("T: topic length mismatch")
 
-                changed = bool(flags & dtella.CHANGE_BIT)
+                changed = bool(flags & dtella_core.CHANGE_BIT)
 
                 if not outdated:
                     osm.tm.updateTopic(
@@ -787,7 +787,7 @@ class BridgeNodeData(object):
 
         try:
             if dst_nhash != osm.me.nickHash():
-                raise dtella.Reject
+                raise dtella_core.Reject
 
             if self.parent_n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it.
@@ -795,13 +795,13 @@ class BridgeNodeData(object):
                 try:
                     self.processChunks(chunks, pktnum)
                 except ChunkError:
-                    raise dtella.Reject
+                    raise dtella_core.Reject
 
-        except dtella.Reject:
-            ack_flags |= dtella.ACK_REJECT_BIT
+        except dtella_core.Reject:
+            ack_flags |= dtella_core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(
-            self.parent_n.ipp, dtella.ACK_PRIVATE, ack_flags, ack_key)
+            self.parent_n.ipp, dtella_core.ACK_PRIVATE, ack_flags, ack_key)
 
 
     def updateNick(self, nick, mode, pktnum):
@@ -860,14 +860,14 @@ class BridgeNodeData(object):
         
         dch = self.main.getOnlineDCH()
         if dch:
-            if flags & dtella.NOTICE_BIT:
+            if flags & dtella_core.NOTICE_BIT:
                 # Notice sent directly to this user.
                 # Display it in the chat window
                 dch.pushChatMessage("*N %s" % nick, text)
             else:
                 # Can't support /me very well in a private message,
                 # so just stick a * at the beginning.
-                if flags & dtella.SLASHME_BIT:
+                if flags & dtella_core.SLASHME_BIT:
                     text = '* ' + text
                 dch.pushPrivMsg(nick, text)
 

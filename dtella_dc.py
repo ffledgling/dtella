@@ -4,7 +4,7 @@ from twisted.internet import reactor
 
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard)
-import dtella
+import dtella_core
 import dtella_local
 import struct
 
@@ -191,7 +191,7 @@ class DCHandler(LineOnlyReceiver):
             return None
 
         # Insert version and OS information into tag.
-        ver_string = "%s[%s]" % (dtella.VERSION, get_os())
+        ver_string = "%s[%s]" % (dtella_core.VERSION, get_os())
 
         # Split info string
         try:
@@ -364,7 +364,7 @@ class DCHandler(LineOnlyReceiver):
             # TODO: this checking could be factored to handle other commands
             if len(line) > 4 and line[:4].lower() in ('/me ','+me ','!me '):
                 line = line[4:]
-                flags |= dtella.SLASHME_BIT
+                flags |= dtella_core.SLASHME_BIT
 
             if self.chat_counter > 0:
                 self.chat_counter -= 1
@@ -461,7 +461,7 @@ class DCHandler(LineOnlyReceiver):
         osm.mrm.newMessage(''.join(packet), tries=4)
 
         # Echo back to the DC client
-        if flags & dtella.SLASHME_BIT:
+        if flags & dtella_core.SLASHME_BIT:
             nick = "*"
             text = "%s %s" % (osm.me.nick, text)
         else:
@@ -563,9 +563,9 @@ class DCHandler(LineOnlyReceiver):
 
 
     def event_ChatMessage(self, nick, text, flags):
-        if flags & dtella.NOTICE_BIT:
+        if flags & dtella_core.NOTICE_BIT:
             self.pushChatMessage(("*N# %s" % nick), text)
-        elif flags & dtella.SLASHME_BIT:
+        elif flags & dtella_core.SLASHME_BIT:
             self.pushChatMessage("*", "%s %s" % (nick, text))
         else:
             self.pushChatMessage(nick, text)

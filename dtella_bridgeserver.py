@@ -1,8 +1,4 @@
 #!/usr/bin/env python
-#
-#IRC Bridge Test Code
-#NOTE: This is only designed to work with UnrealIRCd
-#
 
 import fixtwistedtime
 
@@ -10,6 +6,7 @@ from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet import reactor, defer
 from twisted.python.runtime import seconds
+import twisted.internet.error
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
 from Crypto.PublicKey import RSA
@@ -19,7 +16,7 @@ import struct
 import md5
 import random
 
-import dtella
+import dtella_core
 import dtella_state
 import dtella_crypto
 import dtella_local
@@ -305,7 +302,7 @@ class IRCServer(LineOnlyReceiver):
                 
                 if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
                     text = text[8:-1]
-                    flags |= dtella.SLASHME_BIT
+                    flags |= dtella_core.SLASHME_BIT
 
                 if target == cfg.irc_chan:
                     chunks = []
@@ -332,7 +329,7 @@ class IRCServer(LineOnlyReceiver):
 
                 target = args[0]
                 text = args[1]
-                flags = dtella.NOTICE_BIT
+                flags = dtella_core.NOTICE_BIT
 
                 if target == cfg.irc_chan:
                     chunks = []
@@ -480,9 +477,9 @@ class IRCServer(LineOnlyReceiver):
     def event_ChatMessage(self, nick, text, flags):
         inick = dc_to_irc(nick)
 
-        if flags & dtella.NOTICE_BIT:
+        if flags & dtella_core.NOTICE_BIT:
             self.pushNotice(inick, text)
-        elif flags & dtella.SLASHME_BIT:
+        elif flags & dtella_core.SLASHME_BIT:
             self.pushPrivMsg(inick, text, action=True)
         else:
             self.pushPrivMsg(inick, text)
@@ -846,7 +843,7 @@ class IRCFactory(ReconnectingClientFactory):
 ##############################################################################
 
 
-class BridgeServerProtocol(dtella.PeerHandler):
+class BridgeServerProtocol(dtella_core.PeerHandler):
 
     def handlePacket_bP(self, ad, data):
         # Private message to IRC nick
@@ -1107,7 +1104,7 @@ class BridgeServerManager(object):
         # Session ID, uptime flags
         packet.append(osm.me.sesid)
         packet.append(struct.pack("!I", seconds() - osm.me.uptime))
-        packet.append(struct.pack("!B", dtella.PERSIST_BIT))
+        packet.append(struct.pack("!B", dtella_core.PERSIST_BIT))
 
         chunks = []
 
@@ -1250,7 +1247,7 @@ class BridgeServerManager(object):
 
     def addTopicChunk(self, chunks, nick, topic, changed):
 
-        flags = (changed and dtella.CHANGE_BIT)
+        flags = (changed and dtella_core.CHANGE_BIT)
 
         chunks.append('T')
         chunks.append(struct.pack('!BB', flags, len(nick)))
@@ -1303,18 +1300,18 @@ class BridgeServerManager(object):
 
         try:
             if not (osm and osm.syncd and ircs and ircs.readytosend):
-                raise dtella.Reject("Not ready for bridge PM")
+                raise dtella_core.Reject("Not ready for bridge PM")
 
             try:
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
-                raise dtella.Reject("Unknown source node")
+                raise dtella_core.Reject("Unknown source node")
 
             if not n.expire_dcall:
-                raise dtella.Reject("Source node not online")
+                raise dtella_core.Reject("Source node not online")
             
             if src_nhash != n.nickHash():
-                raise dtella.Reject("Source nickhash mismatch")
+                raise dtella_core.Reject("Source nickhash mismatch")
 
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
@@ -1322,18 +1319,18 @@ class BridgeServerManager(object):
                 try:
                     dst_nick = irc_from_dc(dst_nick)
                 except ValueError:
-                    raise dtella.Reject("Invalid dest nick")
+                    raise dtella_core.Reject("Invalid dest nick")
                 
                 if dst_nick not in ircs.data.ulist:
-                    raise dtella.Reject("Dest not on IRC")
+                    raise dtella_core.Reject("Dest not on IRC")
 
                 ircs.sendLine(":%s PRIVMSG %s :%s" %
                               (dc_to_irc(n.nick), dst_nick, text))
 
-        except dtella.Reject:
-            ack_flags |= dtella.ACK_REJECT_BIT
+        except dtella_core.Reject:
+            ack_flags |= dtella_core.ACK_REJECT_BIT
 
-        self.main.ph.sendAckPacket(src_ipp, dtella.ACK_PRIVATE,
+        self.main.ph.sendAckPacket(src_ipp, dtella_core.ACK_PRIVATE,
                                    ack_flags, ack_key)
 
 
@@ -1345,30 +1342,30 @@ class BridgeServerManager(object):
 
         try:
             if not (osm and osm.syncd and ircs and ircs.syncd):
-                raise dtella.Reject("Not ready for topic change")
+                raise dtella_core.Reject("Not ready for topic change")
 
             try:
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
-                raise dtella.Reject("Unknown node")
+                raise dtella_core.Reject("Unknown node")
 
             if not n.expire_dcall:
-                raise dtella.Reject("Node isn't online")
+                raise dtella_core.Reject("Node isn't online")
             
             if src_nhash != n.nickHash():
-                raise dtella.Reject("Source nickhash mismatch")
+                raise dtella_core.Reject("Source nickhash mismatch")
 
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
 
                 if not ircs.updateTopic(n.nick, topic):
-                    raise dtella.Reject("Topic locked")
+                    raise dtella_core.Reject("Topic locked")
 
-        except dtella.Reject:
-            ack_flags |= dtella.ACK_REJECT_BIT
+        except dtella_core.Reject:
+            ack_flags |= dtella_core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(
-            src_ipp, dtella.ACK_PRIVATE, ack_flags, ack_key)
+            src_ipp, dtella_core.ACK_PRIVATE, ack_flags, ack_key)
 
 
     def shutdown(self):
@@ -1381,16 +1378,10 @@ class BridgeServerManager(object):
 ##############################################################################
 
 
-class DtellaBridgeMain(dtella.DtellaMain_Base):
-    def __init__(self):
+class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
-        # Bind UDP Port
-        try:
-            reactor.listenUDP(cfg.udp_port, self.ph)
-        except twisted.internet.error.BindError:
-            print "Failed to bind UDP port!"
-            reactor.stop()
-            raise SystemExit
+    def __init__(self):
+        dtella_core.DtellaMain_Base.__init__(self)
 
         # State Manager
         self.state = dtella_state.StateManager(self, 'dtella_bridge.state')
@@ -1399,6 +1390,14 @@ class DtellaBridgeMain(dtella.DtellaMain_Base):
 
         # Peer Handler
         self.ph = BridgeServerProtocol(self)        
+
+        # Bind UDP Port
+        try:
+            reactor.listenUDP(cfg.udp_port, self.ph)
+        except twisted.internet.error.BindError:
+            print "Failed to bind UDP port!"
+            reactor.stop()
+            raise SystemExit
 
         # IRC Server
         self.ircs = None
@@ -1469,7 +1468,7 @@ class DtellaBridgeMain(dtella.DtellaMain_Base):
 
 
 if __name__ == '__main__':
-    dtMain = DtellaBridgeMain()
+    dtMain = DtellaMain_Bridge()
     dtMain.state.udp_port = cfg.udp_port
 
     for addr in cfg.ip_cache:

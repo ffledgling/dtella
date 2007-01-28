@@ -18,7 +18,6 @@ dc_to_irc_prefix = '}'
 irc_to_dc_prefix = '~'
 
 # Dtella stuff
-my_ip = '1.2.3.4'
 udp_port = 41236
 ip_cache = ['1.2.3.4:41234']
 
