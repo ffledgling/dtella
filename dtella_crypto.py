@@ -1,10 +1,5 @@
-#from Crypto.Util.randpool import RandomPool
-#from Crypto.PublicKey import RSA
 from Crypto.Cipher import AES
 import md5
-
-#r = RandomPool()
-#x = RSA.generate(512, r.get_bytes, progress)
 
 class PacketEncoder(object):
 
@@ -44,4 +39,4 @@ class PacketEncoder(object):
             raise ValueError("Bad Hash Value")
 
         return data
-    
+

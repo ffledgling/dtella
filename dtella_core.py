@@ -88,7 +88,7 @@ ACK_PRIVATE = 1
 ACK_BROADCAST = 2
 
 # Bridge topic change
-CHANGE_BIT = 1
+CHANGE_BIT = 0x1
 
 
 ##############################################################################
@@ -183,7 +183,7 @@ class PeerHandler(DatagramProtocol):
 
 
     def sendPacket(self, data, addr):
-        # Send a packet, optionally passing it through the encrypter
+        # Send a packet, passing it through the encrypter
         # returns False if an error occurs
         
         print "sending %s to %s" % (data[:2], addr)
@@ -332,8 +332,8 @@ class PeerHandler(DatagramProtocol):
         if src_ad.ip != ad.ip:
             raise BadPacketError("Source ip mismatch")
 
-        # Callers of this function should make sure osm exists
-        if src_ipp == self.main.osm.me.ipp:
+        osm = self.main.osm
+        if osm and src_ipp == osm.me.ipp:
             raise BadPacketError("Packet came from myself!?")
 
         self.main.state.refreshPeer(src_ad, 0)
@@ -641,7 +641,6 @@ class PeerHandler(DatagramProtocol):
 
         # Send IR packet to dtella port
         self.sendPacket(''.join(packet), src_ad.getAddrTuple())
-       
 
         # Update the sender in my peer cache (if valid)
         self.main.state.refreshPeer(src_ad, 0)
@@ -657,11 +656,8 @@ class PeerHandler(DatagramProtocol):
         if ad.isRFC1918():
             if not src_ad.validate():
                 raise BadPacketError("Invalid reported source IP")
-        elif ad.validate():
-            if src_ad.ip != ad.ip:
-                raise BadPacketError("Source IP Mismatch")
         else:
-            raise BadPacketError("Invalid source IP")
+            self.checkSource(src_ipp, ad)
 
         pc, rest = self.decodeNodeTimeList(rest)
 
@@ -671,8 +667,10 @@ class PeerHandler(DatagramProtocol):
         if code not in (0,1):
             raise BadPacketError("Bad Response Code")
 
-        if self.main.icm:
-            self.main.icm.receivedInitResponse(src_ipp, myip, code, pc)
+        if not self.main.icm:
+            raise BadTimingError("Not in initial connection mode")
+
+        self.main.icm.receivedInitResponse(src_ipp, myip, code, pc)
 
 
     def handlePacket_IR(self, ad, data):
@@ -684,11 +682,8 @@ class PeerHandler(DatagramProtocol):
         if ad.isRFC1918():
             if not src_ad.validate():
                 raise BadPacketError("Invalid reported source IP")
-        elif ad.validate():
-            if src_ad.ip != ad.ip:
-                raise BadPacketError("Source IP Mismatch")
         else:
-            raise BadPacketError("Invalid source IP")
+            self.checkSource(src_ipp, ad)
 
         # Node list, Peer Cache
         nd, rest = self.decodeNodeTimeList(rest)
@@ -700,11 +695,11 @@ class PeerHandler(DatagramProtocol):
         if code not in (0,1):
             raise BadPacketError("Bad Response Code")
 
-        if self.main.icm:
-            self.main.icm.receivedInitResponse(src_ipp, myip, code, pc, nd)
-        else:
-            raise BadPacketError("Not in initial connection mode")
-        
+        if not self.main.icm:
+            raise BadTimingError("Not in initial connection mode")
+
+        self.main.icm.receivedInitResponse(src_ipp, myip, code, pc, nd)
+
 
     def handlePacket_NS(self, ad, data):
         # Broadcast: Node Status

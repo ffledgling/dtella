@@ -138,7 +138,7 @@ class IRCBadMessage(Exception):
 
 
 class IRCServer(LineOnlyReceiver):
-    showirc = True
+    showirc = False
 
     def __init__(self, main):
         self.data = IRCServerData(self)
@@ -256,24 +256,33 @@ class IRCServer(LineOnlyReceiver):
             # the Dtella state information if it's available and we haven't
             # sent it already.
 
-            self.sendLine(
-                ":%s TKL + Q * %s* bridge.dtella.net 0 %d :Reserved for Dtella"
-                % (cfg.my_host, cfg.dc_to_irc_prefix, time.time())
-                )
-
             if not self.readytosend:
                 self.readytosend = True
 
                 # Tell the ReconnectingClientFactory that we're cool
                 self.factory.resetDelay()
 
+                # Set up nick reservation
+                self.sendLine(
+                    ":%s TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
+                    (cfg.my_host, cfg.dc_to_irc_prefix,
+                     cfg.my_host, time.time()))
+
                 # Send my own bridge nick
-                self.pushFullJoin(cfg.dc_to_irc_bot, "bridge", "dtella.net")
+                self.pushFullJoin(
+                    cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
+
+                # Give it ops
+                self.sendLine(
+                    ":%s MODE %s +a %s" %
+                    (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
 
                 # Maybe send Dtella nicks
                 if self.main.osm and self.main.osm.syncd:
                     self.sendState()
-            
+
+                # Tell the server we're done
+                self.sendLine(":%s EOS" % cfg.my_host)
 
         elif command == "EOS" and prefix == cfg.irc_server:
             print "SYNCD!!!!"
@@ -386,9 +395,10 @@ class IRCServer(LineOnlyReceiver):
             self.pushFullJoin(nick, "dtnode", host)
                 
 
-    def pushFullJoin(self, nick, user, host):
-        self.sendLine("NICK %s 0 %d %s %s %s 1 :Dtella Peer" %
-            (nick, time.time(), user, host, cfg.my_host))
+    def pushFullJoin(self, nick, user, host, name="Dtella Peer"):
+        self.sendLine(
+            "NICK %s 0 %d %s %s %s 1 :%s" %
+            (nick, time.time(), user, host, cfg.my_host, name))
         self.sendLine(":%s JOIN %s" % (nick, cfg.irc_chan))
 
 
@@ -492,8 +502,8 @@ class IRCServer(LineOnlyReceiver):
 
             # Remove nick ban
             self.sendLine(
-                ":%s TKL - Q * %s* bridge.dtella.net"
-                % (cfg.my_host, cfg.dc_to_irc_prefix)
+                ":%s TKL - Q * %s* %s" %
+                (cfg.my_host, cfg.dc_to_irc_prefix, cfg.my_host)
                 )
 
             # Scream
