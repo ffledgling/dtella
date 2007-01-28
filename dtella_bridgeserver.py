@@ -1451,6 +1451,11 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         pass
 
 
+    def getOnlineDCH(self):
+        # BridgeServer has no DC Handler
+        return None
+
+
     def getStateObserver(self):
         # Return the IRC Server, iff it's fully online
 

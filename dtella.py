@@ -18,6 +18,9 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         # Location map: ipp->string, usually only contains 1 entry
         self.location = {}
 
+        # This shuts down the Dtella node after a period of inactivity.
+        self.disconnect_dcall = None
+
         # Login counter (just for eye candy)
         self.login_counter = 0
         self.login_text = ""
@@ -64,6 +67,19 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self.dch.state = 'shutdown'
         self.shutdown(final=True)
         self.state.saveState()
+
+
+    def addBlocker(self, name):
+        # Add a blocker.  Connecting will be prevented until the
+        # blocker is removed.
+        self.blockers.add(name)
+        self.shutdown()
+
+
+    def removeBlocker(self, name):
+        # Remove a blocker, and start connecting if there are no more left.
+        self.blockers.remove(name)
+        self.startConnecting()
 
 
     def changeUDPPort(self, udp_port):
@@ -120,6 +136,9 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
     def newConnectionRequest(self):
         # This fires when the DC client connects and wants to be online
 
+        # Cancel the disconnect timeout
+        dcall_discard(self, 'disconnect_dcall')
+
         if self.icm or self.osm:
             # Already connecting, just wait.
             return
@@ -164,10 +183,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             
             # Use dtella_local to transform this hostname into a
             # human-readable location
-            if hostname:
-                loc = dtella_local.hostnameToLocation(hostname)
-            else:
-                loc = None
+            loc = dtella_local.hostnameToLocation(hostname)
 
             # If we got a location, save it, otherwise dump the
             # dictionary entry
@@ -278,7 +294,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             return
 
         # Client left, so shut down in a while
-        when = NO_CLIENT_TIMEOUT
+        when = dtella_core.NO_CLIENT_TIMEOUT
 
         print "Shutting down in %d seconds." % when
 

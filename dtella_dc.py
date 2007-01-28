@@ -188,7 +188,7 @@ class DCHandler(LineOnlyReceiver):
         # Build and return a hacked-up version of my info string.
 
         if not self.info:
-            return None
+            return ""
 
         # Insert version and OS information into tag.
         ver_string = "%s[%s]" % (dtella_core.VERSION, get_os())
@@ -197,10 +197,23 @@ class DCHandler(LineOnlyReceiver):
         try:
             info = split_info(self.info)
         except ValueError:
-            return None
+            return ""
+
+        # Split description into description and <tag>
+        desc, tag = split_tag(info[0])
+
+        # Extract the hall suffix, for appending room numbers and stuff.
+        try:
+            pos = desc.index(' ')
+        except ValueError:
+            pos = len(desc)
+        if pos > 1 and desc[0] == '~':
+            suffix = desc[1:pos]
+            desc = desc[pos+1:]
+        else:
+            suffix = ""
 
         # Update tag
-        desc, tag = split_tag(info[0])
         if tag:
             info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
         else:
@@ -213,10 +226,12 @@ class DCHandler(LineOnlyReceiver):
         except (AttributeError, KeyError):
             loc = None
 
-        print repr(loc)
-
         # If I got a location name, splice it into my connection field
         if loc:
+            # Append location suffix, if the user provided one
+            if suffix:
+                loc = '%s|%s' % (loc, suffix)
+            
             info[2] = loc + info[2][-1:]
 
         return '$'.join(info)

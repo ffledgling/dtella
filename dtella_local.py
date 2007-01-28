@@ -32,21 +32,22 @@ suf_table = {
 
 def hostnameToLocation(hostname):
     # Convert a hostname into a human-readable location name.
-    # return None if unsure.
 
-    suffix = suffix_re.match(hostname)
-    if suffix:
-        try:
-            return suf_table[suffix.group(1)]
-        except KeyError:
-            pass
-    
-    prefix = prefix_re.match(hostname)
-    if prefix:
-        try:
-            return pre_table[prefix.group(1)]
-        except KeyError:
-            pass
+    if hostname:
 
-    return None
+        suffix = suffix_re.match(hostname)
+        if suffix:
+            try:
+                return suf_table[suffix.group(1)]
+            except KeyError:
+                pass
+        
+        prefix = prefix_re.match(hostname)
+        if prefix:
+            try:
+                return pre_table[prefix.group(1)]
+            except KeyError:
+                pass
+
+    return "Unknown"
 

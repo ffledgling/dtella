@@ -21,7 +21,7 @@ import dtella_local
 import dtella_crypto
 import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
-                         validateNick, word_wrap)
+                         validateNick, word_wrap, split_info)
 
 # TODO: Put a panic timer into sendMyStatus.
 #       If any circumstances cause way too many status updates in a short time,
@@ -120,7 +120,6 @@ class NickManager(object):
         del self.nickmap[n.nick.lower()]
 
         so = self.main.getStateObserver()
-
         if so:
             so.event_RemoveNick(n.nick, reason)
 
@@ -135,7 +134,6 @@ class NickManager(object):
         self.nickmap[n.nick.lower()] = n
 
         so = self.main.getStateObserver()
-
         if so:
             so.event_AddNick(n.nick, n)
             so.event_UpdateInfo(n.nick, n.info)
@@ -143,30 +141,30 @@ class NickManager(object):
         return True
 
 
-    def setNodeInfo(self, n, info):
+    def updateNodeInfo(self, n, info):
 
-        if n.info == info:
+        # Keep the same nick, but try setting info
+        if not n.setNickAndInfo(n.nick, info):
+            # Info hasn't changed, so there's nothing to send
             return
 
-        n.info = info
-
+        # Look for this node in the nickmap
         try:
             if self.nickmap[n.nick.lower()] is not n:
                 raise KeyError
         except KeyError:
             return
 
+        # Push new info to dch/ircs
         so = self.main.getStateObserver()
-
         if so:
             so.event_UpdateInfo(n.nick, n.info)
-            
+
 
     def quitEverybody(self):
-        # Tell DC client that everyone's gone
+        # Tell dch/ircs that everyone's gone
 
         so = self.main.getStateObserver()
-
         if so:
             for n in self.nickmap.itervalues():
                 so.event_RemoveNick(n.nick, "Removing All Nicks")
@@ -1562,6 +1560,9 @@ class Node(object):
         # General Info
         self.nick = ''
         self.info = ''
+        self.location = ''
+        self.shared = 0
+
         self.uptime = 0.0
         self.persist = False
 
@@ -1579,6 +1580,49 @@ class Node(object):
             self.dist = md5.new(my_key + nb_key).digest()
         else:
             self.dist = md5.new(nb_key + my_key).digest()
+
+
+    def setNickAndInfo(self, nick, info):
+
+        # Update nick
+        self.nick = nick
+
+        # Break up info string
+        try:
+            info = split_info(info)
+        except ValueError:
+            info_changed = (self.info != "")
+            self.info = ""
+            self.location = ""
+            self.shared = 0
+            return info_changed
+
+        # Check if the location has a user-specified suffix
+        try:
+            location, suffix = info[2][:-1].split('|', 1)
+        except ValueError:
+            # No separator, use entire connection field as location name
+            location = info[2][:-1]
+        else:
+            # Keep location, and splice out the separator
+            info[2] = location + suffix + info[2][-1:]
+
+        # Get share size
+        try:
+            shared = int(info[4])
+        except ValueError:
+            shared = 0
+
+        info = '$'.join(info)
+        info_changed = (self.info != info)
+
+        self.info = info
+        self.shared = shared
+        self.location = location
+
+        print "info=", repr(info), repr(shared), repr(location)
+
+        return info_changed
 
 
     def nickHash(self):
@@ -2199,21 +2243,19 @@ class OnlineStateManager(object):
         if nick != n.nick:
             if n.nick:
                 self.nkm.removeNode(n, "Status Changed")
-                n.nick = n.info = ''
+                n.setNickAndInfo('', '')
 
-            n.nick = nick
-            n.info = info
-
-            reason = validateNick(n.nick)
+            reason = validateNick(nick)
             if reason:
-                n.nick = n.info = ''
+                n.setNickAndInfo('', '')
+            else:
+                n.setNickAndInfo(nick, info)
 
-            elif n.nick:
-                if not self.nkm.addNode(n):
-                    n.nick = n.info = ''
-
+                if n.nick:
+                    if not self.nkm.addNode(n):
+                        n.setNickAndInfo('', '')
         else:
-            self.nkm.setNodeInfo(n, info)
+            self.nkm.updateNodeInfo(n, info)
 
         # If n isn't in nodes list, then add it
         if not n.inlist:
@@ -2260,8 +2302,7 @@ class OnlineStateManager(object):
 
         # Remove from the nick mapping
         self.nkm.removeNode(n, reason)
-        n.nick = ''
-        n.info = ''
+        n.setNickAndInfo('', '')
 
         # Cancel any privmsg timeouts
         n.cancelPrivMsgs()
@@ -2338,16 +2379,15 @@ class OnlineStateManager(object):
             if me.nick:
                 self.nkm.removeNode(me)
 
-            me.nick = nick
-            me.info = info
+            me.setNickAndInfo(nick, info)
 
             if me.nick:
                 if not self.nkm.addNode(me):
-                    me.nick = me.info = ''
+                    me.setNickAndInfo('', '')
                     dch.nickCollision()
 
         else:
-            self.nkm.setNodeInfo(me, info)
+            self.nkm.updateNodeInfo(me, info)
 
         me.persist = persist
 
@@ -3709,7 +3749,6 @@ class DtellaMain_Base(object):
         self.blockers = set()
 
         self.reconnect_dcall = None
-        self.disconnect_dcall = None
 
         self.reconnect_interval = RECONNECT_RANGE[0]
 
@@ -3728,25 +3767,8 @@ class DtellaMain_Base(object):
                                       self.cleanupOnExit)
 
 
-    def bindUDPPort(self):
-        raise NotImplemented("Override me!")
-
-
     def cleanupOnExit(self):
         raise NotImplemented("Override me!")
-
-
-    def addBlocker(self, name):
-        # Add a blocker.  Connecting will be prevented until the
-        # blocker is removed.
-        self.blockers.add(name)
-        self.shutdown()
-
-
-    def removeBlocker(self, name):
-        # Remove a blocker, and start connecting if there are no more left.
-        self.blockers.remove(name)
-        self.startConnecting()
 
 
     def connectionPermitted(self):
@@ -3854,7 +3876,6 @@ class DtellaMain_Base(object):
             self.showLoginStatus("Shutting down.")
 
         dcall_discard(self, 'reconnect_dcall')
-        dcall_discard(self, 'disconnect_dcall')
 
         # Shut down InitialContactManager
         if self.icm:
@@ -3900,8 +3921,7 @@ class DtellaMain_Base(object):
 
 
     def getOnlineDCH(self):
-        # Maybe overriden
-        return None
+        raise NotImplemented("Override me!")
 
 
     def getStateObserver(self):
