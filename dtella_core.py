@@ -136,7 +136,7 @@ class NickManager(object):
         so = self.main.getStateObserver()
         if so:
             so.event_AddNick(n.nick, n)
-            so.event_UpdateInfo(n.nick, n.info)
+            so.event_UpdateInfo(n.nick, n.dcinfo)
 
         return True
 
@@ -145,7 +145,7 @@ class NickManager(object):
 
         # Keep the same nick, but try setting info
         if not n.setInfo(info):
-            # Info hasn't changed, so there's nothing to send
+            # dcinfo hasn't changed, so there's nothing to send
             return
 
         # Look for this node in the nickmap
@@ -155,10 +155,10 @@ class NickManager(object):
         except KeyError:
             return
 
-        # Push new info to dch/ircs
+        # Push new dcinfo to dch/ircs
         so = self.main.getStateObserver()
         if so:
-            so.event_UpdateInfo(n.nick, n.info)
+            so.event_UpdateInfo(n.nick, n.dcinfo)
 
 
     def quitEverybody(self):
@@ -762,7 +762,7 @@ class PeerHandler(DatagramProtocol):
 
             if osm.syncd:
                 if (src_n and src_n.expire_dcall and
-                    src_n.infoHash() == infohash
+                    src_n.infohash == infohash
                     ):
                     # We are syncd, and this node matches, so extend the
                     # expire timeout and keep forwarding.
@@ -780,7 +780,7 @@ class PeerHandler(DatagramProtocol):
                     # so just forward blindly.
                     return
 
-                elif src_n.infoHash() == infohash:
+                elif src_n.infohash == infohash:
                     # We know about this node already, and the infohash
                     # matches, so extend timeout and keep forwarding
                     src_n.status_pktnum = pktnum
@@ -788,7 +788,7 @@ class PeerHandler(DatagramProtocol):
                     return
                 
                 else:
-                    # Not syncd, but we know the infoHash is wrong.
+                    # Not syncd, but we know the infohash is wrong.
                     raise Reject
 
         self.handleBroadcast(ad, data, check_cb)
@@ -1559,9 +1559,11 @@ class Node(object):
 
         # General Info
         self.nick = ''
-        self.info = ''
+        self.dcinfo = ''
         self.location = ''
         self.shared = 0
+        
+        self.infohash = None
 
         self.uptime = 0.0
         self.persist = False
@@ -1596,14 +1598,6 @@ class Node(object):
         return struct.pack('!B', flags)
 
 
-    def infoHash(self):
-        # Return a 4-byte hash of the current node status
-
-        # TODO: put a separator between nick+info
-        
-        return md5.new(self.sesid + self.flags() +
-                       self.nick + '|' + self.info).digest()[:4]
-
 
     def getPMAckKey(self):
         # Generate random packet ID for messages going TO this node
@@ -1633,15 +1627,16 @@ class Node(object):
 
 
     def setInfo(self, info):
-        # Rewrite the string and extract stuff
-        info, self.location, self.shared = parse_incoming_info(info)
 
-        # Return true if the info has changed
-        if info != self.info:
-            self.info = info
-            return True
-        else:
-            return False
+        old_dcinfo = self.dcinfo
+        self.dcinfo, self.location, self.shared = parse_incoming_info(info)
+
+        # Update my infohash
+        self.infohash = md5.new(
+            self.sesid + self.flags() + self.nick + '|' + info
+            ).digest()[:4]
+
+        return self.dcinfo != old_dcinfo
 
 
     def setNickAndInfo(self, nick, info):
@@ -1776,6 +1771,9 @@ class Node(object):
 
 
 class MeNode(Node):
+
+    info_out = ""
+    
     def event_PrivateMessage(self, main, text, fail_cb):
         dch = self.main.getOnlineDCH()
         if dch:
@@ -2326,8 +2324,8 @@ class OnlineStateManager(object):
         status.append(self.me.nick)
 
         # My Info
-        status.append(struct.pack('!B', len(self.me.info)))
-        status.append(self.me.info)
+        status.append(struct.pack('!B', len(self.me.info_out)))
+        status.append(self.me.info_out)
 
         return status
 
@@ -2338,8 +2336,6 @@ class OnlineStateManager(object):
         
         dch = self.main.getOnlineDCH()
 
-        persist = self.main.state.persistent
-
         if dch:
             info = dch.formatMyInfo()
             nick = dch.nick
@@ -2347,8 +2343,13 @@ class OnlineStateManager(object):
             info = ''
             nick = ''
 
+        persist = self.main.state.persistent
         me = self.me
-        send = send or (me.nick, me.info, me.persist) != (nick, info, persist)
+
+        send = (send or (me.nick, me.info_out, me.persist)
+                != (nick, info, persist))
+
+        me.persist = persist
 
         if me.nick != nick:
             if me.nick:
@@ -2358,13 +2359,14 @@ class OnlineStateManager(object):
 
             if me.nick:
                 if not self.nkm.addNode(me):
-                    me.setNickAndInfo('', '')
+                    info = ''
+                    me.setNickAndInfo('', info)
                     dch.nickCollision()
 
         else:
             self.nkm.updateNodeInfo(me, info)
-
-        me.persist = persist
+            
+        me.info_out = info
 
         if send and self.syncd:
             self.sendMyStatus()
@@ -2400,13 +2402,11 @@ class OnlineStateManager(object):
                 packet.extend(self.getStatus())
 
             else:
-                infohash = self.me.infoHash()
-
                 packet = self.mrm.broadcastHeader('NH', self.me.ipp)
                 packet.append(pkt_id)
 
                 packet.append(struct.pack('!H', expire))
-                packet.append(infohash)
+                packet.append(self.me.infohash)
 
             self.mrm.newMessage(''.join(packet), tries=8)
 

@@ -119,20 +119,20 @@ class DCHandler(LineOnlyReceiver):
     def d_GetInfo(self, nick, _):
 
         if nick == self.bot.nick:
-            info = "Local Dtella Bot$ $Bot\x01$$0$"
-            self.pushInfo(nick, info)
+            dcinfo = "Local Dtella Bot$ $Bot\x01$$0$"
+            self.pushInfo(nick, dcinfo)
             return
 
         if not self.main.getOnlineDCH():
             return
 
         try:
-            n = self.main.osm.nkm.nickmap[nick.lower()]
+            n = self.main.osm.nkm.lookupNick(nick)
         except KeyError:
             return
 
-        if n.info:
-            self.pushInfo(n.nick, n.info)
+        if n.dcinfo:
+            self.pushInfo(n.nick, n.dcinfo)
         
 
     def d_GetNickList(self):
@@ -407,8 +407,8 @@ class DCHandler(LineOnlyReceiver):
         self.sendLine("<%s> %s" % (nick, text))
 
 
-    def pushInfo(self, nick, info):
-        self.sendLine('$MyINFO $ALL %s %s' % (nick, info))
+    def pushInfo(self, nick, dcinfo):
+        self.sendLine('$MyINFO $ALL %s %s' % (nick, dcinfo))
 
 
     def pushTopic(self, topic=None):
@@ -598,9 +598,9 @@ class DCHandler(LineOnlyReceiver):
             self.pushQuit(nick)
 
 
-    def event_UpdateInfo(self, nick, info):
-        if info:
-            self.pushInfo(nick, info)
+    def event_UpdateInfo(self, nick, dcinfo):
+        if dcinfo:
+            self.pushInfo(nick, dcinfo)
 
 
     def event_ChatMessage(self, nick, text, flags):

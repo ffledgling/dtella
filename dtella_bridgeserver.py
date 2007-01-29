@@ -482,7 +482,7 @@ class IRCServer(LineOnlyReceiver):
         self.pushQuit(inick, reason)
 
 
-    def event_UpdateInfo(self, nick, info):
+    def event_UpdateInfo(self, nick, dcinfo):
         pass
 
 
@@ -642,7 +642,7 @@ class IRCServerData(object):
 
                     # Forget this nick
                     osm.nkm.removeNode(n)
-                    n.nick = n.info = ''
+                    n.setNickAndInfo('', '')
 
         try:
             u = self.ulist[n00b]

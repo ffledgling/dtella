@@ -376,7 +376,8 @@ class NickNode(object):
     def __init__(self, parent_n, nick, info, mode, pktnum):
         self.parent_n = parent_n
         self.nick = nick
-        self.info = ""
+        
+        self.dcinfo = ""
         self.location = ""
         self.shared = 0
         self.setInfo(info)
@@ -386,15 +387,9 @@ class NickNode(object):
 
 
     def setInfo(self, info):
-        # Rewrite the string and extract stuff
-        info, self.location, self.shared = parse_incoming_info(info)
-
-        # Return true if the info has changed
-        if info != self.info:
-            self.info = info
-            return True
-        else:
-            return False
+        old_dcinfo = self.dcinfo
+        self.dcinfo, self.location, self.shared = parse_incoming_info(info)
+        return (self.dcinfo != old_dcinfo)
 
 
     def event_PrivateMessage(self, main, text, fail_cb):
