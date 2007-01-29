@@ -9,6 +9,8 @@ setup(
     #    "icon_resources": [(1, "dcgate.ico")]
     #}]
 
-    console=[{"script": "dtella.py"}]
+    console=[{"script": "dtella.py",
+	    	"icon_resources": [(1, "dtella.ico")]
+	    }]
 )
 
