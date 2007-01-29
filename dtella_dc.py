@@ -3,7 +3,8 @@ from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
 
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
-                         split_tag, remove_dc_escapes, dcall_discard)
+                         split_tag, remove_dc_escapes, dcall_discard,
+                         format_bytes)
 import dtella_core
 import dtella_local
 import struct
@@ -963,6 +964,33 @@ class DtellaBot(object):
         self.syntaxHelp(out, 'REJOIN', prefix)
 
 
+    def handleCmd_USERS(self, out, args, preifx):
+        self.showStats(
+            out,
+            "User Counts",
+            lambda u,b: u,
+            lambda v: "%d" % v
+            )
+
+
+    def handleCmd_SHARED(self, out, args, preifx):
+        self.showStats(
+            out,
+            "Bytes Shared",
+            lambda u,b: b,
+            lambda v: "%s" % format_bytes(v)
+            )
+
+
+    def handleCmd_DENSE(self, out, args, prefix):
+        self.showStats(
+            out,
+            "Share Density",
+            lambda u,b: (b/u, u),
+            lambda v: "%s/user (%d)" % (format_bytes(v[0]), v[1])
+            )
+
+
     def handleTopic(self, out, topic, prefix):
 
         if not self.main.getOnlineDCH():
@@ -976,3 +1004,39 @@ class DtellaBot(object):
         else:
             tm.broadcastNewTopic(topic)
 
+
+    def showStats(self, out, title, compute, format):
+
+        # TODO: make this better
+        if not self.main.getOnlineDCH():
+            out("fail.")
+            return
+
+        # Count users and bytes
+        ucount = {}
+        bcount = {}
+
+        # Collect user count and share size
+        for n in self.main.osm.nkm.nickmap.values():
+            try:
+                ucount[n.location] += 1
+                bcount[n.location] += n.shared
+            except KeyError:
+                ucount[n.location] = 1
+                bcount[n.location] = n.shared
+
+        # Collect final values
+        values = {}
+        for loc in ucount:
+            values[loc] = compute(ucount[loc], bcount[loc])
+
+        # Sort by value, in descending order
+        locs = values.keys()
+        locs.sort(key=lambda loc: values[loc], reverse=True)
+
+        # Build info string and send it
+        out("=== %s, by Location ===" % title)
+        for loc in locs:
+            out("* %s <= %s" % (format(values[loc]), loc))
+        out("==========================")
+       

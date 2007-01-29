@@ -3,7 +3,7 @@ from twisted.internet import reactor
 from dtella_core import BadTimingError, BadPacketError, BadBroadcast, Reject
 import dtella_core
 
-from dtella_util import RandSet, Ad, dcall_discard
+from dtella_util import RandSet, Ad, dcall_discard, parse_incoming_info
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
 from Crypto.PublicKey import RSA
@@ -376,9 +376,25 @@ class NickNode(object):
     def __init__(self, parent_n, nick, info, mode, pktnum):
         self.parent_n = parent_n
         self.nick = nick
-        self.info = info
+        self.info = ""
+        self.location = ""
+        self.shared = 0
+        self.setInfo(info)
+        
         self.pktnum = pktnum
         self.mode = mode
+
+
+    def setInfo(self, info):
+        # Rewrite the string and extract stuff
+        info, self.location, self.shared = parse_incoming_info(info)
+
+        # Return true if the info has changed
+        if info != self.info:
+            self.info = info
+            return True
+        else:
+            return False
 
 
     def event_PrivateMessage(self, main, text, fail_cb):
@@ -840,11 +856,11 @@ class BridgeNodeData(object):
 
                 if n.mode != 0xFF:
                     # Change mode of existing nick
-                    osm.nkm.setNodeInfo(n, info)
+                    osm.nkm.updateNodeInfo(n, info)
                     
                 else:
                     # Dead nick coming back online
-                    n.info = info
+                    n.setInfo(info)
                     if not osm.nkm.addNode(n):
                         # Collision of some sort
                         mode = 0xFF
@@ -915,7 +931,7 @@ class BridgeNodeData(object):
             if not outdated:
                 # Drop this node from the nick list (if it's there)
                 osm.nkm.removeNode(n)
-                n.nick = n.info = ''
+                n.setInfo('')
 
                 # The next valid broadcast should have pktnum+1
                 n.status_pktnum = pktnum
@@ -945,7 +961,7 @@ class BridgeNodeData(object):
             except IndexError:
                 info = ''
 
-            osm.nkm.setNodeInfo(n, info)
+            osm.nkm.updateNodeInfo(n, info)
 
 
     def nodeExited(self):

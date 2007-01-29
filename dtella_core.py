@@ -21,7 +21,7 @@ import dtella_local
 import dtella_crypto
 import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
-                         validateNick, word_wrap, split_info)
+                         validateNick, word_wrap, parse_incoming_info)
 
 # TODO: Put a panic timer into sendMyStatus.
 #       If any circumstances cause way too many status updates in a short time,
@@ -144,7 +144,7 @@ class NickManager(object):
     def updateNodeInfo(self, n, info):
 
         # Keep the same nick, but try setting info
-        if not n.setNickAndInfo(n.nick, info):
+        if not n.setInfo(info):
             # Info hasn't changed, so there's nothing to send
             return
 
@@ -1582,49 +1582,6 @@ class Node(object):
             self.dist = md5.new(nb_key + my_key).digest()
 
 
-    def setNickAndInfo(self, nick, info):
-
-        # Update nick
-        self.nick = nick
-
-        # Break up info string
-        try:
-            info = split_info(info)
-        except ValueError:
-            info_changed = (self.info != "")
-            self.info = ""
-            self.location = ""
-            self.shared = 0
-            return info_changed
-
-        # Check if the location has a user-specified suffix
-        try:
-            location, suffix = info[2][:-1].split('|', 1)
-        except ValueError:
-            # No separator, use entire connection field as location name
-            location = info[2][:-1]
-        else:
-            # Keep location, and splice out the separator
-            info[2] = location + suffix + info[2][-1:]
-
-        # Get share size
-        try:
-            shared = int(info[4])
-        except ValueError:
-            shared = 0
-
-        info = '$'.join(info)
-        info_changed = (self.info != info)
-
-        self.info = info
-        self.shared = shared
-        self.location = location
-
-        print "info=", repr(info), repr(shared), repr(location)
-
-        return info_changed
-
-
     def nickHash(self):
         # Return a 4-byte hash to prevent a transient nick mismapping
         
@@ -1673,7 +1630,25 @@ class Node(object):
                 self.msgkeys_in.pop(ack_key)
             self.msgkeys_in[ack_key] = reactor.callLater(60.0, cb)
             return True
-    
+
+
+    def setInfo(self, info):
+        # Rewrite the string and extract stuff
+        info, self.location, self.shared = parse_incoming_info(info)
+
+        # Return true if the info has changed
+        if info != self.info:
+            self.info = info
+            return True
+        else:
+            return False
+
+
+    def setNickAndInfo(self, nick, info):
+        # Utility function to set nick and info at the same time.
+        self.nick = nick
+
+        return self.setInfo(info)
 
 
     def cancelPrivMsgs(self):

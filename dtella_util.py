@@ -3,6 +3,7 @@ import dtella_local
 import struct
 import random
 import os
+import fpformat
 
 from twisted.python.runtime import seconds
 
@@ -115,6 +116,35 @@ def split_info(info):
     raise ValueError
 
 
+def parse_incoming_info(info):
+    # Pull the location and share size out of an info string
+    # Returns info, location, shared
+
+    # Break up info string
+    try:
+        info = split_info(info)
+    except ValueError:
+        return ("", "", 0)
+
+    # Check if the location has a user-specified suffix
+    try:
+        location, suffix = info[2][:-1].split('|', 1)
+    except ValueError:
+        # No separator, use entire connection field as location name
+        location = info[2][:-1]
+    else:
+        # Keep location, and splice out the separator
+        info[2] = location + suffix + info[2][-1:]
+
+    # Get share size
+    try:
+        shared = int(info[4])
+    except ValueError:
+        shared = 0
+
+    return ('$'.join(info), location, shared)
+
+
 def split_tag(desc):
     # Break 'description<tag>' into ('description','tag')
     tag = ''
@@ -127,6 +157,20 @@ def split_tag(desc):
             pass
     return desc, tag
 
+
+def format_bytes(n):
+    # Convert an integer into a Bytes representation
+    n = float(n)
+    suffix = ('B','KiB','MiB','GiB','TiB','PiB')
+    i = 0
+    while n >= 1024 and i < 5:
+        n /= 1024
+        i+=1
+
+    if i:
+        return "%s %s" % (fpformat.fix(n, 2), suffix[i])
+    else:
+        return "%d %s" % (n, suffix[i])
 
 
 def word_wrap(line, max_len=80):
