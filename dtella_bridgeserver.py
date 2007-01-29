@@ -771,10 +771,10 @@ class IRCServerData(object):
 
     def gotQuit(self, nick):
         try:
-            u = self.ulist[nick]
+            u = self.ulist.pop(nick)
         except KeyError:
             print "nick %s doesn't exist!" % (nick,)
-            return None
+            return
 
         for chan in u.chans:
             c = self.getChan(chan)
@@ -793,7 +793,7 @@ class IRCServerData(object):
             u = self.ulist[nick]
         except KeyError:
             print "nick %s doesn't exist!" % (nick,)
-            return None
+            return
 
         for chan in chans:
             c = self.getChan(chan)
