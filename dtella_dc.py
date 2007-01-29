@@ -269,11 +269,14 @@ class DCHandler(LineOnlyReceiver):
         text = remove_dc_escapes(text)
         
         if nick == self.bot.nick:
-            out = self.bot.say
 
             # No ! is needed for commands in the private message context
             if text[:1] == '!':
                 text = text[1:]
+
+            def out(text):
+                if text is not None:
+                    self.bot.say(text)
             
             self.bot.commandInput(out, text)
             return
