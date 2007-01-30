@@ -2,7 +2,7 @@ import dtella_local
 
 import struct
 import random
-import os
+import sys
 import fpformat
 
 from twisted.python.runtime import seconds
@@ -92,14 +92,16 @@ def dcall_timeleft(d):
 
 
 def get_os():
-    # TODO:
-    # based this on sys.platform
-    # recorded 'win32', 'linux2', 'darwin'
-    os_map = {'nt':'W', 'posix':'L', 'mac':'M'}
-    try:
-        return os_map[os.name]
-    except KeyError:
-        return '?'
+    os_map = [('bsd','B'), ('cygwin','C'), ('linux','L'),
+              ('darwin','M'), ('sun','S'), ('win','W')]
+
+    p = sys.platform.lower()
+
+    for key,value in os_map:
+        if key in p:
+            return value
+
+    return '?'
 
 
 def remove_dc_escapes(text):

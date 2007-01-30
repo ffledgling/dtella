@@ -31,7 +31,7 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: Make the sending of status updates more time conscious.
 
-# TODO: bans, stats, hall suffixing, minshare, minversion
+# TODO: bans, minshare, minversion
 
 
 # Miscellaneous Exceptions
