@@ -759,16 +759,18 @@ class DtellaBot(object):
 
     
     minihelp = [
+        ("--BREAK--",  "--CONTROLS--"),
         ("REJOIN",     "Hop back online after a kick or collision"),
         ("TOPIC",      "View or change the global topic"),
-        ("USERS",      "Show how many users exist at each location"),
-        ("SHARED",     "Show how many bytes are shared at each location"),
-        ("DENSE",      "Show the bytes/user density for each location"),
-        ("RANK",       "Compare your share size with everyone else"),
         ("UDP",        "Change Dtella's peer communication port"),
         ("ADDPEER",    "Add the address of another node to your cache"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
         ("PERSISTENT", "View or toggle persistent mode"),
+        ("--BREAK--",  "--STATISTICS--"),
+        ("USERS",      "Show how many users exist at each location"),
+        ("SHARED",     "Show how many bytes are shared at each location"),
+        ("DENSE",      "Show the bytes/user density for each location"),
+        ("RANK",       "Compare your share size with everyone else"),
         ]
 
 
@@ -869,7 +871,11 @@ class DtellaBot(object):
             out("")
 
             for command, description in self.minihelp:
-                out("  %s%s - %s" % (prefix, command, description))
+                if (command == "--BREAK--"):
+                    out(" ")
+                    out("  %s" % (description))
+                else:
+                    out("  %s%s - %s" % (prefix, command, description))
 
         else:
             key = ' '.join(args)
