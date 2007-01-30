@@ -759,14 +759,14 @@ class DtellaBot(object):
 
     
     minihelp = [
-        ("--BREAK--",  "--CONTROLS--"),
+        ("--",         "CONTROLS"),
         ("REJOIN",     "Hop back online after a kick or collision"),
         ("TOPIC",      "View or change the global topic"),
         ("UDP",        "Change Dtella's peer communication port"),
         ("ADDPEER",    "Add the address of another node to your cache"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
         ("PERSISTENT", "View or toggle persistent mode"),
-        ("--BREAK--",  "--STATISTICS--"),
+        ("--",         "STATISTICS"),
         ("USERS",      "Show how many users exist at each location"),
         ("SHARED",     "Show how many bytes are shared at each location"),
         ("DENSE",      "Show the bytes/user density for each location"),
@@ -865,17 +865,17 @@ class DtellaBot(object):
                 "commands is provided below.  Note that you can PM a command "
                 "directly to the %s user, or enter it in the main chat "
                 "window prefixed with an exclamation point (!)" % self.nick)
-            out("")
-            out("For more detailed information, type: "
-               "%sHELP <command>" % prefix)
-            out("")
 
             for command, description in self.minihelp:
-                if (command == "--BREAK--"):
-                    out(" ")
-                    out("  %s" % (description))
+                if command == "--":
+                    out("")
+                    out("--%s--" % description)
                 else:
-                    out("  %s%s - %s" % (prefix, command, description))
+                    out("%s%s - %s" % (prefix, command, description))
+
+            out("")
+            out("For more detailed information, type: "
+                "%sHELP <command>" % prefix)
 
         else:
             key = ' '.join(args)

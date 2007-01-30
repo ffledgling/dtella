@@ -1243,7 +1243,7 @@ class BridgeServerManager(object):
         chunks.append(reason)
 
 
-    def addBanChunk(self, chunks, ad, subnet, on_off):
+    def addBanChunk(self, chunks, ip, subnet, on_off):
 
         assert 0 <= subnet <= 32
 
@@ -1251,7 +1251,7 @@ class BridgeServerManager(object):
 
         chunks.append('B')
         chunks.append(struct.pack('!B', subnet))
-        chunks.append(ad.getRawIP())
+        chunks.append(ip)
 
 
     def addChatChunk(self, chunks, nick, text, flags=0):
