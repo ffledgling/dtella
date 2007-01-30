@@ -1243,6 +1243,17 @@ class BridgeServerManager(object):
         chunks.append(reason)
 
 
+    def addBanChunk(self, chunks, ad, subnet, on_off):
+
+        assert 0 <= subnet <= 32
+
+        subnet |= (on_off and 0x80)
+
+        chunks.append('B')
+        chunks.append(struct.pack('!B', subnet))
+        chunks.append(ad.getRawIP())
+
+
     def addChatChunk(self, chunks, nick, text, flags=0):
 
         chat_pktnum = self.main.osm.mrm.getPacketNumber_chat()

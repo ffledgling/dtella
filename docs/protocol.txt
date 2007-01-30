@@ -532,10 +532,10 @@ chunks:
 + N-byte text
 
 'B' - ban
-4-byte IP
 1-byte flag/subnet:
     bit 7 = ban/unban flag
     bits 5..0 = subnet length (0..32)
+4-byte IP
 
 'N' - nick info
 1-byte mode ('\xFF' == offline)

@@ -761,10 +761,14 @@ class DtellaBot(object):
     minihelp = [
         ("REJOIN",     "Hop back online after a kick or collision"),
         ("TOPIC",      "View or change the global topic"),
+        ("USERS",      "Show how many users exist at each location"),
+        ("SHARED",     "Show how many bytes are shared at each location"),
+        ("DENSE",      "Show the bytes/user density for each location"),
+        ("RANK",       "Compare your share size with everyone else"),
         ("UDP",        "Change Dtella's peer communication port"),
-        ("REBOOT",     "Exit from the network and immediately reconnect"),
         ("ADDPEER",    "Add the address of another node to your cache"),
-        ("PERSISTENT", "View or toggle persistent mode")
+        ("REBOOT",     "Exit from the network and immediately reconnect"),
+        ("PERSISTENT", "View or toggle persistent mode"),
         ]
 
 
@@ -781,7 +785,37 @@ class DtellaBot(object):
 
         "TOPIC":(
             "<text>",
-            "TODO: put help here"
+            "If no argument is provided, this command will display the "
+            "current topic for the network.  This is the same text which "
+            "is shown in the title bar.  If you provide a string of text, "
+            "this will attempt to set a new topic.  Note that if Dtella "
+            "is bridged to an IRC network, the admins may decide to lock "
+            "the topic to prevent changes."
+            ),
+
+        "USERS":(
+            "",
+            "This will list all the known locations, and show how many "
+            "people are currently connecting from each."
+            ),
+
+        "SHARED":(
+            "",
+            "This will list all the known locations, and show how many "
+            "bytes of data are being shared from each."
+            ),
+        
+        "DENSE":(
+            "",
+            "This will list all the known locations, and show the calculated "
+            "share density (bytes-per-user) for each."
+            ),
+        
+        "RANK":(
+            "<nick>",
+            "Compare your share size with everyone else in the network, and "
+            "show which place you're currently in.  If <nick> is provided, "
+            "this will instead display the ranking of the user with that nick."
             ),
         
         "UDP":(
