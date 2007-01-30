@@ -869,9 +869,9 @@ class DtellaBot(object):
             for command, description in self.minihelp:
                 if command == "--":
                     out("")
-                    out("--%s--" % description)
+                    out("  --%s--" % description)
                 else:
-                    out("%s%s - %s" % (prefix, command, description))
+                    out("  %s%s - %s" % (prefix, command, description))
 
             out("")
             out("For more detailed information, type: "
@@ -1145,9 +1145,11 @@ class DtellaBot(object):
         locs = values.keys()
         locs.sort(key=lambda loc: values[loc], reverse=True)
 
+        overall = compute(sum(ucount.values()), sum(bcount.values()))
+
         # Build info string and send it
-        out("=== %s, by Location ===" % title)
+        out("/== %s, by Location ==\\" % title)
         for loc in locs:
-            out("* %s <= %s" % (format(values[loc]), loc))
-        out("==========================")
+            out("| %s <= %s" % (format(values[loc]), loc))
+        out("\\_ Overall: %s _/" % format(overall))
        
