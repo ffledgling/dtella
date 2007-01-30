@@ -372,6 +372,8 @@ class NickNode(object):
 
     __lt__ = lambda self,other: self.nick <  other.nick
     __le__ = lambda self,other: self.nick <= other.nick
+
+    is_peer = False
     
     def __init__(self, parent_n, nick, info, mode, pktnum):
         self.parent_n = parent_n

@@ -1017,7 +1017,8 @@ class DtellaBot(object):
             out,
             "User Counts",
             lambda u,b: u,
-            lambda v: "%d" % v
+            lambda v: "%d" % v,
+            peers_only=False
             )
 
 
@@ -1031,7 +1032,8 @@ class DtellaBot(object):
             out,
             "Bytes Shared",
             lambda u,b: b,
-            lambda v: "%s" % format_bytes(v)
+            lambda v: "%s" % format_bytes(v),
+            peers_only=True
             )
 
 
@@ -1040,12 +1042,19 @@ class DtellaBot(object):
         if not self.main.getOnlineDCH():
             out("You must be online to use %sDENSE." % prefix)
             return
+
+        def compute(u,b):
+            try:
+                return (b/u, u)
+            except ZeroDivisionError:
+                return (0, u)
         
         self.showStats(
             out,
             "Share Density",
-            lambda u,b: (b/u, u),
-            lambda v: "%s/user (%d)" % (format_bytes(v[0]), v[1])
+            compute,
+            lambda v: "%s/user (%d)" % (format_bytes(v[0]), v[1]),
+            peers_only=True
             )
 
 
@@ -1119,7 +1128,7 @@ class DtellaBot(object):
             tm.broadcastNewTopic(topic)
 
 
-    def showStats(self, out, title, compute, format):
+    def showStats(self, out, title, compute, format, peers_only):
 
         assert self.main.getOnlineDCH()
 
@@ -1129,6 +1138,10 @@ class DtellaBot(object):
 
         # Collect user count and share size
         for n in self.main.osm.nkm.nickmap.values():
+
+            if peers_only and not n.is_peer:
+                continue
+            
             try:
                 ucount[n.location] += 1
                 bcount[n.location] += n.shared
@@ -1151,5 +1164,6 @@ class DtellaBot(object):
         out("/== %s, by Location ==\\" % title)
         for loc in locs:
             out("| %s <= %s" % (format(values[loc]), loc))
+        out("|")
         out("\\_ Overall: %s _/" % format(overall))
        

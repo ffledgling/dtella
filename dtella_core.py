@@ -1536,6 +1536,9 @@ class Node(object):
     __lt__ = lambda self,other: self.dist <  other.dist
     __le__ = lambda self,other: self.dist <= other.dist
 
+    is_peer = True
+    bridge_data = None  # This will be redefined for bridge nodes
+
     def __init__(self, ipp):
         # Dtella Tracking stuff
         self.ipp = ipp            # 6-byte IP:Port
@@ -1567,9 +1570,6 @@ class Node(object):
 
         self.uptime = 0.0
         self.persist = False
-
-        # If this is a bridge node, store extra details here
-        self.bridge_data = None
 
 
     def calcDistance(self, me):
@@ -2271,7 +2271,7 @@ class OnlineStateManager(object):
         # If it's a bridge node, clean up the extra data
         if n.bridge_data:
             n.bridge_data.nodeExited()
-            n.bridge_data = None
+            del n.bridge_data
 
         # Remove from the nick mapping
         self.nkm.removeNode(n, reason)
