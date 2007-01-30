@@ -968,6 +968,11 @@ class DtellaBot(object):
 
 
     def handleCmd_USERS(self, out, args, preifx):
+
+        if not self.main.getOnlineDCH():
+            out("You must be online to use %sUSERS." % prefix)
+            return
+        
         self.showStats(
             out,
             "User Counts",
@@ -977,6 +982,11 @@ class DtellaBot(object):
 
 
     def handleCmd_SHARED(self, out, args, preifx):
+
+        if not self.main.getOnlineDCH():
+            out("You must be online to use %sSHARED." % prefix)
+            return
+        
         self.showStats(
             out,
             "Bytes Shared",
@@ -986,6 +996,11 @@ class DtellaBot(object):
 
 
     def handleCmd_DENSE(self, out, args, prefix):
+
+        if not self.main.getOnlineDCH():
+            out("You must be online to use %sDENSE." % prefix)
+            return
+        
         self.showStats(
             out,
             "Share Density",
@@ -994,10 +1009,66 @@ class DtellaBot(object):
             )
 
 
+    def handleCmd_RANK(self, out, args, prefix):
+
+        if not self.main.getOnlineDCH():
+            out("You must be online to use %sRANK." % prefix)
+            return
+
+        osm = self.main.osm
+
+        tie = False
+        rank = 1
+
+        target = None
+
+        if len(args) == 0:
+            target = osm.me
+        elif len(args) == 1:
+            try:
+                target = osm.nkm.lookupNick(args[0])
+            except KeyError:
+                out("The nick '%s' cannot be located." % args[0])
+                return
+        else:
+            self.syntaxHelp(out, 'RANK', prefix)
+            return
+        
+        if target is osm.me:
+            who = "You are"
+        else:
+            who = "%s is" % target.nick
+
+        for n in osm.nkm.nickmap.values():
+            if n is target:
+                continue
+
+            if n.shared > target.shared:
+                rank += 1
+            elif n.shared == target.shared:
+                tie = True
+
+        try:
+            suffix = {1:'st',2:'nd',3:'rd'}[rank % 10]
+            if 11 <= (rank % 100) <= 13:
+                raise KeyError
+        except KeyError:
+            suffix = 'th'
+
+        if tie:
+            tie = "tied for"
+        else:
+            tie = "in"
+
+        out("%s %s %d%s place, with a share size of %s." %
+            (who, tie, rank, suffix, format_bytes(target.shared))
+            )
+        
+
     def handleTopic(self, out, topic, prefix):
 
         if not self.main.getOnlineDCH():
-            out("You must be online to use TOPIC.")
+            out("You must be online to use %sTOPIC." % prefix)
             return
 
         tm = self.main.osm.tm
@@ -1010,10 +1081,7 @@ class DtellaBot(object):
 
     def showStats(self, out, title, compute, format):
 
-        # TODO: make this better
-        if not self.main.getOnlineDCH():
-            out("fail.")
-            return
+        assert self.main.getOnlineDCH()
 
         # Count users and bytes
         ucount = {}

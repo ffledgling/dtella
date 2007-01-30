@@ -92,6 +92,9 @@ def dcall_timeleft(d):
 
 
 def get_os():
+    # TODO:
+    # based this on sys.platform
+    # recorded 'win32', 'linux2', 'darwin'
     os_map = {'nt':'W', 'posix':'L', 'mac':'M'}
     try:
         return os_map[os.name]

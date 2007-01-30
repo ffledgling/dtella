@@ -7,6 +7,9 @@ from twisted.internet import reactor
 
 from dtella_util import Ad, dcall_discard
 
+# TODO: maybe store the dtella.state file in the home directory.
+# bryhemm says ~/Library/dtella is best for OS X
+
 class StateManager(object):
 
     def __init__(self, main, filename):
