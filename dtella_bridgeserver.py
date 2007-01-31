@@ -1443,7 +1443,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
     def cleanupOnExit(self):
         print "Reactor is shutting down.  Doing cleanup."
 
-        self.shutdown(final=True)
+        self.shutdown(reconnect='no')
         self.state.saveState()
 
         # Cleanly close the IRC connection before terminating

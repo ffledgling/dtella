@@ -65,7 +65,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         print "Reactor is shutting down.  Doing cleanup."
         if self.dch:
             self.dch.state = 'shutdown'
-        self.shutdown(final=True)
+        self.shutdown(reconnect='no')
         self.state.saveState()
 
 
@@ -73,7 +73,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         # Add a blocker.  Connecting will be prevented until the
         # blocker is removed.
         self.blockers.add(name)
-        self.shutdown()
+        self.shutdown(reconnect='no')
 
 
     def removeBlocker(self, name):
@@ -304,7 +304,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
         def cb():
             self.disconnect_dcall = None
-            self.shutdown()
+            self.shutdown(reconnect='no')
 
         self.disconnect_dcall = reactor.callLater(when, cb)
 

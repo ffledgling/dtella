@@ -1023,7 +1023,7 @@ class BridgeNodeData(object):
             osm.nkm.updateNodeInfo(n, info)
 
 
-    def nodeExited(self):
+    def myNodeExited(self):
         osm = self.main.osm
         
         for n in self.nicks.itervalues():

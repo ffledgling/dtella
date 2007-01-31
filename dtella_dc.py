@@ -857,6 +857,11 @@ class DtellaBot(object):
         }
 
 
+    def handleCmd_DEBUG(self, out, args, prefix):
+        if self.main.getOnlineDCH():
+            self.main.osm.sendMyStatus()
+
+
     def handleCmd_HELP(self, out, args, prefix):
 
         if len(args) == 0:
@@ -898,7 +903,7 @@ class DtellaBot(object):
 
         if len(args) == 0:
             out("Rebooting Node...")
-            self.main.shutdown(final=True)
+            self.main.shutdown(reconnect='no')
             self.main.newConnectionRequest()
             return
 

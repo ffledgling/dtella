@@ -23,15 +23,9 @@ import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info)
 
-# TODO: Put a panic timer into sendMyStatus.
-#       If any circumstances cause way too many status updates in a short time,
-#       then flip out and put the node to sleep for a few minutes.
-
-# TODO: Ping ack delay should affect the retransmit time for broadcasts?
-
 # TODO: Kick message should have a flag for auto-reconnect
 
-# TODO: bans, minshare, minversion
+# TODO: minshare, minversion
 
 
 # Miscellaneous Exceptions
@@ -180,17 +174,55 @@ class NickManager(object):
 
 class PeerHandler(DatagramProtocol):
 
+    # Panic rate limit for broadcast traffic
+    CHOKE_RATE = 100000   # bytes per second
+    CHOKE_PERIOD = 5      # how many seconds to average over
+
     def __init__(self, main):
         self.main = main
         self.remap_ip = None
 
+        self.choke_time = seconds() - self.CHOKE_PERIOD
+        self.choke_reported = seconds() - 999
 
-    def sendPacket(self, data, addr):
+
+    def sendPacket(self, data, addr, broadcast=False):
         # Send a packet, passing it through the encrypter
         # returns False if an error occurs
         
         print "sending %s to %s" % (data[:2], addr)
         data = self.main.pk_enc.encrypt(data)
+
+        # For broadcast traffic, set a safety limit on data rate,
+        # in order to protect the physical network from DoS attacks.
+
+        if broadcast:
+            now = seconds()
+            self.choke_time = max(self.choke_time, now - self.CHOKE_PERIOD)
+
+            penalty = (1.0 * len(data) *
+                       self.CHOKE_PERIOD / self.CHOKE_RATE)
+
+            # Have we used up the buffer time?
+            if self.choke_time + penalty >= now:
+
+                print "CHOKE:", penalty, (now - (self.choke_time+penalty))
+                
+                # Tell the user what's going on, but only once every
+                # 10 seconds.
+                if self.choke_reported < now - 10:
+                    self.main.showLoginStatus(
+                        "!!! Dropping broadcast packets due to "
+                        "excessive flood !!!")
+                    self.choke_reported = now
+
+                # Don't send packet
+                return False
+
+            # Nibble something off the choke buffer
+            self.choke_time += penalty
+
+            print "CHOKE:", penalty, (now - self.choke_time)
 
         try:
             self.transport.write(data, addr)
@@ -2116,6 +2148,10 @@ class OnlineStateManager(object):
         
         self.sendStatus_dcall = None
 
+        # Keep track of outbound status rate limiting
+        self.statusLimit_time = seconds() - 999
+        self.statusLimit_dcall = None
+
         self.sendLoginEcho()
 
         self.lookup_ipp = weakref.WeakValueDictionary() # {ipp: Node()}
@@ -2302,7 +2338,7 @@ class OnlineStateManager(object):
 
         # If it's a bridge node, clean up the extra data
         if n.bridge_data:
-            n.bridge_data.nodeExited()
+            n.bridge_data.myNodeExited()
             del n.bridge_data
 
         # Remove from the nick mapping
@@ -2413,6 +2449,8 @@ class OnlineStateManager(object):
             #       stuff into a Base class, with client and server subclasses?
             return
 
+        self.checkStatusLimit()
+
         def cb(sendfull):
             print "sending status..."
 
@@ -2444,6 +2482,32 @@ class OnlineStateManager(object):
 
         dcall_discard(self, 'sendStatus_dcall')
         cb(sendfull)
+
+
+    def checkStatusLimit(self):
+        # Do a sanity check on the rate of status updates that I'm sending.
+        # If other nodes are causing me to trigger a lot, then something's
+        # amiss, so go to sleep for a while.
+
+        if self.statusLimit_dcall:
+            return
+
+        # Limit to 8 updates over 8 seconds
+        now = seconds()
+        self.statusLimit_time = max(self.statusLimit_time, now-8.0)
+        self.statusLimit_time += 1.0
+
+        self.main.showLoginStatus("StatusLimit: %f" % (now-self.statusLimit_time))
+
+        if self.statusLimit_time < now:
+            return
+
+        def cb():
+            self.statusLimit_dcall = None
+            self.main.showLoginStatus("*** YIKES! Too many status updates!")
+            self.main.shutdown(reconnect='max')
+
+        self.statusLimit_dcall = reactor.callLater(0, cb)
 
 
     def sendLoginEcho(self):
@@ -2502,6 +2566,7 @@ class OnlineStateManager(object):
         
         # Cancel all the dcalls here
         dcall_discard(self, 'sendStatus_dcall')
+        dcall_discard(self, 'statusLimit_dcall')
 
         # TODO: remove debugging dcall!
         dcall_discard(self, 'printNodes_dcall')
@@ -2947,7 +3012,7 @@ class PingManager(object):
         def cb():
             self.onlineTimeout_dcall = None
             self.main.showLoginStatus("Lost Sync!")
-            self.main.shutdown()
+            self.main.shutdown(reconnect='normal')
 
         self.onlineTimeout_dcall = reactor.callLater(ONLINE_TIMEOUT, cb)
 
@@ -3095,7 +3160,7 @@ class MessageRoutingManager(object):
                 # Make an attempt now
                 if tries > 0:
                     addr = Ad().setRawIPPort(nb_ipp).getAddrTuple()
-                    ph.sendPacket(data, addr)
+                    ph.sendPacket(data, addr, broadcast=True)
 
                 # Reschedule another attempt
                 if tries-1 > 0:
@@ -3311,7 +3376,7 @@ class MessageRoutingManager(object):
 
             for n in sendto:
                 ad = Ad().setRawIPPort(n.ipp)
-                ph.sendPacket(packet, ad.getAddrTuple())
+                ph.sendPacket(packet, ad.getAddrTuple(), broadcast=True)
 
 
 ##############################################################################
@@ -3396,7 +3461,7 @@ class SyncRequestRoutingManager(object):
                 m.nbs[n.ipp] = hop-1
 
                 ad = Ad().setRawIPPort(n.ipp)
-                ph.sendPacket(packet, ad.getAddrTuple())
+                ph.sendPacket(packet, ad.getAddrTuple(), broadcast=True)
 
         else:
             # no hops left
@@ -3722,7 +3787,7 @@ class BanManager(object):
                 ip, = struct.unpack('!i', osm.me.ipp[:4])
                 if self.matchBan(ban_ip, ban_mask, ip):
                     self.main.showLoginStatus("You were banned.")
-                    self.main.shutdown()
+                    self.main.shutdown(reconnect='max')
                     break
 
             self.newbans.clear()
@@ -3949,19 +4014,19 @@ class DtellaMain_Base(object):
 
                 if reason == 'banned_ip':
                     self.showLoginStatus("You seem to be banned.")
-                    self.shutdown(final=True)
+                    self.shutdown(reconnect='max')
 
                 elif reason == 'foreign_ip':
                     self.showLoginStatus("Your IP address is not authorized to use this network.")
-                    self.shutdown(final=True)
+                    self.shutdown(reconnect='max')
 
                 elif reason == 'dead_port':
                     self.reportDeadPort()
-                    self.shutdown(final=True)
+                    self.shutdown(reconnect='max')
 
                 else:
                     self.showLoginStatus("No online nodes found.")
-                    self.shutdown()
+                    self.shutdown(reconnect='normal')
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
@@ -4028,7 +4093,7 @@ class DtellaMain_Base(object):
         raise NotImplemented("Override me!")
 
 
-    def shutdown(self, final=False):
+    def shutdown(self, reconnect):
         # Do a total shutdown of this Dtella node
 
         if self.icm or self.osm:
@@ -4050,14 +4115,19 @@ class DtellaMain_Base(object):
         self.shutdown_NotifyObservers()
 
         # Schedule a Reconnect (maybe) ...
-        
-        if final:
-            # Final shutdown, don't reconnect.
-            return
 
         # Check if a reconnect makes sense right now
         if not self.connectionPermitted():
-            return        
+            return
+
+        if reconnect == 'no':
+            return
+        elif reconnect == 'normal':
+            pass
+        elif reconnect == 'max':
+            self.reconnect_interval = RECONNECT_RANGE[1]
+        else:
+            raise KeyError("Unknown reconnect value")
 
         # Decide how long to wait before reconnecting
         when = self.reconnect_interval * random.uniform(0.8, 1.2)
@@ -4066,7 +4136,8 @@ class DtellaMain_Base(object):
         self.reconnect_interval = min(self.reconnect_interval * 1.5,
                                       RECONNECT_RANGE[1])
 
-        self.showLoginStatus("Reconnecting in %d seconds." % when)
+        self.showLoginStatus("--")
+        self.showLoginStatus("Next reconnect attempt in %d seconds." % when)
 
         def cb():
             self.reconnect_dcall = None
