@@ -224,10 +224,31 @@ class Ad(object):
         return not self == other
 
 
-    def validate(self):
+    def auth_s(self):
+        # Authorize IP based on static filter
+
         if not self.ip:
             return False
+
         return dtella_local.validateIP(self.ip)
+
+
+    def auth_b(self, main):
+        # Authorize IP based on bans list
+
+        if not self.ip:
+            return False
+
+        if main.osm:
+            return not main.osm.banm.isBanned(self.getRawIPPort())
+        else:
+            return True
+
+
+    def auth_sb(self, main):
+        # Authorize IP based on static+bans
+
+        return (self.auth_s() and self.auth_b(main))
 
 
     def isRFC1918(self):

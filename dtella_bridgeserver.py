@@ -1142,6 +1142,10 @@ class BridgeServerManager(object):
             # Release control of the topic
             self.addNoTopicChunk(chunks)
 
+        # Experimental ban
+        self.addBanChunk(
+            chunks, Ad().setTextIP("128.0.0.0").getRawIP(), 8, True)
+
         chunks = ''.join(chunks)
 
         # Split data string into 1k blocks
@@ -1243,11 +1247,11 @@ class BridgeServerManager(object):
         chunks.append(reason)
 
 
-    def addBanChunk(self, chunks, ip, subnet, on_off):
+    def addBanChunk(self, chunks, ip, subnet, enable):
 
         assert 0 <= subnet <= 32
 
-        subnet |= (on_off and 0x80)
+        subnet |= (enable and 0x80)
 
         chunks.append('B')
         chunks.append(struct.pack('!B', subnet))

@@ -29,7 +29,7 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: Ping ack delay should affect the retransmit time for broadcasts?
 
-# TODO: Make the sending of status updates more time conscious.
+# TODO: Kick message should have a flag for auto-reconnect
 
 # TODO: bans, minshare, minversion
 
@@ -89,6 +89,11 @@ ACK_BROADCAST = 2
 
 # Bridge topic change
 CHANGE_BIT = 0x1
+
+# Init response codes
+CODE_IP_OK = 0
+CODE_IP_FOREIGN = 1
+CODE_IP_BANNED = 2
 
 
 ##############################################################################
@@ -208,7 +213,7 @@ class PeerHandler(DatagramProtocol):
         # Special handler for search results directly from DC
         if rawdata[:4] == '$SR ':
             dch = self.main.getOnlineDCH()
-            if dch and ad.validate():
+            if dch and ad.auth_sb(self.main):
                 dch.pushSearchResult(rawdata)
             return
         
@@ -234,7 +239,7 @@ class PeerHandler(DatagramProtocol):
             # Make sure the sender's IP is permitted, but delay the check if
             # it's an initialize packet.
             if kind not in ('IQ', 'EC', 'IR', 'IC_alt'):
-                if not ad.validate():
+                if not ad.auth_sb(self.main):
                     raise BadPacketError("Invalid source IP")
 
             try:
@@ -307,14 +312,14 @@ class PeerHandler(DatagramProtocol):
     def decodeNodeList(self, data):
         nbs, rest = self.decodeString1(data, 6)
         nbs = self.decodeChunkList('!6s', nbs)
-        nbs = [ipp for ipp, in nbs if Ad().setRawIPPort(ipp).validate()]
+        nbs = [ipp for ipp, in nbs if Ad().setRawIPPort(ipp).auth_s()]
         return nbs, rest
 
 
     def decodeNodeTimeList(self, data):
         nbs, rest = self.decodeString1(data, 6+4)
         nbs = [(ipp, age) for (ipp, age) in self.decodeChunkList('!6sI', nbs)
-               if Ad().setRawIPPort(ipp).validate()]
+               if Ad().setRawIPPort(ipp).auth_s()]
         return nbs, rest
 
 
@@ -324,11 +329,14 @@ class PeerHandler(DatagramProtocol):
 
         src_ad = Ad().setRawIPPort(src_ipp)
 
-        if not src_ad.validate():
-            raise BadPacketError("Invalid source IP")
+        if not src_ad.auth_s():
+            raise BadPacketError("Invalid Source IP")
+
+        if not src_ad.auth_b(self.main):
+            raise BadPacketError("Source IP banned")
 
         if src_ad.ip != ad.ip:
-            raise BadPacketError("Source ip mismatch")
+            raise BadPacketError("Source IP mismatch")
 
         osm = self.main.osm
         if osm and src_ipp == osm.me.ipp:
@@ -352,7 +360,7 @@ class PeerHandler(DatagramProtocol):
 
         # Make sure the src_ipp is valid
         src_ad = Ad().setRawIPPort(src_ipp)
-        if not src_ad.validate():
+        if not src_ad.auth_sb(self.main):
             raise BadPacketError("Invalid forwarded source IP")
 
         # Make sure this came from one of my ping neighbors.
@@ -503,7 +511,7 @@ class PeerHandler(DatagramProtocol):
         src_ad = Ad()
         src_ad.port = port
         
-        if ad.isRFC1918() and my_ad.validate():
+        if ad.isRFC1918() and my_ad.auth_s():
             # If the request came from a private IP address, but was sent
             # toward a public IP address, then assume the sender node also
             # has the same public IP address.
@@ -511,7 +519,12 @@ class PeerHandler(DatagramProtocol):
         else:
             src_ad.ip = ad.ip
 
-        ip_valid = src_ad.validate()
+        if not src_ad.auth_s():
+            ip_code = CODE_IP_FOREIGN
+        elif not src_ad.auth_b(self.main):
+            ip_code = CODE_IP_BANNED
+        else:
+            ip_code = CODE_IP_OK
 
         osm = self.main.osm
         state = self.main.state
@@ -527,7 +540,7 @@ class PeerHandler(DatagramProtocol):
         ir_peercache = []
         ic_peercache = []
 
-        if not ip_valid:
+        if ip_code != CODE_IP_OK:
             # For invalid IPs, send no neighbors, and a small peercache
             # just so they can try for a second opinion.
             IR_LEN = IC_LEN
@@ -544,7 +557,7 @@ class PeerHandler(DatagramProtocol):
             except ValueError:
                 pass
 
-        elif self.main.reconnect_dcall and my_ad.validate():
+        elif self.main.reconnect_dcall and my_ad.auth_s():
             # If we've recently failed to connect, then go online
             # as the sole node on the network.  Then report our node ipp
             # so this other node can try to join us.
@@ -605,7 +618,7 @@ class PeerHandler(DatagramProtocol):
         packet.append(src_ad.getRawIP())
 
         # Add 1-byte flag: 1 if IP is invalid
-        packet.append(struct.pack('!B', int(not ip_valid)))
+        packet.append(struct.pack('!B', ip_code))
 
         # Add the peercache list
         packet.append(struct.pack('!B', len(ic_peercache)))
@@ -627,7 +640,7 @@ class PeerHandler(DatagramProtocol):
         packet.append(src_ad.getRawIP())
 
         # Add 1-byte flag: 1 if IP is invalid
-        packet.append(struct.pack('!B', int(not ip_valid)))
+        packet.append(struct.pack('!B', ip_code))
 
         # Add the node list
         packet.append(struct.pack('!B', len(ir_nodes)))
@@ -652,7 +665,7 @@ class PeerHandler(DatagramProtocol):
 
         src_ad = Ad().setRawIPPort(src_ipp)
         if ad.isRFC1918():
-            if not src_ad.validate():
+            if not src_ad.auth_s():
                 raise BadPacketError("Invalid reported source IP")
         else:
             self.checkSource(src_ipp, ad)
@@ -662,7 +675,7 @@ class PeerHandler(DatagramProtocol):
         if rest:
             raise BadPacketError("Extra data")
 
-        if code not in (0,1):
+        if code not in (CODE_IP_OK, CODE_IP_FOREIGN, CODE_IP_BANNED):
             raise BadPacketError("Bad Response Code")
 
         if not self.main.icm:
@@ -678,7 +691,7 @@ class PeerHandler(DatagramProtocol):
 
         src_ad = Ad().setRawIPPort(src_ipp)
         if ad.isRFC1918():
-            if not src_ad.validate():
+            if not src_ad.auth_s():
                 raise BadPacketError("Invalid reported source IP")
         else:
             self.checkSource(src_ipp, ad)
@@ -690,7 +703,7 @@ class PeerHandler(DatagramProtocol):
         if rest:
             raise BadPacketError("Extra data")
 
-        if code not in (0,1):
+        if code not in (CODE_IP_OK, CODE_IP_FOREIGN, CODE_IP_BANNED):
             raise BadPacketError("Bad Response Code")
 
         if not self.main.icm:
@@ -1252,7 +1265,7 @@ class InitialContactManager(DatagramProtocol):
             self.timeout_dcall = None
             
             self.alt_reply = False
-            self.bad_ip = False
+            self.bad_code = False
 
     
     def __init__(self, main, cb):
@@ -1285,9 +1298,8 @@ class InitialContactManager(DatagramProtocol):
         self.initrequest_dcall = None
         self.finish_dcall = None
 
-        self.stats_bad_ip = 0       # How many bad IPs reported
-        self.stats_dead_port = 0    # How many no-port-forwards found
         self.stats_good = 0         # How many neighbor lists given
+        self.stats_fail = {'foreign_ip':0, 'banned_ip':0, 'dead_port':0}
 
         self.scheduleInitRequest()
 
@@ -1421,13 +1433,16 @@ class InitialContactManager(DatagramProtocol):
         # Get my own IP address
         my_ad = Ad().setRawIP(myip)
 
-        # Check if they reported a bad IP
-        if code == 1:
-            if not p.bad_ip:
-                p.bad_ip = True
-                self.recordResultType('bad_ip')
+        if code != CODE_IP_OK:
+            if not p.bad_code:
+                p.bad_code = True
 
-                # Forget about checking for 'dead_port' now
+                if code == CODE_IP_FOREIGN:
+                    self.recordResultType('foreign_ip')
+
+                elif code == CODE_IP_BANNED:
+                    self.recordResultType('banned_ip')
+
                 self.cancelPeerContactTimeout(p)
             return
 
@@ -1475,23 +1490,30 @@ class InitialContactManager(DatagramProtocol):
             elif self.stats_good == 5:
                 # After 5 good replies, stop now
                 self.scheduleFinish(0)
-            
-        elif kind == 'bad_ip':
-            self.stats_bad_ip += 1
-
-            if self.stats_bad_ip == 1:
-                # On the first bad_ip reply, stop after 10 seconds
-                self.scheduleFinish(10)
-
-        elif kind == 'dead_port':
-            self.stats_dead_port += 1
-
-            if self.stats_dead_port == 1:
-                # On the first dead_port reply, stop after 10 seconds
-                self.scheduleFinish(10)
 
         else:
-            assert False
+            self.stats_fail[kind] += 1
+            self.scheduleFinish(10)
+
+
+    def getFailReason(self):
+
+        # In a tie, prefer 'banned_ip' over 'foreign_ip', etc.
+        rank = []
+        i = 3
+        for name in ('banned_ip', 'foreign_ip', 'dead_port'):
+            rank.append( (self.stats_fail[name], i, name) )
+            i -= 1
+
+        # Sort in descending order
+        rank.sort(reverse=True)
+
+        if rank[0][0] == 0:
+            # Nobody replied
+            return ''
+        else:
+            # Return the name of the failure which occurred most
+            return rank[0][2]
 
 
     def scheduleFinish(self, when):
@@ -1536,8 +1558,22 @@ class Node(object):
     __lt__ = lambda self,other: self.dist <  other.dist
     __le__ = lambda self,other: self.dist <= other.dist
 
+    # For statistics  (bridge nicks are False)
     is_peer = True
-    bridge_data = None  # This will be redefined for bridge nodes
+
+    # This will be redefined for bridge nodes
+    bridge_data = None
+
+    # These will get defined for the instance if the node becomes
+    # a Ping Neighbor
+    is_ping_nb = False
+    ping_reqs = None
+    sendPing_dcall = None
+    nodeFail_dcall = None
+    got_ack = False
+    u_got_ack = False
+    ping_nbs = None
+
 
     def __init__(self, ipp):
         # Dtella Tracking stuff
@@ -1551,14 +1587,6 @@ class Node(object):
         # ack_key -> timeout DelayedCall
         self.msgkeys_out = {}
         self.msgkeys_in = {}
-
-        # Ping stuff
-        self.reqs = {}                # {ack_key: time sent}
-        self.sendPing_dcall = None    # dcall for sending pings
-        self.nodeFail_dcall = None    # keep track of node failure
-        self.got_ack = False
-        self.u_got_ack = False
-        self.ping_nbs = None
 
         # General Info
         self.nick = ''
@@ -1631,10 +1659,13 @@ class Node(object):
         old_dcinfo = self.dcinfo
         self.dcinfo, self.location, self.shared = parse_incoming_info(info)
 
-        # Update my infohash
-        self.infohash = md5.new(
-            self.sesid + self.flags() + self.nick + '|' + info
-            ).digest()[:4]
+        if self.sesid is None:
+            # Node is uninitialized
+            self.infohash = None
+        else:
+            self.infohash = md5.new(
+                self.sesid + self.flags() + self.nick + '|' + info
+                ).digest()[:4]
 
         return self.dcinfo != old_dcinfo
 
@@ -2068,6 +2099,9 @@ class OnlineStateManager(object):
         # TopicManager
         self.tm = TopicManager(main)
 
+        # BanManager
+        self.banm = BanManager(main)
+
         # BridgeClientManager / BridgeServerManager
         self.bcm = bcm
         self.bsm = bsm
@@ -2090,8 +2124,6 @@ class OnlineStateManager(object):
         for ipp in node_ipps:
             n = self.lookup_ipp[ipp] = Node(ipp)
             n.inlist = True
-            self.pgm.cancelInactiveLink(n)
-            
             self.nodes.append(n)
 
         # Initially, we'll just connect to random nodes.
@@ -2498,6 +2530,10 @@ class OnlineStateManager(object):
         if self.pgm:
             self.pgm.shutdown()
 
+        # Shut down the BanManager (just cancels some dcalls)
+        if self.banm:
+            self.banm.shutdown()
+
         # Shut down the SyncRequestRoutingManager
         if self.yqrm:
             self.yqrm.shutdown()
@@ -2543,7 +2579,9 @@ class PingManager(object):
         # asked for.
 
         if not (osm.syncd or iwant):
-            return
+            raise BadTimingError("Not ready to acccept pings yet")
+
+        self.initPingNeighbor(n)
 
         # Save list of neighbors
         if nbs is not None:
@@ -2566,9 +2604,8 @@ class PingManager(object):
         # If this ping contains an acknowledgement...
         if ack_key:
             try:
-                sendtime = n.reqs[ack_key]
+                sendtime = n.ping_reqs[ack_key]
             except KeyError:
-                # TODO: maybe give /some/ credit to older pings?
                 print "Unknown ping ack"
             else:
                 print "Ping delay: %f ms" % ((seconds() - sendtime) * 1000.0)
@@ -2634,8 +2671,10 @@ class PingManager(object):
 
     def pingWithRetransmit(self, n, tries, later, ack_key=None):
 
+        assert n.is_ping_nb
+
         dcall_discard(n, 'sendPing_dcall')
-        n.reqs.clear()
+        n.ping_reqs.clear()
 
         def cb(n, tries):
             n.sendPing_dcall = None
@@ -2696,13 +2735,50 @@ class PingManager(object):
             n.sendPing_dcall.ping_is_shortable = True
 
 
+    def initPingNeighbor(self, n):
+        # To conserve RAM, this state is only attached to ping neighbors.
+        # Normal nodes just keep the class-level defaults
+        
+        if not n.is_ping_nb:
+            n.is_ping_nb = True
+            n.ping_reqs = {}           # {ack_key: time sent}
+            n.sendPing_dcall = None    # dcall for sending pings
+            n.nodeFail_dcall = None    # keep track of node failure
+            n.got_ack = False
+            n.u_got_ack = False
+            n.ping_nbs = None
+
+
     def cancelInactiveLink(self, n):
-        n.got_ack = False
-        n.u_got_ack = False
-        n.ping_nbs = None
-        n.reqs.clear()
+        # Demote n back to a normal node
+
+        assert n.is_ping_nb
+
         dcall_discard(n, 'sendPing_dcall')
         dcall_discard(n, 'nodeFail_dcall')
+        del n.is_ping_nb
+        del n.ping_reqs
+        del n.sendPing_dcall
+        del n.nodeFail_dcall
+        del n.got_ack
+        del n.u_got_ack
+        del n.ping_nbs
+
+
+    def instaKillNeighbor(self, n):
+        # Unconditionally drop neighbor connection (used for bans)
+
+        assert n.is_ping_nb
+
+        iwant = (n in self.outbound)
+
+        self.inbound.discard(n)
+        self.outbound.discard(n)
+        
+        self.cancelInactiveLink(n)
+
+        if iwant:
+            self.scheduleMakeNewLinks()
 
 
     def handleNodeFailure(self, n, nb_ipp=None):
@@ -2808,6 +2884,7 @@ class PingManager(object):
                         # Existing link, not strongly connected yet
                         tries = 2
 
+                    self.initPingNeighbor(n)
                     self.outbound.add(n)
                     self.pingWithRetransmit(n, tries=tries, later=False)
 
@@ -2880,7 +2957,7 @@ class PingManager(object):
             self.outbound.remove(n)
         except KeyError:
             return
-        
+
         # Send iwant=0 to neighbor
         if n in self.inbound:
             self.pingWithRetransmit(n, tries=4, later=False)
@@ -2895,11 +2972,11 @@ class PingManager(object):
         osm = self.main.osm
 
         # Expire old ack requests
-        if n.reqs:
+        if n.ping_reqs:
             now = seconds()
-            for req_key, when in n.reqs.items():
+            for req_key, when in n.ping_reqs.items():
                 if now - when > 15.0:
-                    del n.reqs[req_key]
+                    del n.ping_reqs[req_key]
 
         iwant = (n in self.outbound)
 
@@ -2924,10 +3001,10 @@ class PingManager(object):
             # a new req_key
             while True:
                 req_key = randbytes(4)
-                if req_key not in n.reqs:
+                if req_key not in n.ping_reqs:
                     break
 
-            n.reqs[req_key] = seconds()
+            n.ping_reqs[req_key] = seconds()
             packet.append(req_key)
 
         if ack_key:
@@ -3603,6 +3680,99 @@ class PrivateMessageManager(object):
 ##############################################################################
 
 
+class BanManager(object):
+
+    def __init__(self, main):
+        self.main = main
+        self.ban_dcall = None
+        self.newbans = set()
+
+
+    def enforceNewBan(self, ipmask):
+        # Remove all nodes which match the given ban
+
+        self.newbans.add(ipmask)
+
+        if self.ban_dcall:
+            return
+
+        def cb():
+            self.ban_dcall = None
+
+            osm = self.main.osm
+
+            for ban_ip, ban_mask in self.newbans:
+
+                # Check all the other nodes
+                for n in osm.lookup_ipp.values():
+
+                    ip, = struct.unpack('!i', n.ipp[:4])
+                    
+                    if self.matchBan(ban_ip, ban_mask, ip):
+
+                        # in nodes list
+                        if n.inlist:
+                            osm.nodeExited(n, "Node Banned")
+
+                        # in inbound | outbound
+                        if n.is_ping_nb:
+                            osm.pgm.instaKillNeighbor(n)
+
+                # Check myself
+                ip, = struct.unpack('!i', osm.me.ipp[:4])
+                if self.matchBan(ban_ip, ban_mask, ip):
+                    self.main.showLoginStatus("You were banned.")
+                    self.main.shutdown()
+                    break
+
+            self.newbans.clear()
+
+        # This time is slightly above zero, so that broadcast deliveries
+        # will have a chance to take place before carnage occurs.
+        self.ban_dcall = reactor.callLater(0.1, cb)
+
+
+    def matchBan(self, ban_ip, ban_mask, ip):
+        # All 3 input arguments should be ints
+        return not ((ip ^ ban_ip) & ban_mask)
+
+
+    def isBanned(self, ipp):
+
+        osm = self.main.osm
+
+        if not osm.bcm:
+            return False
+
+        # TODO: re-enable this optimization:
+        
+        # Anything in the nodes/ping lists can't be banned
+        #if ipp in self.main.osm.lookup_ipp:
+        #    return False
+
+        # Search all bridges for a matching ban
+        ip, = struct.unpack('!i', ipp[:4])
+        for bridge in osm.bcm.bridges:
+            for b in bridge.bans.itervalues():
+                if not b.enable:
+                    continue
+                ban_ip, ban_mask = b.ipmask
+                if self.matchBan(ban_ip, ban_mask, ip):
+                    return True
+
+        # TODO: check for bridge server
+
+        # Looks okay
+        return False
+
+
+    def shutdown(self):
+        dcall_discard(self, 'ban_dcall')
+
+
+##############################################################################
+
+
 class TopicManager(object):
 
     def __init__(self, main):
@@ -3657,9 +3827,9 @@ class TopicManager(object):
         if changed and nick:
             dch.pushStatus("%s changed the topic to \"%s\"" % (nick, topic))
 
-        # If a change wasn't reported, but it's new to us, then just say
-        # what the topic is.
-        if not changed and topic != old_topic:
+        # If a change wasn't reported, but it's new to us, and it's not
+        # empty, then just say what the topic is.
+        if not changed and topic and topic != old_topic:
             dch.pushStatus(self.getFormattedTopic())
 
         return True
@@ -3767,17 +3937,23 @@ class DtellaMain_Base(object):
             if icm.node_ipps:
                 self.startNodeSync(icm.node_ipps)
             else:
-                if not (icm.stats_bad_ip or icm.stats_dead_port):
-                    self.showLoginStatus("No online nodes found.")
-                    self.shutdown()
+                reason = icm.getFailReason()
 
-                elif icm.stats_bad_ip >= icm.stats_dead_port:
+                if reason == 'banned_ip':
+                    self.showLoginStatus("You seem to be banned.")
+                    self.shutdown(final=True)
+
+                elif reason == 'foreign_ip':
                     self.showLoginStatus("Your IP address is not authorized to use this network.")
                     self.shutdown(final=True)
 
-                else:
+                elif reason == 'dead_port':
                     self.reportDeadPort()
                     self.shutdown(final=True)
+
+                else:
+                    self.showLoginStatus("No online nodes found.")
+                    self.shutdown()
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
@@ -3907,7 +4083,7 @@ class DtellaMain_Base(object):
         # fromip = the IP who sent us this guess
         # myip = the IP that seems to belong to us
 
-        if not (from_ad.validate() and my_ad.validate()):
+        if not (from_ad.auth_s() and my_ad.auth_s()):
             return
 
         fromip = from_ad.getRawIP()

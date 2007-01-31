@@ -430,6 +430,13 @@ class NickNode(object):
 
 class BridgeNodeData(object):
 
+    class Ban(object):
+        def __init__(self, ipmask, enable, pktnum):
+            self.ipmask = ipmask
+            self.pktnum = pktnum
+            self.enable = enable
+
+
     def __init__(self, main, parent_n):
         self.main = main
         self.parent_n = parent_n
@@ -439,12 +446,16 @@ class BridgeNodeData(object):
 
         self.last_assembled_pktnum = None
         self.nicks = {} # {nick: NickNode()}
+        self.bans = {}  # {(ip,mask): Ban()}
 
         # Tuple of info strings; indices match up with the nick modes
         self.infostrings = ()
 
         self.req_blocks = RandSet()
         self.requestBlocks_dcall = None
+
+        # Register me in BridgeClientManager
+        self.main.osm.bcm.bridges.add(self)
 
 
     def setHashList(self, hashlist, do_request):
@@ -573,19 +584,26 @@ class BridgeNodeData(object):
                 if n.mode != 0xFF:
                     dead_nicks.append(n)
 
+        # Report all the nicks that we deleted
         dead_nicks.sort()
-
         for n in dead_nicks:
             print "Dead nick: '%s'" % n.nick
             osm = self.main.osm
             osm.nkm.removeNode(n)
+
+        # Remove any bans which aren't mentioned in this update
+        for b in self.bans.values():
+            if b.pktnum < self.status_pktnum:
+                del self.bans[b.ipmask]
 
         self.last_assembled_pktnum = self.status_pktnum
 
 
     def processChunks(self, data, pktnum):
 
-        # Here, outdated means that we've received a 
+        # Outdated means that this chunk list is older than the chunk
+        # list from the last full status update.  Therefore, it only
+        # really applies to private bC messages.
         outdated = (
             (self.last_assembled_pktnum is not None)
             and
@@ -716,14 +734,29 @@ class BridgeNodeData(object):
                 ptr += 1
 
                 try:
-                    (ip, subnet
-                     ) = struct.unpack("!4sB", data[ptr:ptr+5])
+                    (subnet, ip
+                     ) = struct.unpack("!Bi", data[ptr:ptr+5])
                     ptr += 5
 
                 except struct.error:
                     raise ChunkError("B: struct error")
 
-                # TODO: handle
+                enable = bool(subnet & 0x80)
+                subnet &= 0x3F
+
+                if subnet == 0:
+                    mask = 0
+                elif 1 <= subnet <= 32:
+                    mask = ~0 << (32-subnet)
+                else:
+                    raise ChunkError("B: Subnet out of range")
+
+                ipmask = (ip, mask)
+
+                print "ipmask=", ipmask
+
+                if not outdated:
+                    self.updateBan(ipmask, enable, pktnum)
 
             elif data[ptr] == 'I':
                 ptr += 1
@@ -869,6 +902,35 @@ class BridgeNodeData(object):
             n.mode = mode
 
 
+    def updateBan(self, ipmask, pktnum, enable):
+
+        osm = self.main.osm
+
+        try:
+            b = self.bans[ipmask]
+        except KeyError:
+            b = self.bans[ipmask] = self.Ban(ipmask, pktnum, enable)
+
+            if enable:
+                osm.banm.enforceNewBan(ipmask)
+
+        else:
+            # Already got a newer status for this ban
+            if pktnum < b.pktnum:
+                return
+
+            b.pktnum = pktnum
+
+            # No change
+            if b.enable == enable:
+                return
+
+            b.enable = enable
+
+            if enable:
+                osm.banm.enforceNewBan(ipmask)
+
+
     def handlePrivateMessage(self, flags, nick, text):
         
         dch = self.main.getOnlineDCH()
@@ -970,6 +1032,9 @@ class BridgeNodeData(object):
         self.nicks.clear()
         self.shutdown()
 
+        # Unregister me from the BridgeClientManager
+        self.main.osm.bcm.bridges.remove(self)
+
 
     def sendTopicChange(self, topic):
         osm = self.main.osm
@@ -1031,6 +1096,9 @@ class BridgeClientManager(object):
         # signed messages can be discarded.
         self.bridge_time = 0
         self.unclaimed_blocks = {}
+
+        # Every BridgeNodeData gets registered here
+        self.bridges = set()
 
 
     def signatureExpired(self, pktnum):

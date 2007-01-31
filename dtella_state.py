@@ -158,7 +158,7 @@ class StateManager(object):
     def refreshPeer(self, ad, age):
         # Call this to update the age of a cached peer
 
-        if not ad.validate():
+        if not ad.auth_s():
             return
 
         ipp = ad.getRawIPPort()
