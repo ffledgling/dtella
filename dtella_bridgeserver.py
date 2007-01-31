@@ -954,6 +954,12 @@ class BridgeServerManager(object):
 
         self.cached_blocks = {}  # hash -> CachedBlock()
 
+        # TESTING !!!
+        #ip, = struct.unpack('!i', Ad().setTextIP("128.10.0.0").getRawIP())
+        #mask = ~0 << 16
+        #self.bans = set([(ip, mask)])
+        self.bans = set()
+
 
     def nextPktNum(self):
 
@@ -1143,8 +1149,8 @@ class BridgeServerManager(object):
             self.addNoTopicChunk(chunks)
 
         # Experimental ban
-        self.addBanChunk(
-            chunks, Ad().setTextIP("128.0.0.0").getRawIP(), 8, True)
+        #self.addBanChunk(
+        #    chunks, Ad().setTextIP("128.10.0.0").getRawIP(), 16, True)
 
         chunks = ''.join(chunks)
 

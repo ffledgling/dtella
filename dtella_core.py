@@ -3734,6 +3734,9 @@ class BanManager(object):
 
     def matchBan(self, ban_ip, ban_mask, ip):
         # All 3 input arguments should be ints
+
+        print "matchBan:", ((ip ^ ban_ip) & ban_mask)
+        
         return not ((ip ^ ban_ip) & ban_mask)
 
 
@@ -3741,7 +3744,7 @@ class BanManager(object):
 
         osm = self.main.osm
 
-        if not osm.bcm:
+        if not (osm.bcm or osm.bsm):
             return False
 
         # TODO: re-enable this optimization:
@@ -3752,15 +3755,20 @@ class BanManager(object):
 
         # Search all bridges for a matching ban
         ip, = struct.unpack('!i', ipp[:4])
-        for bridge in osm.bcm.bridges:
-            for b in bridge.bans.itervalues():
-                if not b.enable:
-                    continue
-                ban_ip, ban_mask = b.ipmask
+
+        if osm.bcm:
+            for bridge in osm.bcm.bridges:
+                for b in bridge.bans.itervalues():
+                    if not b.enable:
+                        continue
+                    ban_ip, ban_mask = b.ipmask
+                    if self.matchBan(ban_ip, ban_mask, ip):
+                        return True
+
+        elif osm.bsm:
+            for ban_ip, ban_mask in osm.bsm.bans:
                 if self.matchBan(ban_ip, ban_mask, ip):
                     return True
-
-        # TODO: check for bridge server
 
         # Looks okay
         return False
