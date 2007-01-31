@@ -23,8 +23,6 @@ import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info)
 
-# TODO: Kick message should have a flag for auto-reconnect
-
 # TODO: minshare, minversion
 
 
@@ -83,6 +81,9 @@ ACK_BROADCAST = 2
 
 # Bridge topic change
 CHANGE_BIT = 0x1
+
+# Bridge Kick autorejoin bit
+REJOIN_BIT = 0x1
 
 # Init response codes
 CODE_IP_OK = 0
@@ -2197,7 +2198,9 @@ class OnlineStateManager(object):
                     n.nick
                     )
 
-            print "len(lookup_ipp):", len(self.lookup_ipp)
+            print "len(lookup_ipp)=%d, #nbs=%d" % (
+                len(self.lookup_ipp),
+                len(self.pgm.inbound | self.pgm.outbound))
 
             self.printNodes_dcall = reactor.callLater(10, cb)
 

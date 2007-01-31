@@ -1232,7 +1232,7 @@ class BridgeServerManager(object):
         chunks.append(infos)
 
 
-    def addKickChunk(self, chunks, n, l33t, reason):
+    def addKickChunk(self, chunks, n, l33t, reason, rejoin=True):
 
         # Pick a packet number that's a little bit ahead of what the node
         # is using, so that any status messages sent out by the node at
@@ -1240,7 +1240,7 @@ class BridgeServerManager(object):
         
         n.status_pktnum = (n.status_pktnum + 3) % 0x100000000
 
-        flags = 0
+        flags = (rejoin and dtella_core.REJOIN_BIT)
 
         chunks.append('K')
         chunks.append(n.ipp)

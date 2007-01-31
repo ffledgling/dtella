@@ -47,6 +47,8 @@ class DCHandler(LineOnlyReceiver):
         # ['login', 'ready', 'invisible']
         self.state = 'login'
 
+        self.autoRejoin_dcall = None
+
         self.sendLine("$Lock FOO Pk=BAR")
         self.pushTopic()
 
@@ -59,6 +61,7 @@ class DCHandler(LineOnlyReceiver):
         print "Connection lost:", reason
         self.main.removeDCHandler()
         dcall_discard(self, 'chatRate_dcall')
+        dcall_discard(self, 'autoRejoin_dcall')
 
 
     def sendLine(self, line):
@@ -375,21 +378,30 @@ class DCHandler(LineOnlyReceiver):
 
         for line in text.split('\n'):
 
+            # Skip empty lines
+            if not line:
+                continue
+
+            # Limit length
             if len(line) > 1024:
                 line = line[:1024-12] + ' [Truncated]'
 
             flags = 0
 
-            # TODO: this checking could be factored to handle other commands
+            # Check for /me
             if len(line) > 4 and line[:4].lower() in ('/me ','+me ','!me '):
                 line = line[4:]
                 flags |= dtella_core.SLASHME_BIT
 
+            # Check rate limiting
             if self.chat_counter > 0:
+
+                # Send now
                 self.chat_counter -= 1
                 self.broadcastChatMessage(flags, line)
 
             else:
+                # Put in a queue
                 if len(self.chatq) < 5:
                     self.chatq.append( (flags, line) )
                 else:
@@ -489,7 +501,7 @@ class DCHandler(LineOnlyReceiver):
         self.pushChatMessage(nick, text)
 
 
-    def goInvisible(self):
+    def goInvisible(self, rejoin_time=None):
         # Node will become visible again if:
         # 1. Dtella node loses its connection
         # 2. User types !REJOIN
@@ -502,6 +514,19 @@ class DCHandler(LineOnlyReceiver):
 
         self.state = 'invisible'
         del self.chatq[:]
+
+        if not rejoin_time:
+            return
+
+        # Automatically rejoin the chat after a timeout period
+        dcall_discard(self, 'autoRejoin_dcall')
+
+        def cb():
+            self.autoRejoin_dcall = None
+            self.pushStatus("Automatically rejoining...")
+            self.doRejoin()
+
+        self.autoRejoin_dcall = reactor.callLater(rejoin_time, cb)
 
 
     # Precompile a regex for pushSearchResult
@@ -558,13 +583,35 @@ class DCHandler(LineOnlyReceiver):
             self.pushStatus(line)
 
 
-    def kickMe(self, l33t, reason):
+    def kickMe(self, l33t, reason, rejoin):
 
-        self.goInvisible()
+        if rejoin:
+            # Pop back on after 5 minutes
+            self.goInvisible(rejoin_time=60*5)
+        else:
+            self.goInvisible()
 
         # Show kick text
         self.pushStatus("You were kicked by %s: %s" % (l33t, reason))
         self.pushStatus("Type !REJOIN to get back in.")
+
+
+
+    def doRejoin(self):
+        if self.state != 'invisible':
+            return
+
+        dcall_discard(self, 'autoRejoin_dcall')
+
+        self.state = 'ready'
+
+        if self.main.osm:
+            # Maybe tell the network that I'm back (unless it collides)
+            self.main.osm.updateMyInfo()
+            
+            # Maybe send a full nicklist+topic (if the update succeeded)
+            self.d_GetNickList()
+            self.grabDtellaTopic()
 
 
     def dtellaShutdown(self):
@@ -574,11 +621,10 @@ class DCHandler(LineOnlyReceiver):
         if self.state == 'invisible':
             self.state = 'ready'
 
+        dcall_discard(self, 'autoRejoin_dcall')
+
         # Wipe out the topic
         self.pushTopic()
-
-        # If this were meant to be called from anywhere but shutdown(),
-        # then we'd want to call updateMyInfo and d_GetNickList here.
 
         # Wipe out my outgoing chat queue
         del self.chatq[:]
@@ -996,17 +1042,7 @@ class DtellaBot(object):
                 return
 
             out("Rejoining...")
-
-            self.dch.state = 'ready'
-
-            if self.main.osm:
-                # Maybe tell the network that I'm back (unless it collides)
-                self.main.osm.updateMyInfo()
-                
-                # Maybe send a full nicklist (if the update succeeded)
-                self.dch.d_GetNickList()
-                self.dch.grabDtellaTopic()
-
+            self.dch.doRejoin()
             return
         
         self.syntaxHelp(out, 'REJOIN', prefix)

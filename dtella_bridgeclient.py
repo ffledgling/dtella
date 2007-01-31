@@ -816,11 +816,6 @@ class BridgeNodeData(object):
                 # Release control of the topic
                 osm.tm.checkLeavingNode(self.parent_n)
 
-            elif data[ptr] == 'R':
-                ptr += 1
-
-                # TODO: handle
-
             else:
                 raise ChunkError("Unknown Chunk '%s'" % data[ptr])
 
@@ -972,8 +967,10 @@ class BridgeNodeData(object):
             # Make sure I'm online, and this kick isn't old somehow
             if dch and not outdated:
 
+                rejoin = bool(flags & dtella_core.REJOIN_BIT)
+
                 # Yell at user and make them invisible
-                dch.kickMe(l33t, reason)
+                dch.kickMe(l33t, reason, rejoin)
 
                 # Broadcast an update so nodes who aren't bridge-aware
                 # will also see us disappear.
