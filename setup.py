@@ -4,14 +4,14 @@ setup(
     options={"py2exe":{"optimize":2}},
     zipfile=None,
 
-    #windows=[{
-    #    "script": "dtella.py",
-    #    "icon_resources": [(1, "dcgate.ico")]
-    #}]
-
-    console=[{
+    windows=[{
         "script": "dtella.py",
         "icon_resources": [(1, "dtella.ico")]
     }]
+
+    #console=[{
+    #    "script": "dtella.py",
+    #    "icon_resources": [(1, "dtella.ico")]
+    #}]
 )
 
