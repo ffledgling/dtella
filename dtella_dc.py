@@ -801,6 +801,7 @@ class DtellaBot(object):
         ("--",         "CONTROLS"),
         ("REJOIN",     "Hop back online after a kick or collision"),
         ("TOPIC",      "View or change the global topic"),
+        ("SUFFIX",     "View or change the your location suffix"),
         ("UDP",        "Change Dtella's peer communication port"),
         ("ADDPEER",    "Add the address of another node to your cache"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
@@ -832,6 +833,16 @@ class DtellaBot(object):
             "this will attempt to set a new topic.  Note that if Dtella "
             "is bridged to an IRC network, the admins may decide to lock "
             "the topic to prevent changes."
+            ),
+
+        "SUFFIX":(
+            "<suffix>",
+            "This command appends a suffix to your location name, which "
+            "is visible in the Speed/Connection column of everyone's DC "
+            "client.  Typically, this is where you put your room number. "
+            "If you provide no arguments, this will display the "
+            "current suffix.  To clear the suffix, just follow the command "
+            "with a single space."
             ),
 
         "USERS":(
