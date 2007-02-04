@@ -246,7 +246,7 @@ class DCHandler(LineOnlyReceiver):
         # Send a search request
 
         if not self.main.getOnlineDCH():
-            self.pushStatus("Search: Not online!")
+            self.pushStatus("Can't Search: Not online!")
             return
 
         if len(search_string) > 255:
@@ -283,23 +283,25 @@ class DCHandler(LineOnlyReceiver):
             self.bot.commandInput(out, text)
             return
 
-        if not self.main.getOnlineDCH():
-            return
-
         if len(text) > 10:
             shorttext = text[:10] + '...'
         else:
             shorttext = text
 
-        def fail_cb():
+        def fail_cb(detail):
             self.pushPrivMsg(
                 nick,
-                "*** Your message \"%s\" could not be delivered." % shorttext)
+                "*** Your message \"%s\" could not be sent: %s"
+                % (shorttext, detail))
+
+        if not self.main.getOnlineDCH():
+            fail_cb("You're not online.")
+            return
 
         try:
             n = self.main.osm.nkm.lookupNick(nick)
         except KeyError:
-            fail_cb()
+            fail_cb("User doesn't seem to exist.")
             return
 
         n.event_PrivateMessage(self.main, text, fail_cb)
@@ -309,22 +311,29 @@ class DCHandler(LineOnlyReceiver):
 
         osm = self.main.osm
 
+        def fail_cb(detail):
+            self.pushStatus(
+                "Connect request to '%s' failed: %s"
+                % (nick, detail))
+
         if not self.main.getOnlineDCH():
+            fail_cb("You're not online.")
             return
 
         try:
             dc_ad = Ad().setTextIPPort(addr)
         except ValueError:
+            fail_cb("Malformed address.")
             return
 
         try:
             n = osm.nkm.lookupNick(nick)
         except KeyError:
+            if nick == self.bot.nick:
+                fail_cb("Connecting to yourself!")
+            else:
+                fail_cb("User doesn't seem to exist.")
             return
-
-        def fail_cb():
-            self.pushStatus("Failed to deliver connect request to '%s'"
-                            % nick)
 
         n.event_ConnectToMe(self.main, dc_ad.port, fail_cb)
 
@@ -333,16 +342,22 @@ class DCHandler(LineOnlyReceiver):
 
         osm = self.main.osm
 
-        if not self.main.getOnlineDCH():
-            return
+        def fail_cb(detail):
+            self.pushStatus(
+                "Connect request to '%s' failed: %s"
+                % (nick, detail))
 
-        def fail_cb():
-            self.pushStatus("Failed to deliver revconnect request to '%s'"
-                            % nick)
+        if not self.main.getOnlineDCH():
+            fail_cb("You're not online.")
+            return
 
         try:
             n = osm.nkm.lookupNick(nick)
         except KeyError:
+            if nick == self.bot.nick:
+                fail_cb("Connecting to yourself!")
+            else:
+                fail_cb("User doesn't seem to exist.")
             return
 
         n.event_RevConnectToMe(self.main, fail_cb)
@@ -370,7 +385,7 @@ class DCHandler(LineOnlyReceiver):
                 return
 
         if not self.main.getOnlineDCH():
-            self.pushStatus("Chat: Not online!")
+            self.pushStatus("You must be online to chat!")
             return
 
         text = text.replace('\r\n','\n').replace('\r','\n')

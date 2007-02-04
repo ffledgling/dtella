@@ -1213,8 +1213,8 @@ class BridgeServerManager(object):
         self.signPacket(packet, broadcast=False)
         packet = ''.join(packet)
 
-        def fail_cb():
-            print "bC failed."
+        def fail_cb(detail):
+            print "bC failed: %s" % detail
 
         n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 

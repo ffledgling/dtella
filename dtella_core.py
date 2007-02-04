@@ -1724,7 +1724,7 @@ class Node(object):
 
             if tries == 0:
                 del self.msgkeys_out[ack_key]
-                fail_cb()
+                fail_cb("Timeout")
                 return
 
             ad = Ad().setRawIPPort(self.ipp)
@@ -1748,7 +1748,7 @@ class Node(object):
             return
 
         if reject:
-            dcall.args[0]()  # Call fail_cb
+            dcall.args[0]("Rejected")  # Call fail_cb
 
         dcall.cancel()
 
@@ -1837,13 +1837,13 @@ class MeNode(Node):
         if dch:
             dch.pushPrivMsg(dch.nick, text)
         else:
-            fail_cb()
+            fail_cb("I'm not online!")
 
     def event_ConnectToMe(self, main, port, fail_cb):
-        fail_cb()
+        fail_cb("Connecting to yourself!")
 
     def event_RevConnectToMe(self, main, fail_cb):
-        fail_cb()
+        fail_cb("Connecting to yourself!")
 
 
 

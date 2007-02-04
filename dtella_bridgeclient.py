@@ -415,11 +415,11 @@ class NickNode(object):
 
 
     def event_ConnectToMe(self, main, port, fail_cb):
-        fail_cb()
+        fail_cb("This user has no files.")
 
 
     def event_RevConnectToMe(self, main, fail_cb):
-        fail_cb()
+        fail_cb("This user has no files.")
 
 
 ##############################################################################
@@ -1037,10 +1037,13 @@ class BridgeNodeData(object):
         packet.append(topic)
         packet = ''.join(packet)
 
-        def fail_cb():
+        def fail_cb(detail):
             dch = self.main.getOnlineDCH()
             if dch:
-                dch.pushStatus("Sorry, the topic has been locked.")
+                if detail == "Rejected":
+                    dch.pushStatus("Sorry, the topic has been locked.")
+                else:
+                    dch.pushStatus("Failed to set topic: Timeout")
 
         ph = self.main.ph
         self.parent_n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
