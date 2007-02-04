@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import dtella_core
 import twisted.internet.error
 import twisted.python.log
@@ -361,7 +363,6 @@ def terminate():
         return
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(('127.0.0.1',0))
     sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
     sock.close()
 
