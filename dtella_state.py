@@ -4,16 +4,21 @@ import time
 import socket
 import heapq
 from twisted.internet import reactor
+import os
+import os.path
 
 from dtella_util import Ad, dcall_discard
-
-# TODO: maybe store the dtella.state file in the home directory.
-# bryhemm says ~/Library/dtella is best for OS X
 
 class StateManager(object):
 
     def __init__(self, main, filename):
-        self.filename = filename
+
+        path = os.path.expanduser("~/.dtella")
+        if not os.path.exists(path):
+            os.mkdir(path)
+
+        self.filename = "%s/%s" % (path, filename)
+
         self.main = main
         self.peers = {}   # {ipp -> time}
 
