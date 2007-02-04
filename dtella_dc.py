@@ -1180,7 +1180,7 @@ class DtellaBot(object):
             out("Your location suffix is \"%s\"" % self.main.state.suffix)
             return
 
-        text = text[:10]
+        text = text[:10].rstrip().replace('$','')
 
         self.main.state.suffix = text
         self.main.state.saveState()
