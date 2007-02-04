@@ -1459,6 +1459,10 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         return {'bsm': BridgeServerManager(self)}
 
 
+    def logPacket(self, text):
+        print "pkt: %s" % text
+
+
     def showLoginStatus(self, text, counter=None):
         print text
 

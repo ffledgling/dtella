@@ -25,8 +25,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: strip linefeeds from topic, chat
 
-# TODO: do something with all these print statements
-
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -193,7 +191,7 @@ class PeerHandler(DatagramProtocol):
         # Send a packet, passing it through the encrypter
         # returns False if an error occurs
         
-        print "sending %s to %s" % (data[:2], addr)
+        self.main.logPacket("%s -> %s:%d" % (data[:2], addr[0], addr[1]))
         data = self.main.pk_enc.encrypt(data)
 
         # For broadcast traffic, set a safety limit on data rate,
@@ -209,8 +207,6 @@ class PeerHandler(DatagramProtocol):
             # Have we used up the buffer time?
             if self.choke_time + penalty >= now:
 
-                print "CHOKE:", penalty, (now - (self.choke_time+penalty))
-                
                 # Tell the user what's going on, but only once every
                 # 10 seconds.
                 if self.choke_reported < now - 10:
@@ -225,7 +221,8 @@ class PeerHandler(DatagramProtocol):
             # Nibble something off the choke buffer
             self.choke_time += penalty
 
-            print "CHOKE:", penalty, (now - self.choke_time)
+            self.main.logPacket(
+                "choke=%f" % (now - (self.choke_time+penalty)))
 
         try:
             self.transport.write(data, addr)
@@ -273,7 +270,7 @@ class PeerHandler(DatagramProtocol):
             if altport:
                 kind += "_alt"
 
-            print "kind:", kind, "from:", addr, "data:", hexlify(data)
+            self.main.logPacket("%s <- %s:%d" % (kind, addr[0], addr[1]))
 
             # Make sure the sender's IP is permitted, but delay the check if
             # it's an initialize packet.
@@ -291,7 +288,7 @@ class PeerHandler(DatagramProtocol):
             method(ad, data)
 
         except (BadPacketError, BadTimingError), e:
-            print "Bad Packet/Timing:", e
+            self.main.logPacket("Bad Packet/Timing: %s" % str(e))
         
 
     def decodePacket(self, fmt, data):
@@ -431,7 +428,9 @@ class PeerHandler(DatagramProtocol):
         try:
             check_cb(src_n, src_ipp, rest)
 
-        except BadBroadcast:
+        except BadBroadcast, e:
+            self.main.logPacket("Bad Broadcast: %s" % str(e))
+            
             # Mark that we've seen this message, but don't forward it.
             osm.mrm.newMessage(data, nb_ipp, tries=0)
 
@@ -501,7 +500,7 @@ class PeerHandler(DatagramProtocol):
             return False
 
         if 0 < (n.status_pktnum - pktnum) % 0x100000000 < PKTNUM_BUF:
-            print "Outdated status update"
+            self.main.logPacket("Outdated Status")
             return True
 
         return False
@@ -519,7 +518,7 @@ class PeerHandler(DatagramProtocol):
 
         # If it's old, ignore it.
         if 0 < (osm.me.status_pktnum - pktnum) % 0x100000000 < PKTNUM_BUF:
-            print "Saw an outdated from-me packet"
+            self.main.logPacket("Outdated from-me packet")
             return True
 
         # If it's from my near future, then repair my packet number
@@ -528,7 +527,7 @@ class PeerHandler(DatagramProtocol):
 
         # If I'm syncd, retransmit my status
         if osm.syncd:
-            print "Reacting to an impersonated status."
+            self.main.logPacket("Reacting to an impersonated status")
             osm.sendMyStatus(sendfull)
 
         return True
@@ -774,10 +773,10 @@ class PeerHandler(DatagramProtocol):
             
             # Make sure this isn't about me
             if self.isMyStatus(src_ipp, pktnum, sendfull=True):
-                raise BadBroadcast
+                raise BadBroadcast("Impersonating me")
             
             if self.isOutdatedStatus(src_n, pktnum):
-                raise BadBroadcast
+                raise BadBroadcast("Outdated")
 
             n = osm.refreshNodeStatus(
                 src_ipp, pktnum, expire, sesid, uptime, persist, nick, info)
@@ -805,12 +804,10 @@ class PeerHandler(DatagramProtocol):
            
             # Make sure this isn't about me
             if self.isMyStatus(src_ipp, pktnum, sendfull=True):
-                print "NH is impersonating me"
-                raise BadBroadcast
+                raise BadBroadcast("Impersonating me")
 
             if self.isOutdatedStatus(src_n, pktnum):
-                print "Outdated NH message"
-                raise BadBroadcast
+                raise BadBroadcast("Outdated")
 
             if osm.syncd:
                 if (src_n and src_n.expire_dcall and
@@ -857,12 +854,10 @@ class PeerHandler(DatagramProtocol):
              ) = self.decodePacket('!4s', rest)
 
             if src_n and src_n.bridge_data:
-                print "Can't NX a bridge node"
-                raise BadBroadcast
+                raise BadBroadcast("Can't NX a bridge node")
 
             if osm.syncd:
                 if src_ipp == osm.me.ipp and sesid == osm.me.sesid:
-                    print "Reacting to an NX"
                     # Yikes! Make me a new session id and rebroadcast it.
                     osm.me.sesid = randbytes(4)
                     for n in osm.nodes:
@@ -871,15 +866,13 @@ class PeerHandler(DatagramProtocol):
 
                     osm.sendMyStatus()
                     osm.pgm.scheduleMakeNewLinks()
-                    raise BadBroadcast
+                    raise BadBroadcast("Tried to exit me")
 
                 if not (src_n and src_n.expire_dcall):
-                    print "Got NX for not-online node"
-                    raise BadBroadcast
+                    raise BadBroadcast("Node not online")
 
                 if sesid != src_n.sesid:
-                    print "NX for wrong session id"
-                    raise BadBroadcast
+                    raise BadBroadcast("Wrong session ID")
 
             elif not src_n:
                 # Not syncd, and haven't seen this node yet.
@@ -904,19 +897,16 @@ class PeerHandler(DatagramProtocol):
             
             # Make sure this isn't about me
             if self.isMyStatus(src_ipp, pktnum, sendfull=False):
-                raise BadBroadcast
+                raise BadBroadcast("I'm not dead!")
 
             if not (src_n and src_n.expire_dcall):
-                print "NF packet received for nonexistent node"
-                raise BadBroadcast
+                raise BadBroadcast("Nonexistent node")
             
             if src_n.sesid != sesid:
-                print "NF has the wrong session ID"
-                raise BadBroadcast
-            
+                raise BadBroadcast("Wrong session ID")
+
             if self.isOutdatedStatus(src_n, pktnum):
-                print "NF is outdated"
-                raise BadBroadcast
+                raise BadBroadcast("Outdated")
 
             # Reduce the expiration time.  If that node isn't actually
             # dead, it will rebroadcast a status update to correct it.
@@ -970,14 +960,14 @@ class PeerHandler(DatagramProtocol):
 
             if src_ipp == osm.me.ipp:
                 # Possibly a spoofed chat from me
-                raise BadBroadcast
+                raise BadBroadcast("Spoofed chat")
 
             if not osm.syncd:
                 # Not syncd, forward blindly
                 return
 
             if src_n and src_n.bridge_data:
-                raise BadBroadcast
+                raise BadBroadcast("Bridge can't chat")
             
             elif src_n and src_n.expire_dcall and nhash == src_n.nickHash():
                 osm.cms.addMessage(src_ipp, pktnum, src_n.nick, text, flags)
@@ -1003,16 +993,14 @@ class PeerHandler(DatagramProtocol):
                 raise BadPacketError("Extra data")
 
             if src_ipp == osm.me.ipp:
-                # Weird...
-                raise BadBroadcast
+                raise BadBroadcast("Spoofed topic")
 
             if not osm.syncd:
                 # Not syncd, forward blindly
                 return None
 
             if src_n and src_n.bridge_data:
-                # Bridge can't set the topic like this
-                raise BadBroadcast
+                raise BadBroadcast("Bridge can't use TP")
             
             if src_n and src_n.expire_dcall and nhash == src_n.nickHash():
                 osm.tm.gotTopic(src_n, topic)
@@ -1038,11 +1026,10 @@ class PeerHandler(DatagramProtocol):
                 raise BadPacketError("Extra data")
 
             if src_ipp == osm.me.ipp:
-                # A bit odd...
-                raise BadBroadcast
+                raise BadBroadcast("Spoofed search")
 
             if src_n and src_n.bridge_data:
-                raise BadBroadcast
+                raise BadBroadcast("Bridge can't search")
 
             if not osm.syncd:
                 # Not syncd, forward blindly
@@ -1320,7 +1307,8 @@ class InitialContactManager(DatagramProtocol):
         except socket.error:
             # If for whatever reason it fails, just try to get by without
             # the alternate port.
-            print "Failed to bind alternate UDP Port"
+            self.main.showLoginStatus("Failed to bind alt UDP port!")
+            cb()
 
         self.peers = {}  # {IPPort -> PeerInfo object}
 
@@ -1385,7 +1373,7 @@ class InitialContactManager(DatagramProtocol):
             packet.append(ad.getRawIP())
             packet.append(struct.pack('!H', self.main.state.udp_port))
 
-            print "sending IQ to %s" % (ad.getAddrTuple(),)
+            self.main.logPacket("IQ -> %s:%d" % ad.getAddrTuple())
 
             packet = self.main.pk_enc.encrypt(''.join(packet))
 
@@ -1407,7 +1395,6 @@ class InitialContactManager(DatagramProtocol):
         # If there's nothing left to ping, and nobody waiting for replies,
         # then make do with what we have.
         if not (self.heap or self.waitreply):
-            print "Nothing to ping, nothing waiting"
             self.shutdown()
             self.done_callback()
 
@@ -1415,7 +1402,6 @@ class InitialContactManager(DatagramProtocol):
     def schedulePeerContactTimeout(self, p):
         
         def cb(p):
-            print "peerContactTimeout"
             p.timeout_dcall = None
             self.waitreply.remove(p)
 
@@ -1439,7 +1425,11 @@ class InitialContactManager(DatagramProtocol):
 
     def receivedInitResponse(self, src_ipp, myip, code, pc, nd=None):
 
-        print "init response", hexlify(myip), code
+        # Get my own IP address
+        my_ad = Ad().setRawIP(myip)
+
+        self.main.logPacket("Init Response: myip=%s code=%d" %
+                            (my_ad.getTextIP(), code))
 
         try:
             p = self.peers[src_ipp]
@@ -1468,9 +1458,6 @@ class InitialContactManager(DatagramProtocol):
             for ipp, age in pc:
                 ad = Ad().setRawIPPort(ipp)
                 self.main.state.refreshPeer(ad, age)
-
-        # Get my own IP address
-        my_ad = Ad().setRawIP(myip)
 
         if code != CODE_IP_OK:
             if not p.bad_code:
@@ -1517,7 +1504,7 @@ class InitialContactManager(DatagramProtocol):
 
     def recordResultType(self, kind):
 
-        print "recordResultType:", kind
+        self.main.logPacket("Recording result: '%s'" % kind)
 
         # After we get a meaningful packet, stop after 5 seconds.
 
@@ -2174,8 +2161,6 @@ class OnlineStateManager(object):
         # This list will be sorted after syncing is finished.
         random.shuffle(self.nodes)
 
-        # TODO: DEBUG
-        self.printNodes()
 
         if self.nodes:
             self.main.showLoginStatus("Joining The Network.",
@@ -2185,33 +2170,6 @@ class OnlineStateManager(object):
             self.main.showLoginStatus("Creating a new empty network.",
                                       counter='inc')
             self.syncComplete()
-
-
-    def printNodes(self):
-
-        self.printNodes_dcall = None
-
-        def cb():
-        
-            print "--Nodes--"
-            for n in self.nodes + [self.me]:
-                expire = -1
-                if n.expire_dcall:
-                    expire = dcall_timeleft(n.expire_dcall)
-                    
-                print "> %s: expire=%d nick='%s'" % (
-                    hexlify(n.ipp),
-                    expire,
-                    n.nick
-                    )
-
-            print "len(lookup_ipp)=%d, #nbs=%d" % (
-                len(self.lookup_ipp),
-                len(self.pgm.inbound | self.pgm.outbound))
-
-            self.printNodes_dcall = reactor.callLater(10, cb)
-
-        self.printNodes_dcall = reactor.callLater(0, cb)
 
 
     def syncComplete(self):
@@ -2266,9 +2224,8 @@ class OnlineStateManager(object):
         except KeyError:
             n = self.lookup_ipp[src_ipp] = Node(src_ipp)
 
-        print "refreshNodeStatus: ipp=%s pktnum=? expire=%d sesid=%s uptime=%d persist=%d nick=%s info=%s" % (
-            hexlify(src_ipp), expire, hexlify(sesid),
-            uptime, persist, nick, info)
+        self.main.logPacket("Status: %s %d (%s)" %
+                            (hexlify(src_ipp), expire, nick))
 
         # Update the last-seen status packet number
         n.status_pktnum = pktnum
@@ -2372,9 +2329,6 @@ class OnlineStateManager(object):
     def scheduleNodeExpire(self, n, when):
         # Schedule a timer for the given node to expire from the network
 
-        print "scheduleNodeExpire: ipp=%s, when=%d" % (
-            hexlify(n.ipp), when)
-        
         if n.expire_dcall:
             n.expire_dcall.reset(when)
             return
@@ -2462,8 +2416,6 @@ class OnlineStateManager(object):
         self.checkStatusLimit()
 
         def cb(sendfull):
-            print "sending status..."
-
             # Choose an expiration time so that the network handles
             # approximately 1 status update per second, but set bounds of
             # about 1-15 minutes
@@ -2525,7 +2477,7 @@ class OnlineStateManager(object):
         def cb():
             self.loginEcho_dcall = None
             self.loginEcho_rand = None
-            print "loginEcho: Did not get reply"
+            self.main.logPacket("No EC response")
 
         echorand = ''.join([chr(random.randint(0,255)) for i in range(8)])
 
@@ -2541,8 +2493,7 @@ class OnlineStateManager(object):
 
     def receivedLoginEcho(self, ad, rand):
         if rand != self.loginEcho_rand:
-            print "loginEcho: rand mismatch"
-            return
+            raise BadPacketError("EC Rand mismatch")
 
         myad = Ad().setRawIPPort(self.me.ipp)
 
@@ -2550,7 +2501,6 @@ class OnlineStateManager(object):
         self.loginEcho_rand = None
 
         if ad.ip == myad.ip:
-            print "loginEcho: remapping not needed"
             return
 
         if ad.isRFC1918():
@@ -2558,10 +2508,11 @@ class OnlineStateManager(object):
             # Remap this address to my external IP in the future
 
             self.main.ph.remap_ip = (ad.ip, myad.ip)
-            print "loginEcho: remapping %s->%s" % (ad.ip, myad.ip)
+            self.main.logPacket("EC: Remap %s->%s" %
+                                (ad.getTextIP(), myad.getTextIP()))
 
         else:
-            print "loginEcho: Not RFC1918 address."
+            self.main.logPacket("EC: Not RFC1918")
 
 
     def makeExitPacket(self):
@@ -2575,9 +2526,6 @@ class OnlineStateManager(object):
         # Cancel all the dcalls here
         dcall_discard(self, 'sendStatus_dcall')
         dcall_discard(self, 'statusLimit_dcall')
-
-        # TODO: remove debugging dcall!
-        dcall_discard(self, 'printNodes_dcall')
 
         # Tell the DC client that all nicks are gone
         if self.nkm:
@@ -2679,9 +2627,10 @@ class PingManager(object):
             try:
                 sendtime = n.ping_reqs[ack_key]
             except KeyError:
-                print "Unknown ping ack"
+                raise BadPacketError("PG: unknown ack")
             else:
-                print "Ping delay: %f ms" % ((seconds() - sendtime) * 1000.0)
+                self.main.logPacket("Ping: %f ms" %
+                                    ((seconds() - sendtime) * 1000.0))
 
                 # If we just got the first ack, then send a ping now to
                 # send the GOTACK bit to neighbor
@@ -3275,9 +3224,7 @@ class MessageRoutingManager(object):
 
         ack_key = self.generateKey(data)
 
-        if ack_key in self.msgs:
-            print "Tried to create a duplicate message"
-            return
+        assert (ack_key not in self.msgs)
 
         m = self.msgs[ack_key] = self.Message(data, tries)
         self.pokeMessage(ack_key, nb_ipp)
@@ -3807,9 +3754,6 @@ class BanManager(object):
 
     def matchBan(self, ban_ip, ban_mask, ip):
         # All 3 input arguments should be ints
-
-        print "matchBan:", ((ip ^ ban_ip) & ban_mask)
-        
         return not ((ip ^ ban_ip) & ban_mask)
 
 
@@ -3820,11 +3764,9 @@ class BanManager(object):
         if not (osm.bcm or osm.bsm):
             return False
 
-        # TODO: re-enable this optimization:
-        
-        # Anything in the nodes/ping lists can't be banned
-        #if ipp in self.main.osm.lookup_ipp:
-        #    return False
+         # Anything in the nodes/ping lists can't be banned
+        if ipp in self.main.osm.lookup_ipp:
+            return False
 
         # Search all bridges for a matching ban
         ip, = struct.unpack('!i', ipp[:4])
@@ -4053,16 +3995,15 @@ class DtellaMain_Base(object):
         try:
             my_ipp = self.selectMyIP()
         except ValueError:
-            print "I don't know who I am!"
+            self.main.showLoginStatus("Can't determine my own IP?!")
             return
 
         # Look up my location string
-        self.queryLocation(my_ipp)
+        if dtella_local.use_locations:
+            self.queryLocation(my_ipp)
 
         # Get Bridge Client/Server Manager, or nothing.
         b = self.getBridgeManager()
-
-        print "Bridge Manager =", b
 
         # Enable the object that keeps us online
         self.osm = OnlineStateManager(self, my_ipp, node_ipps, **b)
@@ -4073,6 +4014,10 @@ class DtellaMain_Base(object):
 
 
     def queryLocation(self, my_ipp):
+        raise NotImplemented("Override me!")
+
+
+    def logPacket(self, text):
         raise NotImplemented("Override me!")
 
 

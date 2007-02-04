@@ -207,6 +207,12 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.dnsh.ipToHostname(ad, cb)
 
 
+    def logPacket(self, text):
+        dch = self.dch
+        if dch and dch.bot.dbg_show_packets:
+            dch.bot.say(text)
+
+
     def getBridgeManager(self):
         # Create BridgeClientManager, if the module exists
         try:
@@ -302,8 +308,6 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
         # Client left, so shut down in a while
         when = dtella_core.NO_CLIENT_TIMEOUT
-
-        print "Shutting down in %d seconds." % when
 
         if self.disconnect_dcall:
             self.disconnect_dcall.reset(when)

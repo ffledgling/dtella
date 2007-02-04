@@ -24,7 +24,7 @@ class DNSHandler(object):
         self.version = ''
         self.pkhashes = set()
         
-        dns_servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222']
+        dns_servers = list(dtella_local.dns_servers)
         random.shuffle(dns_servers)
 
         self.resolver = client.Resolver(
@@ -36,13 +36,11 @@ class DNSHandler(object):
         # Requery the TXT record if we haven't gotten an update in the
         # last hour.
 
-        print "Seconds since last DNS update: %d" % (seconds() - self.lastUpdate)
-        
         if seconds() - self.lastUpdate < DNS_STALE_TIME:
             return
 
-        self.main.showLoginStatus("Downloading network configuration...",
-                                  counter=0)
+        self.main.showLoginStatus(
+            "Requesting config from %s..." % dtella_local.dnshost, counter=0)
 
         if 'dns' in self.main.blockers:
             return
@@ -53,7 +51,9 @@ class DNSHandler(object):
             dns.Query(dtella_local.dnshost, type=dns.TXT))
 
         def err(text):
-            print "DNS Failed"
+            self.main.showLoginStatus(
+                "DNS query failed!  "
+                "Trying to continue, but this may cause further problems.")
             self.main.removeBlocker('dns')
 
         d.addCallback(self.handleTXT)
@@ -80,8 +80,6 @@ class DNSHandler(object):
 
             f(value)
 
-        print "handled"
-
         self.lastUpdate = seconds()
 
         self.main.removeBlocker('dns')
@@ -96,22 +94,16 @@ class DNSHandler(object):
 
 
     def handleTXT_pkhash(self, value):
-
         h = binascii.a2b_base64(value)
-        print "pkhash is '%s'" % binascii.hexlify(h)
-
         self.pkhashes.add(h)
 
 
     def handleTXT_ipcache(self, value):
 
-        print "ipcache =", value
-
         try:
             data = binascii.a2b_base64(value)
             data = self.main.pk_enc.decrypt(data)
         except (ValueError, binascii.Error), why:
-            print "DNS ipcache decrypt failed:", why
             return
 
         if (len(data)-4) % 6 != 0:
@@ -124,13 +116,8 @@ class DNSHandler(object):
         ipps = [data[i:i+6] for i in range(4, len(data), 6)]
         random.shuffle(ipps)
 
-        print "DNS ipcache age = %d" % age
-
         for ipp in ipps:
             ad = Ad().setRawIPPort(ipp)
-
-            print "Adding from DNS: %s" % ad.getTextIPPort()
-            
             self.main.state.refreshPeer(ad, age)
 
 

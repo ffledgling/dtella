@@ -25,7 +25,6 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
         # 16: = "the rest"
 
         if not rsa_obj:
-            print "rsa_obj not defined"
             return False
 
         # Grab the kind, skip over the header, and get everything up
@@ -41,7 +40,6 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
         try:
             return rsa_obj.verify(data_hash, sig_tuple)
         except:
-            print "Error verifying signature"
             return False
 
 
@@ -262,8 +260,8 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
 
             try:
                 bdata.processChunks(chunks, pktnum)
-            except ChunkError:
-                print "BC: bad chunks"
+            except ChunkError, e:
+                self.main.logPacket("BC chunk error: %s" % str(e))
 
         self.handleBroadcast(ad, data, check_cb)
 
@@ -335,8 +333,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
         # Verify Signature
         if not self.verifySignature(
             bdata.rsa_obj, data, signature, broadcast=False):
-            print "bC: Invalid signature"
-            return
+            raise BadPacketError("bC: signature didn't verify")
 
         # Keep track of the timestamp
         osm.bcm.updateBridgeTime(pktnum)
@@ -558,8 +555,6 @@ class BridgeNodeData(object):
             if bk is None:
                 i+=1
 
-        print "Need %d more blocks" % i
-
         # Check if all the blocks exist yet
         if None in self.blocks.itervalues():
             return
@@ -571,9 +566,8 @@ class BridgeNodeData(object):
 
         try:
             self.processChunks(data, self.status_pktnum)
-        except ChunkError:
-            print "processChunks FAILED"
-            return
+        except ChunkError, e:
+            self.main.logPacket("Couldn't assemble blocks: %s" % e)
 
         # Remove any nicks who aren't mentioned in this update
         dead_nicks = []
@@ -587,7 +581,6 @@ class BridgeNodeData(object):
         # Report all the nicks that we deleted
         dead_nicks.sort()
         for n in dead_nicks:
-            print "Dead nick: '%s'" % n.nick
             osm = self.main.osm
             osm.nkm.removeNode(n)
 
@@ -752,8 +745,6 @@ class BridgeNodeData(object):
                     raise ChunkError("B: Subnet out of range")
 
                 ipmask = (ip, mask)
-
-                print "ipmask=", ipmask
 
                 if not outdated:
                     self.updateBan(ipmask, enable, pktnum)
@@ -954,7 +945,6 @@ class BridgeNodeData(object):
             try:
                 n = osm.lookup_ipp[ipp]
             except KeyError:
-                print "handleKick: can't find node"
                 return
 
         # Check if the user has rejoined by the time we got this
@@ -995,8 +985,6 @@ class BridgeNodeData(object):
 
     def handleInfo(self, info):
         infostrings = tuple(info.split('|'))
-
-        print "infostrings=", infostrings
 
         if self.infostrings == infostrings:
             return
@@ -1115,8 +1103,6 @@ class BridgeClientManager(object):
         
 
     def refreshBridgeNodeStatus(self, n, pktnum, rsa_obj, hashes, do_request):
-
-        print "refreshBNS: pktnum=%d hashes=%s" % (pktnum, hashes)
 
         if n.bridge_data:
             bdata = n.bridge_data

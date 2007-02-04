@@ -1,14 +1,16 @@
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
+from twisted.python.runtime import seconds
 
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard,
-                         format_bytes)
+                         format_bytes, dcall_timeleft)
 import dtella_core
 import dtella_local
 import struct
 import re
+import binascii
 
 
 class DCHandler(LineOnlyReceiver):
@@ -54,23 +56,25 @@ class DCHandler(LineOnlyReceiver):
 
         self.scheduleChatRateControl()
 
+        self.sendLine("$NickList %s$$" % self.bot.nick)
+        self.sendLine("$OpList %s$$" % self.bot.nick)
+
         self.main.addDCHandler(self)
         
 
     def connectionLost(self, reason):
-        print "Connection lost:", reason
         self.main.removeDCHandler()
         dcall_discard(self, 'chatRate_dcall')
         dcall_discard(self, 'autoRejoin_dcall')
 
 
     def sendLine(self, line):
-        print "<:", line
+        #print "<:", line
         LineOnlyReceiver.sendLine(self, line.replace('|','&#124;'))
 
 
     def lineReceived(self, line):
-        print ">:", line
+        #print ">:", line
         cmd = line.split(' ', 1)
 
         # Do a dict lookup to find the parameters for this command
@@ -212,21 +216,22 @@ class DCHandler(LineOnlyReceiver):
         else:
             info[0] = "%s<Dt:%s>" % (desc, ver_string)
 
-        # Try to get my location name.
-        try:
-            ad = Ad().setRawIPPort(self.main.osm.me.ipp)
-            loc = self.main.location[ad.getTextIP()]
-        except (AttributeError, KeyError):
-            loc = None
+        if dtella_local.use_locations:
+            # Try to get my location name.
+            try:
+                ad = Ad().setRawIPPort(self.main.osm.me.ipp)
+                loc = self.main.location[ad.getTextIP()]
+            except (AttributeError, KeyError):
+                loc = None
 
-        # If I got a location name, splice it into my connection field
-        if loc:
-            # Append location suffix, if it exists
-            suffix = self.main.state.suffix
-            if suffix:
-                loc = '%s|%s' % (loc, suffix)
-            
-            info[2] = loc + info[2][-1:]
+            # If I got a location name, splice it into my connection field
+            if loc:
+                # Append location suffix, if it exists
+                suffix = self.main.state.suffix
+                if suffix:
+                    loc = '%s|%s' % (loc, suffix)
+                
+                info[2] = loc + info[2][-1:]
 
         info = '$'.join(info)
 
@@ -239,8 +244,6 @@ class DCHandler(LineOnlyReceiver):
 
     def d_Search(self, addr_string, search_string):
         # Send a search request
-
-        print "Search: addr='%s' string='%s'" % (addr_string, search_string)
 
         if not self.main.getOnlineDCH():
             self.pushStatus("Search: Not online!")
@@ -317,11 +320,11 @@ class DCHandler(LineOnlyReceiver):
         try:
             n = osm.nkm.lookupNick(nick)
         except KeyError:
-            print "ConnectToMe: Nick not found"
             return
 
         def fail_cb():
-            print "CA Failed"
+            self.pushStatus("Failed to deliver connect request to '%s'"
+                            % nick)
 
         n.event_ConnectToMe(self.main, dc_ad.port, fail_cb)
 
@@ -334,12 +337,12 @@ class DCHandler(LineOnlyReceiver):
             return
 
         def fail_cb():
-            print "CP Failed"
+            self.pushStatus("Failed to deliver revconnect request to '%s'"
+                            % nick)
 
         try:
             n = osm.nkm.lookupNick(nick)
         except KeyError:
-            print "ConnectToMe: Nick not found"
             return
 
         n.event_RevConnectToMe(self.main, fail_cb)
@@ -532,7 +535,6 @@ class DCHandler(LineOnlyReceiver):
 
         m = self.searchreply_re.match(data)
         if not m:
-            print "Search result doesn't match pattern"
             # Doesn't look like a search reply
             return
 
@@ -746,6 +748,8 @@ class DtellaBot(object):
         self.main = dch.main
         self.nick = nick
 
+        self.dbg_show_packets = False
+
 
     def say(self, txt):
         self.dch.pushPrivMsg(self.nick, txt)
@@ -756,7 +760,7 @@ class DtellaBot(object):
         cmd = line.upper().split()
 
         if not cmd:
-            return
+            return False
 
         try:
             f = getattr(self, 'handleCmd_' + cmd[0])
@@ -766,25 +770,30 @@ class DtellaBot(object):
             else:
                 out("Unknown command '%s'.  Type %sHELP for help." %
                     (cmd[0], prefix))
+                return True
+
+        # Filter out location-specific commands
+        if not dtella_local.use_locations:
+            if cmd[0] in self.location_cmds:
+                return False
+            
+        if cmd[0] in self.freeform_cmds:
+            try:
+                text = line.split(' ', 1)[1]
+            except IndexError:
+                text = None
+
+            f(out, text, prefix)
+            
         else:
-            if cmd[0] in self.freeforms:
-
-                try:
-                    text = line.split(' ', 1)[1]
-                except IndexError:
-                    text = None
-
-                f(out, text, prefix)
-                
-            else:
-                def wrapped_out(line):
-                    for l in word_wrap(line):
-                        if l:
-                            out(l)
-                        else:
-                            out(" ")
-               
-                f(wrapped_out, cmd[1:], prefix)
+            def wrapped_out(line):
+                for l in word_wrap(line):
+                    if l:
+                        out(l)
+                    else:
+                        out(" ")
+           
+            f(wrapped_out, cmd[1:], prefix)
 
         return True
 
@@ -800,7 +809,9 @@ class DtellaBot(object):
         out("Type '%sHELP %s' for more information." % (prefix, key))
 
 
-    freeforms = ('TOPIC', 'SUFFIX')
+    freeform_cmds = frozenset(['TOPIC','SUFFIX','DEBUG'])
+
+    location_cmds = frozenset(['SUFFIX','USERS','SHARED','DENSE'])
 
     
     minihelp = [
@@ -913,12 +924,6 @@ class DtellaBot(object):
         }
 
 
-#    def handleCmd_DEBUG(self, out, args, prefix):
-#        def cb():
-#            None.crash()
-#        reactor.callLater(1, cb)
-
-
     def handleCmd_HELP(self, out, args, prefix):
 
         if len(args) == 0:
@@ -929,6 +934,12 @@ class DtellaBot(object):
                 "window prefixed with an exclamation point (!)" % self.nick)
 
             for command, description in self.minihelp:
+
+                # Filter location-specific commands
+                if not dtella_local.use_locations:
+                    if command in self.location_cmds:
+                        continue
+                
                 if command == "--":
                     out("")
                     out("  --%s--" % description)
@@ -947,9 +958,16 @@ class DtellaBot(object):
                 key = key[1:]
 
             try:
+                # Filter location-specific commands
+                if not dtella_local.use_locations:
+                    if key in self.location_cmds:
+                        raise KeyError
+                    
                 (head, body) = self.bighelp[key]
+                
             except KeyError:
                 out("Sorry, no help available for '%s'." % key)
+
             else:
                 out("Syntax: %s%s %s" % (prefix, key, head))
                 out("")
@@ -1237,3 +1255,106 @@ class DtellaBot(object):
         out("|")
         out("\\_ Overall: %s _/" % format(overall))
        
+
+    def handleCmd_DEBUG(self, out, text, prefix):
+
+        out(None)
+        
+        if not text:
+            return
+
+        text = text.strip().lower()
+        args = text.split()
+
+        if args[0] == "nbs":
+            self.debug_neighbors(out)
+
+        elif args[0] == "nodes":
+            try:
+                sortkey = int(args[1])
+            except (IndexError, ValueError):
+                sortkey = 0
+            self.debug_nodes(out, sortkey)
+
+        elif args[0] == "packets":
+            if len(args) < 2:
+                pass
+            elif args[1] == "on":
+                self.dbg_show_packets = True
+            elif args[1] == "off":
+                self.dbg_show_packets = False
+
+
+    def debug_neighbors(self, out):
+
+        osm = self.main.osm
+        if not osm:
+            return
+
+        out("Neighbor Nodes: {direction, ipp, nick}")
+
+        nbs = list(osm.pgm.inbound | osm.pgm.outbound)
+
+        for n in nbs:
+            iwant = (n in osm.pgm.outbound)
+            uwant = (n in osm.pgm.inbound)
+
+            info = []
+
+            if iwant and uwant:
+                info.append("<->")
+            elif iwant:
+                info.append("-->")
+            elif uwant:
+                info.append("<--")
+
+            info.append(binascii.hexlify(n.ipp).upper())
+            info.append("(%s)" % n.nick)
+
+            out(' '.join(info))
+
+
+    def debug_nodes(self, out, sortkey):
+
+        osm = self.main.osm
+        if not osm and osm.syncd:
+            out("Not syncd")
+            return
+
+        me = osm.me
+
+        now = seconds()
+
+        out("Online Nodes: {ipp, nb, persist, expire, uptime, nick}")
+
+        lines = []
+
+        for n in ([me] + osm.nodes):
+            info = []
+            info.append(binascii.hexlify(n.ipp).upper())
+
+            if n.is_ping_nb:
+                info.append("Y")
+            else:
+                info.append("N")
+
+            if n.persist:
+                info.append("Y")
+            else:
+                info.append("N")
+
+            if n is me:
+                info.append("%4d" % dcall_timeleft(osm.sendStatus_dcall))
+            else:
+                info.append("%4d" % dcall_timeleft(n.expire_dcall))
+            info.append("%8d" % (now - n.uptime))
+            info.append("(%s)" % n.nick)
+
+            lines.append(info)
+
+        if 1 <= sortkey <= 6:
+            lines.sort(key=lambda l: l[sortkey-1])
+
+        for line in lines:
+            out(' '.join(line))
+

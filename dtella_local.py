@@ -5,6 +5,7 @@ network_key = 'PurdueDtella-10'
 
 hub_name = "Dtella@Purdue"
 
+dns_servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222']
 dnshost = 'purdue.config.dtella.org'
 
 def validateIP(ip):
@@ -14,6 +15,8 @@ def validateIP(ip):
 
 
 # Purude-specific location lookup stuff
+use_locations = True
+
 suffix_re = re.compile(r".*\.([^.]+)\.purdue\.edu")
 prefix_re = re.compile(r"^([a-z]{1,6}).*\.purdue\.edu")
 
