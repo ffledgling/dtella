@@ -5,6 +5,7 @@ import twisted.internet.error
 import twisted.python.log
 from twisted.internet import reactor
 import sys
+import socket
 
 import dtella_state
 import dtella_dc
@@ -50,7 +51,10 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         # DNS Handler
         self.dnsh = dtella_dnslookup.DNSHandler(self)
 
-        # Bind UDP Port
+        self.addBlocker('udp_bind')
+
+
+    def initComplete(self):
         self.bindUDPPort()
 
         if self.state.persistent:
@@ -349,26 +353,42 @@ def run():
 
     tcp_port = 7314
     dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
-    reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
 
-    print "Dtella Experimental %s" % dtella_core.VERSION
-    print "Listening on 127.0.0.1:%d" % tcp_port
+    print "Dtella %s" % dtella_core.VERSION
+
+    def cb(first):
+        try:
+            reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
+        except twisted.internet.error.CannotListenError:
+            if first:
+                print "TCP bind failed.  Killing old process..."
+                terminate()
+                reactor.callLater(2.0, cb, False)
+            else:
+                print "Bind failed again.  Giving up."
+                reactor.stop()
+        else:
+            print "Listening on 127.0.0.1:%d" % tcp_port
+            dtMain.initComplete()
+
+    cb(True)
     reactor.run()
     
 
 def terminate():
     # Terminate another Dtella process on the local machine
 
-    import socket
-
     state = dtella_state.StateManager(None, STATE_FILE)
 
     if not state.udp_port:
         return
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
-    sock.close()
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
+        sock.close()
+    except socket.error:
+        pass
 
 
 if __name__=='__main__':

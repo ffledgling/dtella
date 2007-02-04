@@ -25,6 +25,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: strip linefeeds from topic, chat
 
+# TODO: add GPL stuff to the source files
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
