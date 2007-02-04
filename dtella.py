@@ -12,6 +12,9 @@ import dtella_local
 from dtella_util import dcall_discard, Ad, word_wrap
 
 
+STATE_FILE = "dtella.state"
+
+
 class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
     def __init__(self):
@@ -40,7 +43,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self.ph = dtella_bridgeclient.BridgeClientProtocol(self)
 
         # State Manager
-        self.state = dtella_state.StateManager(self, 'dtella.state')
+        self.state = dtella_state.StateManager(self, STATE_FILE)
 
         # DNS Handler
         self.dnsh = dtella_dnslookup.DNSHandler(self)
@@ -311,8 +314,8 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.disconnect_dcall = reactor.callLater(when, cb)
 
 
-if __name__=='__main__':
-        
+def run():
+
     dtMain = DtellaMain_Client()
 
     def logObserver(eventDict):
@@ -345,3 +348,27 @@ if __name__=='__main__':
     print "Dtella Experimental %s" % dtella_core.VERSION
     print "Listening on 127.0.0.1:%d" % tcp_port
     reactor.run()
+    
+
+def terminate():
+    # Terminate another Dtella process on the local machine
+
+    import socket
+
+    state = dtella_state.StateManager(None, STATE_FILE)
+
+    if not state.udp_port:
+        return
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(('127.0.0.1',0))
+    sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
+    sock.close()
+
+
+if __name__=='__main__':
+
+    if len(sys.argv) == 2 and sys.argv[1] == "--terminate":
+        terminate()
+    else:
+        run()

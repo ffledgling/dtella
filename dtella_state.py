@@ -13,19 +13,34 @@ class StateManager(object):
 
     def __init__(self, main, filename):
 
+        if main:
+            self.setupPath(filename, create=True)
+
+            self.main = main
+            self.peers = {}   # {ipp -> time}
+
+            self.loadState()
+
+            self.saveState_dcall = None
+            self.saveState()
+
+        else:
+            # Only read the UDP port (for --terminate)
+            try:
+                self.setupPath(filename, create=False)
+                d = self.readDict()
+                self.udp_port, = struct.unpack('!H', d['udp_port'])
+            except:
+                self.udp_port = None
+
+
+    def setupPath(self, filename, create):
+
         path = os.path.expanduser("~/.dtella")
-        if not os.path.exists(path):
+        if create and not os.path.exists(path):
             os.mkdir(path)
 
         self.filename = "%s/%s" % (path, filename)
-
-        self.main = main
-        self.peers = {}   # {ipp -> time}
-
-        self.loadState()
-
-        self.saveState_dcall = None
-        self.saveState()
 
 
     def loadState(self):

@@ -251,6 +251,10 @@ class PeerHandler(DatagramProtocol):
             if dch and ad.auth_sb(self.main):
                 dch.pushSearchResult(rawdata)
             return
+
+        elif rawdata == "DTELLA_KILL" and ad.ip == (127,0,0,1):
+            reactor.stop()
+            return
         
         try:
             try:
