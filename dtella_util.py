@@ -125,6 +125,8 @@ def parse_incoming_info(info):
     # Pull the location and share size out of an info string
     # Returns info, location, shared
 
+    info = info.replace('\r','').replace('\n','')
+
     # Break up info string
     try:
         info = split_info(info)
@@ -134,6 +136,7 @@ def parse_incoming_info(info):
     # Check if the location has a user-specified suffix
     try:
         location, suffix = info[2][:-1].split('|', 1)
+        suffix = suffix[:8]
     except ValueError:
         # No separator, use entire connection field as location name
         location = info[2][:-1]

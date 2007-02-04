@@ -22,7 +22,7 @@ import dtella_crypto
 import dtella_local
 
 from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
-from dtella_core import Reject
+from dtella_core import Reject, BadPacketError, BadTimingError
 
 
 import dtella_bridge_config as cfg

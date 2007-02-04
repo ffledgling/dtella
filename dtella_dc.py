@@ -228,7 +228,13 @@ class DCHandler(LineOnlyReceiver):
             
             info[2] = loc + info[2][-1:]
 
-        return '$'.join(info)
+        info = '$'.join(info)
+
+        if len(info) > 255:
+            self.pushStatus("*** Your info string is too long!")
+            info = ''
+
+        return info
 
 
     def d_Search(self, addr_string, search_string):
@@ -309,7 +315,7 @@ class DCHandler(LineOnlyReceiver):
             return
 
         try:
-            n = self.main.osm.nkm.lookupNick(nick)
+            n = osm.nkm.lookupNick(nick)
         except KeyError:
             print "ConnectToMe: Nick not found"
             return
@@ -331,7 +337,7 @@ class DCHandler(LineOnlyReceiver):
             print "CP Failed"
 
         try:
-            n = self.main.osm.nkm.lookupNick(nick)
+            n = osm.nkm.lookupNick(nick)
         except KeyError:
             print "ConnectToMe: Nick not found"
             return
@@ -1180,7 +1186,7 @@ class DtellaBot(object):
             out("Your location suffix is \"%s\"" % self.main.state.suffix)
             return
 
-        text = text[:10].rstrip().replace('$','')
+        text = text[:8].rstrip().replace('$','')
 
         self.main.state.suffix = text
         self.main.state.saveState()

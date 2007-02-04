@@ -73,7 +73,7 @@ class StateManager(object):
 
         # Get Location suffix
         try:
-            self.suffix = d['suffix'][:10]
+            self.suffix = d['suffix'][:8]
         except KeyError:
             self.suffix = ""
 

@@ -3,7 +3,6 @@ VERSION = "DEV"
 import fixtwistedtime
 
 import struct
-import hmac
 import md5
 import heapq
 import time
@@ -19,11 +18,14 @@ from twisted.python.runtime import seconds
 
 import dtella_local
 import dtella_crypto
-import dtella_state
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info)
 
 # TODO: minshare, minversion
+
+# TODO: strip linefeeds from topic, chat
+
+# TODO: do something with all these print statements
 
 
 # Miscellaneous Exceptions
@@ -773,7 +775,7 @@ class PeerHandler(DatagramProtocol):
             if self.isOutdatedStatus(src_n, pktnum):
                 raise BadBroadcast
 
-            n = self.main.osm.refreshNodeStatus(
+            n = osm.refreshNodeStatus(
                 src_ipp, pktnum, expire, sesid, uptime, persist, nick, info)
 
             # They had a nick, now they don't.  This indicates a problem.
