@@ -444,7 +444,7 @@ class IRCServer(LineOnlyReceiver):
             else:
                 self.sendLine("PING :%s" % cfg.my_host)
                 self.ping_waiting = True
-                self.ping_dcall = reactor.callLater(15.0, cb)
+                self.ping_dcall = reactor.callLater(30.0, cb)
 
         self.ping_dcall = reactor.callLater(60.0, cb)
 

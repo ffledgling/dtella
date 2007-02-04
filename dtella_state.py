@@ -71,6 +71,12 @@ class StateManager(object):
             ipp, when = struct.unpack('!6sI', ipcache[i:i+10])
             self.refreshPeer(Ad().setRawIPPort(ipp), now-when)
 
+        # Get Location suffix
+        try:
+            self.suffix = d['suffix'][:10]
+        except KeyError:
+            self.suffix = ""
+
 
     def saveState(self):
         # Save the state file every few minutes
@@ -89,6 +95,8 @@ class StateManager(object):
                         for when, ipp in self.getYoungestPeers(128)]
             
             d['ipcache'] = ''.join(peerdata)
+
+            d['suffix'] = self.suffix
             
             self.writeDict(d)
 

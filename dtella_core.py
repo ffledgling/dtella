@@ -1477,6 +1477,7 @@ class InitialContactManager(DatagramProtocol):
                     self.recordResultType('banned_ip')
 
                 self.cancelPeerContactTimeout(p)
+                self.doneCheck()
             return
 
         # Add my own IP to the list
@@ -2499,8 +2500,6 @@ class OnlineStateManager(object):
         now = seconds()
         self.statusLimit_time = max(self.statusLimit_time, now-8.0)
         self.statusLimit_time += 1.0
-
-        self.main.showLoginStatus("StatusLimit: %f" % (now-self.statusLimit_time))
 
         if self.statusLimit_time < now:
             return

@@ -1,6 +1,8 @@
 import dtella_core
 import twisted.internet.error
+import twisted.python.log
 from twisted.internet import reactor
+import sys
 
 import dtella_state
 import dtella_dc
@@ -312,6 +314,22 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 if __name__=='__main__':
         
     dtMain = DtellaMain_Client()
+
+    def logObserver(eventDict):
+        if eventDict["isError"]:
+            if eventDict.has_key('failure'):
+                text = eventDict['failure'].getTraceback()
+            else:
+                text = " ".join([str(m) for m in eventDict["message"]]) + "\n"
+
+            dch = dtMain.dch
+            if dch:
+                dch.bot.say("Something bad happened:\n" + text)
+            else:
+                sys.stderr.write(text)
+                sys.stderr.flush()
+
+    twisted.python.log.startLoggingWithObserver(logObserver, setStdout=False)
 
     #def kill():
     #    print "20-sec timeout"

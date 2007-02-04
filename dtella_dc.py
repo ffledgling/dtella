@@ -206,17 +206,6 @@ class DCHandler(LineOnlyReceiver):
         # Split description into description and <tag>
         desc, tag = split_tag(info[0])
 
-        # Extract the hall suffix, for appending room numbers and stuff.
-        try:
-            pos = desc.index(' ')
-        except ValueError:
-            pos = len(desc)
-        if pos > 1 and desc[0] == '~':
-            suffix = desc[1:pos]
-            desc = desc[pos+1:]
-        else:
-            suffix = ""
-
         # Update tag
         if tag:
             info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
@@ -232,7 +221,8 @@ class DCHandler(LineOnlyReceiver):
 
         # If I got a location name, splice it into my connection field
         if loc:
-            # Append location suffix, if the user provided one
+            # Append location suffix, if it exists
+            suffix = self.main.state.suffix
             if suffix:
                 loc = '%s|%s' % (loc, suffix)
             
@@ -762,23 +752,6 @@ class DtellaBot(object):
         if not cmd:
             return
 
-        # This needs to be handled specially
-        if cmd[0] == "TOPIC":
-            out(None)  # make sure input gets echo'd
-            try:
-                topic = line.split(' ', 1)[1]
-            except IndexError:
-                topic = None
-            self.handleTopic(out, topic, prefix)
-            return True
-
-        def format_out(line):
-            for l in word_wrap(line):
-                if l:
-                    out(l)
-                else:
-                    out(" ")
-
         try:
             f = getattr(self, 'handleCmd_' + cmd[0])
         except AttributeError:
@@ -788,7 +761,24 @@ class DtellaBot(object):
                 out("Unknown command '%s'.  Type %sHELP for help." %
                     (cmd[0], prefix))
         else:
-            f(format_out, cmd[1:], prefix)
+            if cmd[0] in self.freeforms:
+
+                try:
+                    text = line.split(' ', 1)[1]
+                except IndexError:
+                    text = None
+
+                f(out, text, prefix)
+                
+            else:
+                def wrapped_out(line):
+                    for l in word_wrap(line):
+                        if l:
+                            out(l)
+                        else:
+                            out(" ")
+               
+                f(wrapped_out, cmd[1:], prefix)
 
         return True
 
@@ -802,6 +792,9 @@ class DtellaBot(object):
 
         out("Syntax: %s%s %s" % (prefix, key, head))
         out("Type '%sHELP %s' for more information." % (prefix, key))
+
+
+    freeforms = ('TOPIC', 'SUFFIX')
 
     
     minihelp = [
@@ -903,9 +896,10 @@ class DtellaBot(object):
         }
 
 
-    def handleCmd_DEBUG(self, out, args, prefix):
-        if self.main.getOnlineDCH():
-            self.main.osm.sendMyStatus()
+#    def handleCmd_DEBUG(self, out, args, prefix):
+#        def cb():
+#            None.crash()
+#        reactor.callLater(1, cb)
 
 
     def handleCmd_HELP(self, out, args, prefix):
@@ -1154,9 +1148,8 @@ class DtellaBot(object):
             (who, tie, rank, suffix, format_bytes(target.shared))
             )
         
-
-    def handleTopic(self, out, topic, prefix):
-
+    def handleCmd_TOPIC(self, out, topic, prefix):
+        
         if not self.main.getOnlineDCH():
             out("You must be online to use %sTOPIC." % prefix)
             return
@@ -1166,7 +1159,26 @@ class DtellaBot(object):
         if topic is None:
             out(tm.getFormattedTopic())
         else:
+            out(None)
             tm.broadcastNewTopic(topic)
+
+
+    def handleCmd_SUFFIX(self, out, text, prefix):
+
+        if text is None:
+            out("Your location suffix is \"%s\"" % self.main.state.suffix)
+            return
+
+        text = text[:10]
+
+        self.main.state.suffix = text
+        self.main.state.saveState()
+        
+        out("Set location suffix to \"%s\"" % text)
+
+        osm = self.main.osm
+        if osm:
+            osm.updateMyInfo()
 
 
     def showStats(self, out, title, compute, format, peers_only):
