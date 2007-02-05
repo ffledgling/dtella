@@ -147,12 +147,16 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
     def newConnectionRequest(self):
         # This fires when the DC client connects and wants to be online
 
+        # return True if the old login status should be displayed
+
         # Cancel the disconnect timeout
         dcall_discard(self, 'disconnect_dcall')
 
         if self.icm or self.osm:
-            # Already connecting, just wait.
-            return
+            # Already in progress
+            return True
+
+        self.login_text = ""
 
         # If an update is necessary, this will add a blocker
         self.dnsh.updateIfStale()
@@ -160,11 +164,11 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         # If we don't have the UDP port, then try again now.
         if 'udp_bind' in self.blockers:
             self.bindUDPPort()
-            return
+            return False
 
         # Start connecting now if there are no blockers
-        
-        self.startConnecting()            
+        self.startConnecting()
+        return False
 
 
     def queryLocation(self, my_ipp):
@@ -243,7 +247,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             # Prepend a number
             text = "%d. %s" % (self.login_counter, text)
 
-            # This text will be remembered for new DC clients
+            # Remember this for new DC clients
             self.login_text = text
         
         dch = self.dch
@@ -276,16 +280,13 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
     def addDCHandler(self, dch):
         self.dch = dch
 
-        oldtext = self.login_text
-        self.login_text = ""
+        in_progress = self.newConnectionRequest()
 
-        self.newConnectionRequest()
+        if in_progress:
+            dch.pushStatus(self.login_text)
 
-        if self.osm and oldtext and not self.login_text:
-            # The connection request didn't trigger any text, so show
-            # the previous status to this new DC client.
-            self.login_text = oldtext
-            dch.pushStatus(oldtext)
+        if not self.blockers:
+            self.dnsh.sendVersionMessage()
 
 
     def removeDCHandler(self):
@@ -373,7 +374,7 @@ def run():
 
     cb(True)
     reactor.run()
-    
+
 
 def terminate():
     # Terminate another Dtella process on the local machine

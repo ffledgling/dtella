@@ -97,6 +97,37 @@ class StateManager(object):
         except KeyError:
             self.suffix = ""
 
+        # Get cached public key hashes
+        try:
+            self.pkhashes = self.unpackStrs(d['pkhashes'])
+        except KeyError:
+            self.pkhashes = []
+
+
+    def packStrs(self, strs):
+        data = []
+        for s in strs:
+            data.append(struct.pack("!I", len(s)))
+            data.append(s)
+
+        return ''.join(data)
+
+
+    def unpackStrs(self, data):
+        strs = []
+        i = 0
+
+        while i < len(data):
+            slen, = struct.unpack("!I", data[i:i+4])
+            i += 4
+            s = data[i:i+slen]
+            i += slen
+            if len(s) != slen:
+                return []
+            strs.append(s)
+
+        return strs
+
 
     def saveState(self):
         # Save the state file every few minutes
@@ -106,6 +137,8 @@ class StateManager(object):
             self.saveState_dcall = reactor.callLater(when, cb)
 
             d = {}
+
+            d['pkhashes'] = self.packStrs(self.pkhashes)
 
             d['udp_port'] = struct.pack('!H', self.udp_port)
 

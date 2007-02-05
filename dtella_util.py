@@ -4,12 +4,33 @@ import struct
 import random
 import sys
 import fpformat
+import re
 
 from twisted.python.runtime import seconds
 
 
 def randbytes(n):
     return ''.join([chr(random.randint(0,255)) for i in range(n)])
+
+
+def cmpify_version(ver):
+    # Given a version string, turn it into something comparable.
+
+    ver_re = re.compile("([0-9]*)(.*)")
+
+    ver_parts = []
+    
+    for part in ver.split('.'):
+        m = ver_re.match(part)
+        spart = m.group(2)
+        try:
+            ipart = int(m.group(1))
+        except ValueError:
+            ver_parts.append((spart,))
+        else:
+            ver_parts.append((ipart, spart))
+
+    return tuple(ver_parts)
 
 
 def validateNick(nick):
@@ -353,3 +374,5 @@ class Ad(object):
             return struct.pack('!BBBBH', *addr)
         except (struct.error, TypeError, IndexError):
             return None
+
+

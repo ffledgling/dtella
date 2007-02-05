@@ -461,6 +461,7 @@ class IRCServer(LineOnlyReceiver):
 
         # Update IRC topic
         c.topic = topic
+        c.topic_whoset = dnick
         self.pushTopic(dc_to_irc(dnick), topic)
 
         # Broadcast change
@@ -472,9 +473,9 @@ class IRCServer(LineOnlyReceiver):
 
 
     def event_AddNick(self, nick, n):
-        nick = dc_to_irc(nick)
+        inick = dc_to_irc(nick)
         host = Ad().setRawIPPort(n.ipp).getTextIP()
-        self.pushFullJoin(nick, "dtnode", host)
+        self.pushFullJoin(inick, "dtnode", host)
 
 
     def event_RemoveNick(self, nick, reason):

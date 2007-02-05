@@ -1,6 +1,7 @@
 import dtella_local
 import dtella_crypto
-from dtella_util import Ad
+import dtella_core
+from dtella_util import Ad, cmpify_version, word_wrap
 
 from twisted.python.runtime import seconds
 
@@ -21,7 +22,7 @@ class DNSHandler(object):
         self.lastUpdate = seconds() - DNS_STALE_TIME - 1
 
         self.minshare = 1
-        self.version = ''
+        self.version = None
         self.pkhashes = set()
         
         dns_servers = list(dtella_local.dns_servers)
@@ -37,6 +38,8 @@ class DNSHandler(object):
         # last hour.
 
         if seconds() - self.lastUpdate < DNS_STALE_TIME:
+            if self.versionBelowMinimum():
+                self.main.addBlocker('old_version')
             return
 
         self.main.showLoginStatus(
@@ -52,8 +55,12 @@ class DNSHandler(object):
 
         def err(text):
             self.main.showLoginStatus(
-                "DNS query failed!  "
-                "Trying to continue, but this may cause further problems.")
+                "DNS query failed!  Trying to proceed without it...")
+
+            # Pull out cached copy of the public key(s)
+            if not self.pkhashes and self.main.state.pkhashes:
+                self.pkhashes = set(self.main.state.pkhashes)
+            
             self.main.removeBlocker('dns')
 
         d.addCallback(self.handleTXT)
@@ -63,6 +70,8 @@ class DNSHandler(object):
     def handleTXT(self, reply):
 
         # Clear out old values
+        self.minshare = 1
+        self.version = None
         self.pkhashes = set()
         
         for a in reply[0]:
@@ -82,6 +91,20 @@ class DNSHandler(object):
 
         self.lastUpdate = seconds()
 
+        # Update local cache of public keys
+        self.main.state.pkhashes = list(self.pkhashes)
+
+        # Check for minimum version
+        if self.versionBelowMinimum():
+            self.main.addBlocker('old_version')
+        else:
+            if 'old_version' in self.main.blockers:
+                self.main.removeBlocker('old_version')
+
+            # We know they have the minimum version, but
+            # now check if they have the *latest* version.
+            self.sendVersionMessage()
+
         self.main.removeBlocker('dns')
 
 
@@ -90,7 +113,12 @@ class DNSHandler(object):
 
 
     def handleTXT_version(self, value):
-        print "version is '%s'" % value
+        try:
+            min_v, new_v, url = value.split()
+        except ValueError:
+            return
+        else:
+            self.version = (min_v, new_v, url)
 
 
     def handleTXT_pkhash(self, value):
@@ -119,6 +147,54 @@ class DNSHandler(object):
         for ipp in ipps:
             ad = Ad().setRawIPPort(ipp)
             self.main.state.refreshPeer(ad, age)
+
+
+    def sendVersionMessage(self):
+
+        if not self.version:
+            return False
+
+        min_v, new_v, url = self.version
+        my_v = dtella_core.VERSION
+        my_vc = cmpify_version(my_v)
+        new_vc = cmpify_version(new_v)
+
+        if my_vc < new_vc:
+            if self.main.dch:
+                self.main.dch.bot.say(
+                    "Your version of Dtella (%s) is outdated.  Get "
+                    "version %s here:" % (my_v, new_v))
+                self.main.dch.bot.say(url)
+
+
+    def versionBelowMinimum(self):
+
+        if not self.version:
+            return False
+
+        min_v, new_v, url = self.version
+        my_v = dtella_core.VERSION
+        my_vc = cmpify_version(my_v)
+        min_vc = cmpify_version(min_v)
+
+        if my_vc < min_vc:
+            text = (
+                "Your version of Dtella (%s) is too old to be used on this "
+                "network.  Please upgrade to the latest version (%s).  "
+                "(If you *REALLY* want to try using your old version, type "
+                "!VERSION_OVERRIDE.)"
+                % (my_v, new_v)
+                )
+
+            for line in word_wrap(text):
+                self.main.showLoginStatus(line)
+
+            self.main.showLoginStatus(" ")
+            self.main.showLoginStatus("Download link: %s" % url)
+            return True
+
+        else:
+            return False
 
 
     def ipToHostname(self, ad, cb):

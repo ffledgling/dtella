@@ -1,4 +1,4 @@
-VERSION = "DEV"
+VERSION = "SVN"
 
 import fixtwistedtime
 
@@ -21,9 +21,11 @@ import dtella_crypto
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info)
 
-# TODO: minshare, minversion
+# TODO: minshare
 
 # TODO: strip linefeeds from topic, chat
+
+# TODO: make the info string contain version info for EVERY online node.
 
 # TODO: add GPL stuff to the source files
 
@@ -1300,8 +1302,7 @@ class InitialContactManager(DatagramProtocol):
         self.main = main
         self.done_callback = cb
 
-        self.main.showLoginStatus("Scanning For Online Nodes...",
-                                  counter=1)
+        self.main.showLoginStatus("Scanning For Online Nodes...", counter=1)
 
         # Listen on an arbitrary UDP port
         try:
@@ -1311,6 +1312,7 @@ class InitialContactManager(DatagramProtocol):
             # the alternate port.
             self.main.showLoginStatus("Failed to bind alt UDP port!")
             cb()
+            return
 
         self.peers = {}  # {IPPort -> PeerInfo object}
 
@@ -1883,8 +1885,7 @@ class SyncManager(object):
         self.stats_total = len(self.main.osm.nodes)
         self.stats_lastbar = -1
 
-        self.main.showLoginStatus("Network Sync In Progress...",
-                                  counter='inc')
+        self.main.showLoginStatus("Network Sync In Progress...", counter='inc')
 
         self.showProgress_dcall = None
         self.showProgress()
@@ -1921,8 +1922,8 @@ class SyncManager(object):
             self.stats_lastbar = bar
 
             progress = '>'*bar + '_'*(MAX-bar)
-            self.main.showLoginStatus("[%s] (%d/%d)" % (
-                progress, done, total))
+            self.main.showLoginStatus(
+                "[%s] (%d/%d)" % (progress, done, total))
 
         if self.stats_total == 0:
             bar = MAX
@@ -2165,12 +2166,12 @@ class OnlineStateManager(object):
 
 
         if self.nodes:
-            self.main.showLoginStatus("Joining The Network.",
-                                      counter='inc')
+            self.main.showLoginStatus(
+                "Joining The Network.", counter='inc')
             self.pgm.scheduleMakeNewLinks()
         else:
-            self.main.showLoginStatus("Creating a new empty network.",
-                                      counter='inc')
+            self.main.showLoginStatus(
+                "Creating a new empty network.", counter='inc')
             self.syncComplete()
 
 
@@ -2212,8 +2213,8 @@ class OnlineStateManager(object):
         if dch:
             dch.d_GetNickList()
 
-        self.main.showLoginStatus("Sync Complete; You're Online!",
-                                  counter='inc')
+        self.main.showLoginStatus(
+            "Sync Complete; You're Online!", counter='inc')
 
         if dch:
             dch.grabDtellaTopic()
@@ -3965,11 +3966,14 @@ class DtellaMain_Base(object):
                 reason = icm.getFailReason()
 
                 if reason == 'banned_ip':
-                    self.showLoginStatus("You seem to be banned.")
+                    self.showLoginStatus(
+                        "You seem to be banned.")
                     self.shutdown(reconnect='max')
 
                 elif reason == 'foreign_ip':
-                    self.showLoginStatus("Your IP address is not authorized to use this network.")
+                    self.showLoginStatus(
+                        "Your IP address is not authorized to use "
+                        "this network.")
                     self.shutdown(reconnect='max')
 
                 elif reason == 'dead_port':
@@ -3977,7 +3981,8 @@ class DtellaMain_Base(object):
                     self.shutdown(reconnect='max')
 
                 else:
-                    self.showLoginStatus("No online nodes found.")
+                    self.showLoginStatus(
+                        "No online nodes found.")
                     self.shutdown(reconnect='normal')
 
         self.ph.remap_ip = None

@@ -1269,7 +1269,16 @@ class DtellaBot(object):
             out("| %s <= %s" % (format(values[loc]), loc))
         out("|")
         out("\\_ Overall: %s _/" % format(overall))
-       
+
+
+    def handleCmd_VERSION_OVERRIDE(self, out, text, prefix):
+        if 'old_version' in self.main.blockers:
+            out("Overriding minimum version!  Don't be surprised "
+                "if something breaks.")
+            self.main.removeBlocker('old_version')
+        else:
+            out("%sVERSION_OVERRIDE not needed." % prefix)
+
 
     def handleCmd_DEBUG(self, out, text, prefix):
 
