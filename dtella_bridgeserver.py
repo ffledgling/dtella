@@ -1145,13 +1145,9 @@ class BridgeServerManager(object):
 
             self.addTopicChunk(chunks, c.topic_whoset, c.topic, changed=False)
 
-        else:
-            # Release control of the topic
-            self.addNoTopicChunk(chunks)
-
-        # Experimental ban
-        #self.addBanChunk(
-        #    chunks, Ad().setTextIP("128.10.0.0").getRawIP(), 16, True)
+        # Get bans list
+        for ip, mask in osm.bsm.bans:
+            self.addBanChunk(chunks, ip, mask, True)
 
         chunks = ''.join(chunks)
 
@@ -1254,15 +1250,21 @@ class BridgeServerManager(object):
         chunks.append(reason)
 
 
-    def addBanChunk(self, chunks, ip, subnet, enable):
+    def addBanChunk(self, chunks, ip, mask, enable):
 
-        assert 0 <= subnet <= 32
+        subnet = 0
+        b = ~0 << 31
+        while ((b & mask) == b) and (subnet < 32):
+            b >>= 1
+            subnet += 1
+
+        if subnet == 0 and mask != 0:
+            raise ValueError
 
         subnet |= (enable and 0x80)
 
         chunks.append('B')
-        chunks.append(struct.pack('!B', subnet))
-        chunks.append(ip)
+        chunks.append(struct.pack('!Bi', subnet, ip))
 
 
     def addChatChunk(self, chunks, nick, text, flags=0):
@@ -1290,10 +1292,6 @@ class BridgeServerManager(object):
         topic = topic[:255]
         chunks.append(struct.pack('!B', len(topic)))
         chunks.append(topic)
-
-
-    def addNoTopicChunk(self, chunks):
-        chunks.append('t')
 
 
     def addMessageChunk(self, chunks, nick, text, flags=0):

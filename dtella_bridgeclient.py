@@ -430,8 +430,8 @@ class BridgeNodeData(object):
     class Ban(object):
         def __init__(self, ipmask, enable, pktnum):
             self.ipmask = ipmask
-            self.pktnum = pktnum
             self.enable = enable
+            self.pktnum = pktnum
 
 
     def __init__(self, main, parent_n):
@@ -440,6 +440,8 @@ class BridgeNodeData(object):
         self.blocks = {}   # {hash: [None | data]}
         self.hashlist = []
         self.status_pktnum = None
+
+        self.topic_flag = False
 
         self.last_assembled_pktnum = None
         self.nicks = {} # {nick: NickNode()}
@@ -549,6 +551,8 @@ class BridgeNodeData(object):
 
     def assembleBlocks(self):
 
+        osm = self.main.osm
+
         # DEBUG
         i=0
         for bk in self.blocks.itervalues():
@@ -563,6 +567,9 @@ class BridgeNodeData(object):
 
         self.hashlist = []
         self.blocks = {}
+
+        # This will be toggled back to True if the topic is set
+        self.topic_flag = False
 
         try:
             self.processChunks(data, self.status_pktnum)
@@ -581,13 +588,16 @@ class BridgeNodeData(object):
         # Report all the nicks that we deleted
         dead_nicks.sort()
         for n in dead_nicks:
-            osm = self.main.osm
             osm.nkm.removeNode(n)
 
         # Remove any bans which aren't mentioned in this update
         for b in self.bans.values():
             if b.pktnum < self.status_pktnum:
                 del self.bans[b.ipmask]
+
+        # If not topic was set, release control of it
+        if not self.topic_flag:
+            osm.tm.checkLeavingNode(self.parent_n)
 
         self.last_assembled_pktnum = self.status_pktnum
 
@@ -801,11 +811,7 @@ class BridgeNodeData(object):
                     osm.tm.updateTopic(
                         self.parent_n, nick, topic, changed)
 
-            elif data[ptr] == 't':
-                ptr += 1
-
-                # Release control of the topic
-                osm.tm.checkLeavingNode(self.parent_n)
+                    self.topic_flag = True
 
             else:
                 raise ChunkError("Unknown Chunk '%s'" % data[ptr])
@@ -888,14 +894,14 @@ class BridgeNodeData(object):
             n.mode = mode
 
 
-    def updateBan(self, ipmask, pktnum, enable):
+    def updateBan(self, ipmask, enable, pktnum):
 
         osm = self.main.osm
 
         try:
             b = self.bans[ipmask]
         except KeyError:
-            b = self.bans[ipmask] = self.Ban(ipmask, pktnum, enable)
+            b = self.bans[ipmask] = self.Ban(ipmask, enable, pktnum)
 
             if enable:
                 osm.banm.enforceNewBan(ipmask)
