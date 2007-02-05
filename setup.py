@@ -1,9 +1,27 @@
 from distutils.core import setup
-import py2exe
-setup(
-    options={"py2exe":{"optimize":2}},
-    zipfile=None,
+import sys
 
+if sys.platform == 'darwin':
+    import py2app
+else:
+    import py2exe
+
+setup(
+    options={
+        "py2exe":{
+            "optimize":2
+        },
+        
+        "py2app":{
+            "argv_emulation":True,
+            "iconfile": "dtella.icns",
+            "plist":{'LSBackgroundOnly':True}
+        }
+    },
+
+    app=["dtella.py"],
+
+    zipfile=None,
     windows=[{
         "script": "dtella.py",
         "icon_resources": [(1, "dtella.ico")]
@@ -14,4 +32,3 @@ setup(
     #    "icon_resources": [(1, "dtella.ico")]
     #}]
 )
-
