@@ -37,14 +37,15 @@ SetCompressor lzma
 !define MUI_ICON "${NSISDIR}\Contrib\Graphics\Icons\modern-install.ico"
 !define MUI_UNICON "${NSISDIR}\Contrib\Graphics\Icons\modern-uninstall.ico"
 
+!define MUI_COMPONENTSPAGE_SMALLDESC
+!define MUI_FINISHPAGE_RUN "$INSTDIR\dtella.exe"
+!define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\readme.txt"
+
 ; Installer Pages
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
-
-!define MUI_FINISHPAGE_RUN "$INSTDIR\dtella.exe"
-!define MUI_FINISHPAGE_SHOWREADME "$INSTDIR\readme.txt"
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller pages
@@ -70,7 +71,7 @@ Section -Pre
   ExecWait '"$INSTDIR\dtella.exe" --terminate'
 SectionEnd
 
-Section "Dtella Executable"
+Section "!Dtella (Required)" Section_EXE
   SectionIn 1 RO
   SetOutPath "$INSTDIR"
   File "dtella.exe"
@@ -81,7 +82,7 @@ Section "Dtella Executable"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk" "$INSTDIR\dtella.exe" "--terminate"
 SectionEnd
 
-Section /o "Source Code"
+Section /o "Source Code" Section_SOURCE
   SetOutPath "$INSTDIR"
   File "dtella-purdue-${PRODUCT_VERSION}.tar.bz2"
 SectionEnd
@@ -100,6 +101,15 @@ Section -Post
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
   WriteRegStr ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
 SectionEnd
+
+; Section Descriptions
+!insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${Section_EXE} "The main Dtella program."
+  !insertmacro MUI_DESCRIPTION_TEXT ${Section_Source} "If you don't know what this is for, then you don't need it."
+!insertmacro MUI_FUNCTION_DESCRIPTION_END
+
+
+; Uninstaller Stuff
 
 Function un.onInit
   MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to completely remove $(^Name) and all of its components?" IDYES +2
