@@ -1,7 +1,7 @@
 import dtella_local
 import dtella_crypto
 import dtella_core
-from dtella_util import Ad, cmpify_version, word_wrap
+from dtella_util import Ad, cmpify_version, word_wrap, parse_bytes
 
 from twisted.python.runtime import seconds
 
@@ -109,7 +109,10 @@ class DNSHandler(object):
 
 
     def handleTXT_minshare(self, value):
-        print "minshare is '%s'" % value
+        try:
+            self.minshare = parse_bytes(value)
+        except ValueError:
+            self.minshare = 1
 
 
     def handleTXT_version(self, value):

@@ -202,6 +202,19 @@ def format_bytes(n):
         return "%d %s" % (n, suffix[i])
 
 
+def parse_bytes(s):
+    # Might raise ValueError
+    
+    mult = 1
+    if s:
+        i = 'KMGT'.find(s[-1].upper())
+        if i > -1:
+            s = s[:-1]
+            mult = 1024 ** (i+1)
+
+    return int(float(s) * mult)
+
+
 def word_wrap(line, max_len=80):
 
     lines = []

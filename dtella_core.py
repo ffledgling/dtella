@@ -477,6 +477,50 @@ class PeerHandler(DatagramProtocol):
         self.main.state.refreshPeer(src_ad, 0)
 
 
+    def handlePrivMsg(self, ad, data, cb):
+        # Common code for handling private messages (PM, CA, CP)
+
+        (kind, src_ipp, ack_key, src_nhash, dst_nhash, rest
+         ) = self.decodePacket('!2s6s8s4s4s+', data)
+
+        ack_flags = 0
+
+        try:
+            # Make src_ipp agrees with the sender's IP
+            self.checkSource(src_ipp, ad)
+            
+            # Make sure we're ready to receive it
+            dch = self.main.getOnlineDCH()
+            if not dch:
+                raise Reject
+
+            osm = self.main.osm
+
+            try:
+                n = osm.lookup_ipp[src_ipp]
+            except KeyError:
+                raise Reject("Unknown node")
+
+            if not n.expire_dcall:
+                raise Reject("Not online")
+            
+            if src_nhash != n.nickHash():
+                raise Reject("Source nickhash mismatch")
+            
+            if dst_nhash != osm.me.nickHash():
+                raise Reject("Dest nickhash mismatch")
+
+            if n.pokePMKey(ack_key):
+                # Haven't seen this message before, so handle it
+                cb(dch, n, rest)
+
+        except (BadPacketError, BadTimingError, Reject):
+            ack_flags |= ACK_REJECT_BIT
+
+        # Send acknowledgement
+        self.sendAckPacket(src_ipp, ACK_PRIVATE, ack_flags, ack_key)
+
+
     def sendAckPacket(self, ipp, mode, flags, ack_key):
         packet = ['AK']
         packet.append(self.main.osm.me.ipp)
@@ -1097,57 +1141,53 @@ class PeerHandler(DatagramProtocol):
     def handlePacket_CA(self, ad, data):
         # Direct: ConnectToMe
 
-        (kind, src_ipp, ack_key, src_nhash, dst_nhash, port
-         ) = self.decodePacket('!2s6s8s4s4sH', data)
+        def cb(dch, n, rest):
+            port, = self.decodePacket('!H', rest)
 
-        osm = self.main.osm
-        if not (osm and osm.syncd):
-            raise BadTimingError("Not ready for CA")
+            if port == 0:
+                raise BadPacketError("Zero port")
 
-        self.checkSource(src_ipp, ad)
+            ad = Ad().setRawIPPort(n.ipp)
+            ad.port = port
 
-        osm.pmm.receivedMessage(kind, src_ipp, ack_key,
-                                src_nhash, dst_nhash, port)
+            dch.pushConnectToMe(ad)
+
+        self.handlePrivMsg(ad, data, cb)
 
 
     def handlePacket_CP(self, ad, data):
         # Direct: RevConnectToMe
 
-        (kind, src_ipp, ack_key, src_nhash, dst_nhash
-         ) = self.decodePacket('!2s6s8s4s4s', data)
+        def cb(dch, n, rest):
+            if rest:
+                raise BadPacketError("Extra data")
 
-        osm = self.main.osm
-        if not (osm and osm.syncd):
-            raise BadTimingError("Not ready for CP")
+            dch.pushRevConnectToMe(n.nick)
 
-        self.checkSource(src_ipp, ad)
-
-        osm.pmm.receivedMessage(kind, src_ipp, ack_key,
-                                src_nhash, dst_nhash)
+        self.handlePrivMsg(ad, data, cb)
 
 
     def handlePacket_PM(self, ad, data):
         # Direct: Private Message
 
-        (kind, src_ipp, ack_key, src_nhash, dst_nhash, flags, rest
-         ) = self.decodePacket('!2s6s8s4s4sB+', data)
+        def cb(dch, n, rest):
 
-        osm = self.main.osm
-        if not (osm and osm.syncd):
-            raise BadTimingError("Not ready for PM")
+            flags, rest = self.decodePacket('!B+', rest)
+            
+            text, rest = self.decodeString2(rest)
+            
+            if rest:
+                raise BadPacketError("Extra data")
 
-        self.checkSource(src_ipp, ad)
+            notice = bool(flags & NOTICE_BIT)
 
-        text, rest = self.decodeString2(rest)
+            if notice:
+                nick = "*N %s" % n.nick
+                dch.pushChatMessage(nick, text)
+            else:
+                dch.pushPrivMsg(n.nick, text)
 
-        if rest:
-            raise BadPacketError("Extra data")
-
-        notice = bool(flags & NOTICE_BIT)
-
-        osm.pmm.receivedMessage(kind, src_ipp, ack_key,
-                                src_nhash, dst_nhash, notice, text)
-
+        self.handlePrivMsg(ad, data, cb)
 
 
     def handlePacket_PG(self, ad, data):
@@ -2146,7 +2186,6 @@ class OnlineStateManager(object):
         # Init all these when sync is established:
         self.yqrm = None        # SyncRequestRoutingManager
         self.cms = None         # ChatMessageSequencer
-        self.pmm = None         # PrivateMessageManager
         
         self.sendStatus_dcall = None
 
@@ -2201,7 +2240,6 @@ class OnlineStateManager(object):
         # Get ready to handle Sync requests from other nodes
         self.yqrm = SyncRequestRoutingManager(self.main)
         self.cms = ChatMessageSequencer(self.main)
-        self.pmm = PrivateMessageManager(self.main)
         self.syncd = True
 
         if self.bsm:
@@ -3617,91 +3655,6 @@ class ChatMessageSequencer(object):
         for c in self.info.values():
             for d in c.dcalls.values():
                 d.cancel()
-
-
-##############################################################################
-
-
-class PrivateMessageManager(object):
-    # Handles incoming private messages and connection requests
-
-    def __init__(self, main):
-        self.main = main
-
-
-    def receivedMessage(self, kind, src_ipp, ack_key,
-                        src_nhash, dst_nhash, *args):
-
-        osm = self.main.osm
-
-        ack_flags = 0
-
-        try:
-            # Make sure we're ready to receive it
-            if not self.main.getOnlineDCH():
-                raise Reject
-
-            try:
-                n = osm.lookup_ipp[src_ipp]
-            except KeyError:
-                # Never heard of this node
-                raise Reject
-
-            if not n.expire_dcall:
-                # Node isn't online
-                raise Reject
-            
-            if src_nhash != n.nickHash():
-                # Source nickhash mismatch
-                raise Reject
-            
-            if dst_nhash != osm.me.nickHash():
-                # Dest nickhash mismatch
-                raise Reject
-
-            if n.pokePMKey(ack_key):
-                # Haven't seen this message before, so handle it
-                f = getattr(self, 'handleMessage_%s' % kind)
-                f(n, *args)
-
-        except Reject:
-            ack_flags |= ACK_REJECT_BIT
-
-        self.main.ph.sendAckPacket(src_ipp, ACK_PRIVATE, ack_flags, ack_key)
-
-
-    def handleMessage_PM(self, n, notice, text):
-        # Send private message to the DC client
-        
-        dch = self.main.getOnlineDCH()
-
-        if notice:
-            nick = "*N %s" % n.nick
-            dch.pushChatMessage(nick, text)
-        else:
-            dch.pushPrivMsg(n.nick, text)
-
-
-    def handleMessage_CA(self, n, port):
-        # Send a $ConnectToMe to the DC client
-        
-        dch = self.main.getOnlineDCH()
-
-        if port == 0:
-            raise Reject
-
-        ad = Ad().setRawIPPort(n.ipp)
-        ad.port = port
-        
-        dch.pushConnectToMe(ad)
-    
-
-    def handleMessage_CP(self, n):
-        # Send a $RevConnectToMe to the DC client
-        
-        dch = self.main.getOnlineDCH()
-
-        dch.pushRevConnectToMe(n.nick)
 
 
 ##############################################################################
