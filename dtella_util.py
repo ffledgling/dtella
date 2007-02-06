@@ -146,7 +146,7 @@ def get_os():
 
 
 def get_version_string():
-    return "Dt:%s[%s]" % (dtella_local.version, get_os())
+    return "Dt:%s/%s" % (dtella_local.version, get_os())
 
 
 def remove_dc_escapes(text):
