@@ -1,5 +1,23 @@
-# Dtella site-specific configuration
-import re
+"""
+Dtella - Localization Module
+Copyright (C) 2007  Paul Marks (www.pmarks.net)
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+"""
+
+# These settings are specific to the Purdue network.
 
 version = "SVN"
 
@@ -16,9 +34,9 @@ def validateIP(ip):
     return ip[0] == 128 and ip[1] in (10,46,210,211)
 
 
-# Purude-specific location lookup stuff
 use_locations = True
 
+import re
 suffix_re = re.compile(r".*\.([^.]+)\.purdue\.edu")
 prefix_re = re.compile(r"^([a-z]{1,6}).*\.purdue\.edu")
 
