@@ -4,9 +4,9 @@ from twisted.internet import reactor
 from twisted.python.runtime import seconds
 import twisted.python.log
 
-from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
+from dtella_util import (Ad, validateNick, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard,
-                         format_bytes, dcall_timeleft)
+                         format_bytes, dcall_timeleft, get_version_string)
 import dtella_core
 import dtella_local
 import struct
@@ -170,6 +170,8 @@ class DCHandler(LineOnlyReceiver):
 
     def d_MyInfo(self, _1, _2, info):
 
+        info = info.replace('\r','').replace('\n','')
+
         if not self.nick:
             self.pushStatus("ERROR: Must send $ValidateNick before $MyInfo.")
             self.transport.loseConnection()
@@ -202,9 +204,6 @@ class DCHandler(LineOnlyReceiver):
         if not self.info:
             return ""
 
-        # Insert version and OS information into tag.
-        ver_string = "%s[%s]" % (dtella_core.VERSION, get_os())
-
         # Split info string
         try:
             info = split_info(self.info)
@@ -214,11 +213,14 @@ class DCHandler(LineOnlyReceiver):
         # Split description into description and <tag>
         desc, tag = split_tag(info[0])
 
+        # Get version string
+        ver_string = get_version_string()
+
         # Update tag
         if tag:
-            info[0] = "%s<%s,Dt:%s>" % (desc, tag, ver_string)
+            info[0] = "%s<%s,%s>" % (desc, tag, ver_string)
         else:
-            info[0] = "%s<Dt:%s>" % (desc, ver_string)
+            info[0] = "%s<%s>" % (desc, ver_string)
 
         if dtella_local.use_locations:
             # Try to get my location name.
@@ -802,6 +804,9 @@ class DtellaBot(object):
 
 
     def commandInput(self, out, line, prefix=''):
+
+        # Sanitize
+        line = line.replace('\r', ' ').replace('\n', ' ')
 
         cmd = line.upper().split()
 

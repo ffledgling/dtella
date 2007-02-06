@@ -1,5 +1,3 @@
-VERSION = "SVN"
-
 import fixtwistedtime
 
 import struct
@@ -19,13 +17,10 @@ from twisted.python.runtime import seconds
 import dtella_local
 import dtella_crypto
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
-                         validateNick, word_wrap, parse_incoming_info)
-
-# TODO: minshare
+                         validateNick, word_wrap, parse_incoming_info,
+                         get_version_string)
 
 # TODO: strip linefeeds from topic, chat
-
-# TODO: make the info string contain version info for EVERY online node.
 
 # TODO: add GPL stuff to the source files
 
@@ -2468,12 +2463,16 @@ class OnlineStateManager(object):
             if me.nick:
                 if not self.nkm.addNode(me):
                     info = ''
-                    me.setNickAndInfo('', info)
+                    me.setNickAndInfo('', '')
                     dch.nickCollision()
 
         else:
             self.nkm.updateNodeInfo(me, info)
-            
+
+        # Instead of sending empty info, include version string
+        if not info:
+            info = "<%s>" % get_version_string()
+
         me.info_out = info
 
         if send and self.syncd:
@@ -3817,8 +3816,8 @@ class TopicManager(object):
             if self.topic_node.bridge_data and (not n.bridge_data):
                 return False
 
-        # Keep the length sane
-        topic = topic[:255]
+        # Sanitize the topic
+        topic = topic[:255].replace('\r','').replace('\n','')
 
         # Get old topic
         old_topic = self.topic

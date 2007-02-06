@@ -348,7 +348,7 @@ def run():
     tcp_port = 7314
     dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
 
-    print "Dtella %s" % dtella_core.VERSION
+    print "Dtella %s" % dtella_local.version
 
     def cb(first):
         try:

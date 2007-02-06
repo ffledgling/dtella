@@ -1,6 +1,8 @@
 # Dtella site-specific configuration
 import re
 
+version = "SVN"
+
 network_key = 'PurdueDtella-10'
 
 hub_name = "Dtella@Purdue"

@@ -1,6 +1,5 @@
 import dtella_local
 import dtella_crypto
-import dtella_core
 from dtella_util import Ad, cmpify_version, word_wrap, parse_bytes
 
 from twisted.python.runtime import seconds
@@ -158,7 +157,7 @@ class DNSHandler(object):
             return False
 
         min_v, new_v, url = self.version
-        my_v = dtella_core.VERSION
+        my_v = dtella_local.version
         my_vc = cmpify_version(my_v)
         new_vc = cmpify_version(new_v)
 
@@ -176,7 +175,7 @@ class DNSHandler(object):
             return False
 
         min_v, new_v, url = self.version
-        my_v = dtella_core.VERSION
+        my_v = dtella_local.version
         my_vc = cmpify_version(my_v)
         min_vc = cmpify_version(min_v)
 
