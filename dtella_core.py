@@ -228,6 +228,7 @@ class PeerHandler(DatagramProtocol):
             self.main.logPacket(
                 "choke=%f" % (now - (self.choke_time+penalty)))
 
+        # Send the packet
         try:
             self.transport.write(data, addr)
         except socket.error:
@@ -486,7 +487,7 @@ class PeerHandler(DatagramProtocol):
         ack_flags = 0
 
         try:
-            # Make src_ipp agrees with the sender's IP
+            # Make sure src_ipp agrees with the sender's IP
             self.checkSource(src_ipp, ad)
             
             # Make sure we're ready to receive it
@@ -1162,6 +1163,7 @@ class PeerHandler(DatagramProtocol):
             if rest:
                 raise BadPacketError("Extra data")
 
+            n.openRevConnectWindow()
             dch.pushRevConnectToMe(n.nick)
 
         self.handlePrivMsg(ad, data, cb)
@@ -1649,6 +1651,9 @@ class Node(object):
     u_got_ack = False
     ping_nbs = None
 
+    # Remember when we receive a RevConnect
+    rcWindow_dcall = None
+
 
     def __init__(self, ipp):
         # Dtella Tracking stuff
@@ -1765,6 +1770,31 @@ class Node(object):
         self.msgkeys_out.clear()
 
 
+    def openRevConnectWindow(self):
+        # When get a RevConnect, create a 5-second window during
+        # which errors are suppressed for outgoing connects.
+
+        if self.rcWindow_dcall:
+            self.rcWindow_dcall.reset(5.0)
+            return
+
+        def cb():
+            del self.rcWindow_dcall
+
+        self.rcWindow_dcall = reactor.callLater(5.0, cb)
+
+
+    def checkRevConnectWindow(self):
+        # If the RevConnect window is open, close it and return True.
+
+        if self.rcWindow_dcall:
+            self.rcWindow_dcall.cancel()
+            del self.rcWindow_dcall
+            return True
+        else:
+            return False
+
+
     def sendPrivateMessage(self, ph, ack_key, packet, fail_cb):
         # Send an ACK-able direct message to this node
 
@@ -1869,6 +1899,7 @@ class Node(object):
 
     def shutdown(self):
         dcall_discard(self, 'expire_dcall')
+        dcall_discard(self, 'rcWindow_dcall')
         
         self.cancelPrivMsgs()
         

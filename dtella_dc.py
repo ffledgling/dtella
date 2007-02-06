@@ -2,6 +2,7 @@ from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet.protocol import ServerFactory, Protocol
 from twisted.internet import reactor
 from twisted.python.runtime import seconds
+import twisted.python.log
 
 from dtella_util import (Ad, validateNick, get_os, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard,
@@ -94,7 +95,10 @@ class DCHandler(LineOnlyReceiver):
             args = cmd[1].split(' ', nargs)
 
         if len(args) == nargs:
-            fn(*args)
+            try:
+                fn(*args)
+            except:
+                twisted.python.log.err()
 
 
     def addDispatch(self, command, nargs, fn):
@@ -313,8 +317,7 @@ class DCHandler(LineOnlyReceiver):
 
         def fail_cb(detail):
             self.pushStatus(
-                "Connect request to '%s' failed: %s"
-                % (nick, detail))
+                "*** Connect request to '%s' failed: %s" % (nick, detail))
 
         if not self.main.getOnlineDCH():
             fail_cb("You're not online.")
@@ -335,6 +338,15 @@ class DCHandler(LineOnlyReceiver):
                 fail_cb("User doesn't seem to exist.")
             return
 
+        if n.checkRevConnectWindow():
+            # If we're responding to a RevConnect, disable errors
+            def fail_cb(detail):
+                pass
+
+        elif self.belowMinShare():
+            # I'm a leech
+            return
+
         n.event_ConnectToMe(self.main, dc_ad.port, fail_cb)
 
 
@@ -344,8 +356,7 @@ class DCHandler(LineOnlyReceiver):
 
         def fail_cb(detail):
             self.pushStatus(
-                "Connect request to '%s' failed: %s"
-                % (nick, detail))
+                "*** Connect request to '%s' failed: %s" % (nick, detail))
 
         if not self.main.getOnlineDCH():
             fail_cb("You're not online.")
@@ -360,7 +371,27 @@ class DCHandler(LineOnlyReceiver):
                 fail_cb("User doesn't seem to exist.")
             return
 
+        if self.belowMinShare():
+            # I'm a leech
+            return
+
         n.event_RevConnectToMe(self.main, fail_cb)
+
+
+    def belowMinShare(self):
+        # If I don't meet the minimum share, yell and return True
+
+        osm = self.main.osm
+        minshare = self.main.dnsh.minshare
+
+        if osm.me.shared < minshare:
+            self.pushStatus(
+                "*** You must share at least %s in order to download!  "
+                "(You currently have %s)" %
+                (format_bytes(minshare), format_bytes(osm.me.shared)))
+            return True
+
+        return False
 
 
     def d_PublicMsg(self, text):
@@ -385,7 +416,7 @@ class DCHandler(LineOnlyReceiver):
                 return
 
         if not self.main.getOnlineDCH():
-            self.pushStatus("You must be online to chat!")
+            self.pushStatus("*** You must be online to chat!")
             return
 
         text = text.replace('\r\n','\n').replace('\r','\n')

@@ -232,7 +232,7 @@ class IRCServer(LineOnlyReceiver):
             n00b = args[0]
             reason = args[1]
             
-            self.data.gotKick(chan, l33t, n00b, reason)
+            #self.data.gotKick(chan, l33t, n00b, reason)
             self.data.gotQuit(n00b)
         
         elif command == "TOPIC":

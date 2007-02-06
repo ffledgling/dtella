@@ -422,6 +422,10 @@ class NickNode(object):
         fail_cb("This user has no files.")
 
 
+    def checkRevConnectWindow(self):
+        return False
+
+
 ##############################################################################
 
 

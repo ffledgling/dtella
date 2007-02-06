@@ -345,13 +345,6 @@ def run():
 
     twisted.python.log.startLoggingWithObserver(logObserver, setStdout=False)
 
-    #def kill():
-    #    print "20-sec timeout"
-    #    reactor.stop()
-    #reactor.callLater(20.0, kill)
-    #import profile
-    #profile.run('reactor.run()')
-
     tcp_port = 7314
     dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
 
