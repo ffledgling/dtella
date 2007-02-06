@@ -40,7 +40,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info,
                          get_version_string)
 
-# TODO: add GPL stuff to the source files
+
+# TODO: expandpath can leave ~ intact sometimes.  Write a workaround.
 
 
 # Miscellaneous Exceptions
