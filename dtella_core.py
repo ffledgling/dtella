@@ -1206,7 +1206,11 @@ class PeerHandler(DatagramProtocol):
             raise BadTimingError("Not ready to handle a sync request")
 
         self.checkSource(nb_ipp, ad)
-        
+
+        src_ad = Ad().setRawIPPort(src_ipp)
+        if not src_ad.auth_sb(self.main):
+            raise BadPacketError("Invalid source IP")
+
         timedout = bool(flags & TIMEDOUT_BIT)
         
         if not 0 <= hop <= 2:

@@ -546,8 +546,6 @@ chunks:
 2-byte infostrings length
 + '|'.join(info_strings)
 
-'t' - release topic
-
 'T' - topic
 1-byte flags:
     bit 0 = topic is being changed (not just a refresh)
