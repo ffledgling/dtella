@@ -2,8 +2,9 @@
 
 """
 Dtella - Bridge Server Module
-Copyright (C) 2007  Paul Marks (www.pmarks.net)
+Copyright (C) 2007  Paul Marks
 Copyright (C) 2007  Jacob Feisley
+http://www.dtella.org/
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License

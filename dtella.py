@@ -2,7 +2,8 @@
 
 """
 Dtella - Node Startup Module
-Copyright (C) 2007  Paul Marks (www.pmarks.net)
+Copyright (C) 2007  Paul Marks
+http://www.dtella.org/
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
