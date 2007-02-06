@@ -22,7 +22,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 version = "SVN"
 
-network_key = 'PurdueDtella-10'
+network_key = 'PurdueDtella-11'
 
 hub_name = "Dtella@Purdue"
 
