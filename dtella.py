@@ -25,6 +25,7 @@ import twisted.python.log
 from twisted.internet import reactor
 import sys
 import socket
+import time
 
 import dtella_state
 import dtella_dc
@@ -391,17 +392,27 @@ def run():
 def terminate():
     # Terminate another Dtella process on the local machine
 
+    print "Finding Port..."
     state = dtella_state.StateManager(None, STATE_FILE)
 
     if not state.udp_port:
+        print "Not Found."
         return
 
     try:
+        print "Sending Packet of Death..."
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
         sock.close()
     except socket.error:
         pass
+    else:
+        # Sleep for a few seconds, so an uninstaller won't get ahead
+        # of itself
+        print "Sleeping..."
+        time.sleep(2.0)
+
+    print "Done."
 
 
 if __name__=='__main__':
