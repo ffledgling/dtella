@@ -58,6 +58,6 @@ move %DTDIR%.exe %OUTDIR%
 move %DTDIR%.tar.* %OUTDIR%
 
 
-del *.dll
+del msvcr71.dll
 del readme.txt
 del dtella.exe

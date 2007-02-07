@@ -80,6 +80,7 @@ Section "!Dtella (Required)" Section_EXE
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Dtella (Run in Background).lnk" "$INSTDIR\dtella.exe"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk" "$INSTDIR\dtella.exe" "--terminate"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Readme.lnk" "$INSTDIR\readme.txt"
 SectionEnd
 
 Section /o "Source Code" Section_SOURCE
@@ -134,6 +135,7 @@ Section Uninstall
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Dtella (Run in Background).lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_NAME}\Readme.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
   
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
