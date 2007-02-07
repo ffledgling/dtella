@@ -1397,7 +1397,7 @@ class DtellaBot(object):
     def debug_nodes(self, out, sortkey):
 
         osm = self.main.osm
-        if not osm and osm.syncd:
+        if not (osm and osm.syncd):
             out("Not syncd")
             return
 

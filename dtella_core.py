@@ -43,6 +43,12 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: expandpath can leave ~ intact sometimes.  Write a workaround.
 
+# TODO: make an option to disable local search replies
+
+# TODO: show average ping times in !debug nbs
+
+# TODO: notify when somebody else gets banned
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
