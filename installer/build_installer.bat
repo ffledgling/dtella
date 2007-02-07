@@ -1,6 +1,7 @@
 set DTDIR="dtella-purdue-0.9"
 set ARC="C:\Program Files\7-Zip\7z.exe"
 set NSIS="C:\Program Files\NSIS\makensisw.exe"
+set OUTDIR="Output"
 
 
 REM ------- SOURCE CODE ---------
@@ -47,3 +48,16 @@ REM ------- INSTALLER -------
 %NSIS% dtella.nsi
 
 pause
+
+
+REM -----CLEAN UP OUTPUT------
+
+mkdir Output
+
+move %DTDIR%.exe %OUTDIR%
+move %DTDIR%.tar.* %OUTDIR%
+
+
+del *.dll
+del readme.txt
+del dtella.exe
