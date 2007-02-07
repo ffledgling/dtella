@@ -45,8 +45,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: make an option to disable local search replies
 
-# TODO: show average ping times in !debug nbs
-
 # TODO: notify when somebody else gets banned
 
 
@@ -1670,6 +1668,7 @@ class Node(object):
     got_ack = False
     u_got_ack = False
     ping_nbs = None
+    avg_ping = None
 
     # Remember when we receive a RevConnect
     rcWindow_dcall = None
@@ -2729,8 +2728,14 @@ class PingManager(object):
             except KeyError:
                 raise BadPacketError("PG: unknown ack")
             else:
-                self.main.logPacket("Ping: %f ms" %
-                                    ((seconds() - sendtime) * 1000.0))
+                # Keep track of ping delay
+                delay = seconds() - sendtime
+                self.main.logPacket("Ping: %f ms" % (delay * 1000.0))
+
+                if n.avg_ping is None:
+                    n.avg_ping = delay
+                else:
+                    n.avg_ping = 0.8 * n.avg_ping + 0.2 * delay
 
                 # If we just got the first ack, then send a ping now to
                 # send the GOTACK bit to neighbor
@@ -2869,6 +2874,7 @@ class PingManager(object):
             n.got_ack = False
             n.u_got_ack = False
             n.ping_nbs = None
+            n.avg_ping = None
 
 
     def cancelInactiveLink(self, n):
@@ -2885,6 +2891,7 @@ class PingManager(object):
         del n.got_ack
         del n.u_got_ack
         del n.ping_nbs
+        del n.avg_ping
 
 
     def instaKillNeighbor(self, n):

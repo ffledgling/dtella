@@ -1371,7 +1371,7 @@ class DtellaBot(object):
         if not osm:
             return
 
-        out("Neighbor Nodes: {direction, ipp, nick}")
+        out("Neighbor Nodes: {direction, ipp, ping, nick}")
 
         nbs = list(osm.pgm.inbound | osm.pgm.outbound)
 
@@ -1389,6 +1389,13 @@ class DtellaBot(object):
                 info.append("<--")
 
             info.append(binascii.hexlify(n.ipp).upper())
+
+            if n.avg_ping is not None:
+                delay = n.avg_ping * 1000.0
+            else:
+                delay = 0.0
+            info.append("%7.1fms" % delay)
+
             info.append("(%s)" % n.nick)
 
             out(' '.join(info))
