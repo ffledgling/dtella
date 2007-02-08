@@ -2365,10 +2365,9 @@ class OnlineStateManager(object):
             # Remove old nick, if it's in there
             self.nkm.removeNode(n, "Nick Cleared or Changed")
 
-            # Check new nick
-            reason = validateNick(nick)
-            if reason:
-                # Malformed or empty
+            # Run a sanity check on the new nick
+            if nick and validateNick(nick) != '':
+                # Malformed
                 n.setNoUser()
 
             else:
@@ -2376,7 +2375,7 @@ class OnlineStateManager(object):
                 n.nick = nick
                 n.setInfo(info)
 
-                # Try to add the new nick
+                # Try to add the new nick (no-op if the nick is empty)
                 try:
                     self.nkm.addNode(n)
                 except NickError:
