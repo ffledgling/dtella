@@ -221,20 +221,18 @@ class DCHandler(LineOnlyReceiver):
     def formatMyInfo(self):
         # Build and return a hacked-up version of my info string.
 
-        if not self.info:
-            return ""
+        # Get version string
+        ver_string = get_version_string()
 
         # Split info string
         try:
             info = split_info(self.info)
         except ValueError:
-            return ""
+            # No info.  Just use the offline version tag
+            return "<%s>" % ver_string
 
         # Split description into description and <tag>
         desc, tag = split_tag(info[0])
-
-        # Get version string
-        ver_string = get_version_string()
 
         # Update tag
         if tag:
