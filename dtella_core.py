@@ -45,12 +45,10 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: make an option to disable local search replies
 
-# TODO: notify when somebody else gets banned
+# TODO: notify when somebody else gets banned?
 
 # TODO: rewrite DCHandler stuff so that a DC client isn't really "online"
 #       until after the MyINFO + GetNickList
-
-# TODO: persistent mode ignores DNS query when removing the udp_port blocker
 
 
 # Miscellaneous Exceptions
@@ -3960,8 +3958,6 @@ class DtellaMain_Base(object):
        
         self.myip_reports = []
 
-        self.blockers = set()
-
         self.reconnect_dcall = None
 
         self.reconnect_interval = RECONNECT_RANGE[0]
@@ -4098,8 +4094,11 @@ class DtellaMain_Base(object):
     def shutdown(self, reconnect):
         # Do a total shutdown of this Dtella node
 
-        if self.icm or self.osm:
-            self.showLoginStatus("Shutting down.")
+        if not (self.icm or self.osm):
+            # Nothing to do.
+            return
+
+        self.showLoginStatus("Shutting down.")
 
         dcall_discard(self, 'reconnect_dcall')
 

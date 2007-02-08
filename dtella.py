@@ -54,6 +54,10 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.login_counter = 0
         self.login_text = ""
 
+        # Synchronization stuff
+        self.blockers = set()
+        self.changing_port = False
+
         # DC Handler(s)
         self.dch = None
         self.pending_dch = None
@@ -72,14 +76,8 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         # DNS Handler
         self.dnsh = dtella_dnslookup.DNSHandler(self)
 
+        # Hold off on binding the UDP port until we get the TCP port
         self.addBlocker('udp_bind')
-
-
-    def initComplete(self):
-        self.bindUDPPort()
-
-        if self.state.persistent:
-            self.newConnectionRequest()
 
 
     def connectionPermitted(self):
@@ -109,37 +107,44 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
 
     def removeBlocker(self, name):
-        # Remove a blocker, and start connecting if there are no more left.
+        # Remove a blocker
         self.blockers.remove(name)
-        self.startConnecting()
+
+        # Start connecting, if there's a reason to.
+        if self.connectionPermitted():
+            self.newConnectionRequest()
 
 
     def changeUDPPort(self, udp_port):
         # Shut down the node, and start up with a different UDP port
 
-        if 'udp_change' in self.blockers:
+        # Pseudo-mutex: can't change the port twice simultaneously
+        if self.changing_port:
             return False
 
-        self.addBlocker('udp_change')
+        self.changing_port = True
 
         self.state.udp_port = udp_port
         self.state.saveState()
 
         def cb(result):
             self.bindUDPPort()
-            self.removeBlocker('udp_change')
+            self.changing_port = False
 
-        if self.ph.transport:
-            self.ph.transport.stopListening().addCallback(cb)
-        else:
-            reactor.callLater(0, cb, None)
-
+        self.unbindUDPPort(cb)
         return True
 
 
     def bindUDPPort(self):
+
+        # This blocker should be set iff the udp port isn't bound already
+        if 'udp_bind' not in self.blockers:
+            return False
+
         try:
             reactor.listenUDP(self.state.udp_port, self.ph)
+            self.removeBlocker('udp_bind')
+
         except twisted.internet.error.BindError:
 
             self.showLoginStatus("*** FAILED TO BIND UDP PORT ***")
@@ -157,39 +162,38 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
             for line in word_wrap(text):
                 self.showLoginStatus(line)
-            
-            if 'udp_bind' not in self.blockers:
-                self.addBlocker('udp_bind')
+
+
+    def unbindUDPPort(self, cb):
+        # Release the UDP port, and call cb when done
+        
+        if 'udp_bind' in self.blockers:
+            # Not bound yet
+            reactor.callLater(0, cb, None)
+
         else:
-            if 'udp_bind' in self.blockers:
-                self.removeBlocker('udp_bind')
+            self.addBlocker('udp_bind')
+            self.ph.transport.stopListening().addCallback(cb)
             
 
     def newConnectionRequest(self):
         # This fires when the DC client connects and wants to be online
 
-        # return True if the old login status should be displayed
-
-        # Cancel the disconnect timeout
-        dcall_discard(self, 'disconnect_dcall')
-
         if self.icm or self.osm:
-            # Already in progress
-            return True
+            # Already in progress; return description.
+            return self.login_text
 
         self.login_text = ""
+
+        # If we don't have the UDP port, then try again now.
+        if self.bindUDPPort():
+            return
 
         # If an update is necessary, this will add a blocker
         self.dnsh.updateIfStale()
 
-        # If we don't have the UDP port, then try again now.
-        if 'udp_bind' in self.blockers:
-            self.bindUDPPort()
-            return False
-
         # Start connecting now if there are no blockers
         self.startConnecting()
-        return False
 
 
     def queryLocation(self, my_ipp):
@@ -301,11 +305,16 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
     def addDCHandler(self, dch):
         self.dch = dch
 
-        in_progress = self.newConnectionRequest()
+        # Cancel the disconnect timeout
+        dcall_discard(self, 'disconnect_dcall')
 
-        if in_progress:
-            dch.pushStatus(self.login_text)
+        # Start connecting, or get status of current connection
+        text = self.newConnectionRequest()
+        if text:
+            dch.pushStatus(text)
 
+        # If we're not hung up on anything, then notify the user
+        # about new versions.
         if not self.blockers:
             self.dnsh.sendVersionMessage()
 
@@ -384,7 +393,7 @@ def run():
                 reactor.stop()
         else:
             print "Listening on 127.0.0.1:%d" % tcp_port
-            dtMain.initComplete()
+            dtMain.bindUDPPort()
 
     cb(True)
     reactor.run()
@@ -398,7 +407,7 @@ def terminate():
 
     if not state.udp_port:
         print "Not Found."
-        return
+        return False
 
     try:
         print "Sending Packet of Death..."
@@ -406,19 +415,18 @@ def terminate():
         sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
         sock.close()
     except socket.error:
-        pass
-    else:
-        # Sleep for a few seconds, so an uninstaller won't get ahead
-        # of itself
-        print "Sleeping..."
-        time.sleep(2.0)
+        return False
 
-    print "Done."
+    return True
 
 
 if __name__=='__main__':
 
     if len(sys.argv) == 2 and sys.argv[1] == "--terminate":
-        terminate()
+        if terminate():
+            # Give the other process time to exit first
+            print "Sleeping..."
+            time.sleep(2.0)
+        print "Done."
     else:
         run()
