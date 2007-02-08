@@ -20,7 +20,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from twisted.internet import reactor
 
-from dtella_core import BadTimingError, BadPacketError, BadBroadcast, Reject
+from dtella_core import (BadTimingError, BadPacketError, BadBroadcast,
+                         Reject, NickError)
 import dtella_core
 
 from dtella_util import RandSet, Ad, dcall_discard, parse_incoming_info
@@ -884,7 +885,9 @@ class BridgeNodeData(object):
                 self.parent_n, nick, info, mode, pktnum)
 
             if mode != 0xFF:
-                if not osm.nkm.addNode(n):
+                try:
+                    osm.nkm.addNode(n)
+                except NickError:
                     # Collision of some sort
                     n.mode = 0xFF
         else:
@@ -907,7 +910,9 @@ class BridgeNodeData(object):
                 else:
                     # Dead nick coming back online
                     n.setInfo(info)
-                    if not osm.nkm.addNode(n):
+                    try:
+                        osm.nkm.addNode(n)
+                    except NickError:
                         # Collision of some sort
                         mode = 0xFF
 
@@ -1000,13 +1005,20 @@ class BridgeNodeData(object):
         else:
             # Display text even for outdated messages, because the
             # Updated status message from the kicked node is racing
-            # against the kick packet.
-            if dch:
+            # against the kick packet.  Also, if n00b is empty, then
+            # treat it as a silent kick.
+            if dch and n00b:
                 dch.pushStatus("%s has kicked %s: %s" % (l33t, n00b, reason))
 
             if not outdated:
                 # Drop this node from the nick list (if it's there)
                 osm.nkm.removeNode(n)
+
+                # If it's a real node, then strip its nick
+                if n.is_peer:
+                    n.nick = ''
+
+                # Wipe info
                 n.setInfo('')
 
                 # The next valid broadcast should have pktnum+1

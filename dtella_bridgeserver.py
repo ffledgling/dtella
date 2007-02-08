@@ -42,11 +42,15 @@ import dtella_crypto
 import dtella_local
 
 from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
-from dtella_core import Reject, BadPacketError, BadTimingError
+from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 
 
 import dtella_bridge_config as cfg
 
+irc_nick_chars = (
+    "-0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
+    "abcdefghijklmnopqrstuvwxyz{|}")
 
 escape_chars = """!"#%&'()*+,./:;=?@`~"""
 base36_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -83,8 +87,9 @@ def base_convert(chars, from_digits, to_digits, min_len=1):
 def dc_to_irc(dnick):
     # Encode a DC nick, for use in IRC.
 
-    if validateNick(dnick):
-        raise ValueError
+    reason = validateNick(dnick)
+    if reason:
+        raise NickError("Bad Dtella Nick: %s" % reason)
 
     escapes = ''
     inick = cfg.dc_to_irc_prefix
@@ -99,8 +104,9 @@ def dc_to_irc(dnick):
     if escapes:
         inick += '-' + base_convert(escapes, escape_chars, base36_chars)
 
-    # TODO: Check length?
-    
+    if len(inick) > cfg.max_irc_nick_len:
+        raise NickError("Your nick is too long.")
+
     return inick
 
 
@@ -109,7 +115,7 @@ def dc_from_irc(inick):
 
     # Verify prefix
     if len(inick) <= 1 or inick[0] != cfg.dc_to_irc_prefix:
-        raise ValueError
+        raise NickError("Bad prefix")
 
     dnick = inick[1:]
 
@@ -123,7 +129,7 @@ def dc_from_irc(inick):
         escapes = base_convert(tail, base36_chars, escape_chars, n_escapes)
 
         if len(escapes) != n_escapes:
-            raise ValueError
+            raise NickError("Unknown escape sequence")
 
         dnick = ''
         n_escapes = 0
@@ -146,11 +152,15 @@ def irc_to_dc(inick):
 def irc_from_dc(dnick):
     # Decode a Dtella-encoded IRC nick, for use in IRC.
     if len(dnick) <= 1 or dnick[0] != cfg.irc_to_dc_prefix:
-        raise ValueError
+        raise NickError("Bad prefix")
 
-    # TODO: Verify that IRC nick contains only sane characters
+    inick = dnick[1:].replace('!','|')
 
-    return dnick[1:].replace('!','|')
+    for c in inick:
+        if c not in irc_nick_chars:
+            raise NickError("Invalid character: %s" % c)
+
+    return inick
 
 
 class IRCBadMessage(Exception):
@@ -345,7 +355,7 @@ class IRCServer(LineOnlyReceiver):
                     try:
                         nick = dc_from_irc(target)
                         n = osm.nkm.lookupNick(nick)
-                    except (ValueError, KeyError):
+                    except (NickError, KeyError):
                         return
 
                     chunks = []
@@ -372,7 +382,7 @@ class IRCServer(LineOnlyReceiver):
                     try:
                         nick = dc_from_irc(target)
                         n = osm.nkm.lookupNick(nick)
-                    except (ValueError, KeyError):
+                    except (NickError, KeyError):
                         return
 
                     chunks = []
@@ -406,13 +416,29 @@ class IRCServer(LineOnlyReceiver):
 
         print "Sending Dtella state to IRC..."
 
-        nicks = [(n.nick, n.ipp) for n in osm.nkm.nickmap.values()]
-        nicks.sort()
+        nicks = osm.nkm.nickmap.values()
+        nicks.sort(key=lambda n: n.nick)
 
-        for nick,ipp in nicks:
-            nick = dc_to_irc(nick)
-            host = Ad().setRawIPPort(ipp).getTextIP()
-            self.pushFullJoin(nick, "dtnode", host)
+        for n in nicks:
+            try:
+                inick = dc_to_irc(n.nick)
+
+            except NickError, e:
+                # Bad nick.  KICK!
+                osm = self.main.osm
+                chunks = []
+                osm.bsm.addKickChunk(
+                    chunks, n, cfg.irc_to_dc_bot, str(e), rejoin=False)
+                osm.bsm.sendBridgeChange(chunks)
+
+                # Remove from Dtella nick list
+                osm.nkm.removeNode(n)
+                n.setNickAndInfo('', '')
+
+            else:
+                # Ok, send to IRC
+                host = Ad().setRawIPPort(n.ipp).getTextIP()
+                self.pushFullJoin(inick, "dtnode", host)
                 
 
     def pushFullJoin(self, nick, user, host, name="Dtella Peer"):
@@ -482,7 +508,10 @@ class IRCServer(LineOnlyReceiver):
         # Update IRC topic
         c.topic = topic
         c.topic_whoset = dnick
-        self.pushTopic(dc_to_irc(dnick), topic)
+        try:
+            self.pushTopic(dc_to_irc(dnick), topic)
+        except NickError:
+            return False
 
         # Broadcast change
         chunks = []
@@ -493,13 +522,28 @@ class IRCServer(LineOnlyReceiver):
 
 
     def event_AddNick(self, nick, n):
-        inick = dc_to_irc(nick)
+        try:
+            inick = dc_to_irc(nick)
+
+        except NickError, e:
+            # Bad nick.  KICK!
+            osm = self.main.osm
+            chunks = []
+            osm.bsm.addKickChunk(
+                chunks, n, cfg.irc_to_dc_bot, str(e), rejoin=False)
+            osm.bsm.sendBridgeChange(chunks)
+            raise
+
         host = Ad().setRawIPPort(n.ipp).getTextIP()
         self.pushFullJoin(inick, "dtnode", host)
 
 
     def event_RemoveNick(self, nick, reason):
-        inick = dc_to_irc(nick)
+        try:
+            inick = dc_to_irc(nick)
+        except NickError:
+            return
+
         self.pushQuit(inick, reason)
 
 
@@ -508,7 +552,10 @@ class IRCServer(LineOnlyReceiver):
 
 
     def event_ChatMessage(self, nick, text, flags):
-        inick = dc_to_irc(nick)
+        try:
+            inick = dc_to_irc(nick)
+        except NickError:
+            return
 
         if flags & dtella_core.NOTICE_BIT:
             self.pushNotice(inick, text)
@@ -642,7 +689,7 @@ class IRCServerData(object):
                 try:
                     nick = dc_from_irc(n00b)
                     n = osm.nkm.lookupNick(nick)
-                except (ValueError, KeyError):
+                except (NickError, KeyError):
                     # IRC nick
                     chunks = []
                     osm.bsm.addChatChunk(
@@ -832,8 +879,10 @@ class IRCServerData(object):
     def gotTopic(self, chan, whoset, topic):
 
         try:
+            # DC nick
             whoset = dc_from_irc(whoset)
-        except ValueError:
+        except NickError:
+            # IRC nick
             whoset = irc_to_dc(whoset)
         
         c = self.getChan(chan)
@@ -1193,9 +1242,8 @@ class BridgeServerManager(object):
 
     def sendBridgeChange(self, chunks):
         osm = self.main.osm
-        ircs = self.main.ircs
 
-        assert (osm and osm.syncd and ircs and ircs.syncd)
+        assert (osm and osm.syncd)
 
         packet = osm.mrm.broadcastHeader('BC', osm.me.ipp)
         packet.append(self.nextPktNum())
@@ -1212,10 +1260,9 @@ class BridgeServerManager(object):
     def sendPrivateBridgeChange(self, n, chunks):
 
         osm = self.main.osm
-        ircs = self.main.ircs
         ph = self.main.ph
 
-        assert (osm and osm.syncd and ircs and ircs.syncd)
+        assert (osm and osm.syncd)
 
         chunks = ''.join(chunks)
 
@@ -1249,7 +1296,8 @@ class BridgeServerManager(object):
         chunks.append(infos)
 
 
-    def addKickChunk(self, chunks, n, l33t, reason, rejoin=True):
+    def addKickChunk(self, chunks, n, l33t, reason,
+                     rejoin=True, silent=False):
 
         # Pick a packet number that's a little bit ahead of what the node
         # is using, so that any status messages sent out by the node at
@@ -1264,8 +1312,14 @@ class BridgeServerManager(object):
         chunks.append(struct.pack("!IB", n.status_pktnum, flags))
         chunks.append(struct.pack("!B", len(l33t)))
         chunks.append(l33t)
-        chunks.append(struct.pack("!B", len(n.nick)))
-        chunks.append(n.nick)
+
+        if silent:
+            n00b = ''
+        else:
+            n00b = n.nick
+        
+        chunks.append(struct.pack("!B", len(n00b)))
+        chunks.append(n00b)
         chunks.append(struct.pack("!H", len(reason)))
         chunks.append(reason)
 
@@ -1369,15 +1423,19 @@ class BridgeServerManager(object):
                 # Haven't seen this message before, so handle it
 
                 try:
+                    src_nick = dc_to_irc(n.nick)
+                except NickError:
+                    raise Reject("Invalid src nick")
+
+                try:
                     dst_nick = irc_from_dc(dst_nick)
-                except ValueError:
+                except NickError:
                     raise Reject("Invalid dest nick")
                 
                 if dst_nick not in ircs.data.ulist:
                     raise Reject("Dest not on IRC")
 
-                ircs.sendLine(":%s PRIVMSG %s :%s" %
-                              (dc_to_irc(n.nick), dst_nick, text))
+                ircs.pushPrivMsg(src_nick, text, dst_nick)
 
         except Reject:
             ack_flags |= dtella_core.ACK_REJECT_BIT

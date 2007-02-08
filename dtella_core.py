@@ -47,6 +47,9 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: notify when somebody else gets banned
 
+# TODO: rewrite DCHandler stuff so that a DC client isn't really "online"
+#       until after the MyINFO + GetNickList
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -59,6 +62,9 @@ class BadBroadcast(Exception):
     pass
 
 class Reject(Exception):
+    pass
+
+class NickError(Exception):
     pass
 
 
@@ -104,7 +110,7 @@ ACK_BROADCAST = 2
 # Bridge topic change
 CHANGE_BIT = 0x1
 
-# Bridge Kick autorejoin bit
+# Bridge Kick flags
 REJOIN_BIT = 0x1
 
 # Init response codes
@@ -149,18 +155,19 @@ class NickManager(object):
     def addNode(self, n):
 
         assert n.nick
-        
-        if n.nick.lower() in self.nickmap:
-            return False
 
-        self.nickmap[n.nick.lower()] = n
+        lnick = n.nick.lower()
+        
+        if lnick in self.nickmap:
+            raise NickError("collision")
 
         so = self.main.getStateObserver()
         if so:
+            # Might raise NickError
             so.event_AddNick(n.nick, n)
             so.event_UpdateInfo(n.nick, n.dcinfo)
 
-        return True
+        self.nickmap[lnick] = n
 
 
     def updateNodeInfo(self, n, info):
@@ -2355,7 +2362,9 @@ class OnlineStateManager(object):
                 n.setNickAndInfo(nick, info)
 
                 if n.nick:
-                    if not self.nkm.addNode(n):
+                    try:
+                        self.nkm.addNode(n)
+                    except NickError:
                         n.setNickAndInfo('', '')
         else:
             self.nkm.updateNodeInfo(n, info)
@@ -2485,7 +2494,9 @@ class OnlineStateManager(object):
             me.setNickAndInfo(nick, info)
 
             if me.nick:
-                if not self.nkm.addNode(me):
+                try:
+                    self.nkm.addNode(me)
+                except NickError:
                     info = ''
                     me.setNickAndInfo('', '')
                     dch.nickCollision()
