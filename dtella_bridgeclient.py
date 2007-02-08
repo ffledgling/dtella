@@ -1110,6 +1110,7 @@ class BridgeClientManager(object):
             
             if self.expire_dcall:
                 self.expire_dcall.reset(15.0)
+                return
 
             def cb(blocks, key):
                 del blocks[key]

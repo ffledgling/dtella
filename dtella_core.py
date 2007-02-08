@@ -50,6 +50,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 # TODO: rewrite DCHandler stuff so that a DC client isn't really "online"
 #       until after the MyINFO + GetNickList
 
+# TODO: !version command
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):

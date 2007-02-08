@@ -17,6 +17,9 @@ virtual_nicks = []
 dc_to_irc_prefix = '}'
 irc_to_dc_prefix = '~'
 
+# Maximum IRC nick length
+max_irc_nick_len = 30
+
 # Dtella stuff
 udp_port = 41236
 ip_cache = ['1.2.3.4:41234']
