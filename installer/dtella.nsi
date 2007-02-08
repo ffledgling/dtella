@@ -77,10 +77,12 @@ Section "!Dtella (Required)" Section_EXE
   File "dtella.exe"
   File "msvcr71.dll"
   File "readme.txt"
+  File "changelog.txt"
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Dtella (Run in Background).lnk" "$INSTDIR\dtella.exe"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk" "$INSTDIR\dtella.exe" "--terminate"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Readme.lnk" "$INSTDIR\readme.txt"
+  CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk" "$INSTDIR\changelog.txt"
 SectionEnd
 
 Section /o "Source Code" Section_SOURCE
@@ -124,6 +126,7 @@ Section Uninstall
 
   Delete "$INSTDIR\uninst.exe"
   Delete "$INSTDIR\readme.txt"
+  Delete "$INSTDIR\changelog.txt"
   Delete "$INSTDIR\msvcr71.dll"
   Delete "$INSTDIR\dtella.exe"
   Delete "$INSTDIR\dtella-purdue-*.tar.bz2"
@@ -136,6 +139,7 @@ Section Uninstall
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Dtella (Run in Background).lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Readme.lnk"
+  Delete "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
   
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"

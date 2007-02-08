@@ -23,6 +23,7 @@ copy ..\dtella_local.py          %DTDIR%
 copy ..\dtella_state.py          %DTDIR%
 copy ..\dtella_util.py           %DTDIR%
 copy ..\docs\readme.txt          %DTDIR%
+copy ..\docs\changelog.txt       %DTDIR%
 copy ..\docs\gpl.txt             %DTDIR%
 
 %ARC% a -ttar %DTDIR%.tar %DTDIR%
@@ -41,6 +42,7 @@ popd
 REM ------- DOCS ------------
 
 copy ..\docs\readme.txt .
+copy ..\docs\changelog.txt .
 
 
 REM ------- INSTALLER -------
@@ -60,4 +62,5 @@ move %DTDIR%.tar.* %OUTDIR%
 
 del msvcr71.dll
 del readme.txt
+del changelog.txt
 del dtella.exe
