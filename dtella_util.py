@@ -166,6 +166,31 @@ def split_info(info):
     raise ValueError
 
 
+def parse_dtella_tag(info):
+
+    # Break up info string
+    try:
+        info = split_info(info)
+
+    except ValueError:
+        # This could be an 'offline info'.
+        if (info[:4], info[-1:]) != ('<Dt:','>'):
+            return info[1:-1]
+
+    else:
+        # Properly formatted; extract tag
+        desc, tag = split_tag(info[0])
+        if tag:
+            try:
+                pos = tag.rindex("Dt:")
+                return tag[pos:-1]
+            except ValueError:
+                pass
+
+    # Couldn't find dtella tag
+    return ""
+
+
 def parse_incoming_info(info):
     # Pull the location and share size out of an info string
     # Returns dcinfo, version, location, shared

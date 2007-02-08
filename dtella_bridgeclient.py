@@ -412,6 +412,10 @@ class NickNode(object):
         return (self.dcinfo != old_dcinfo)
 
 
+    def setNoUser(self):
+        self.setInfo('')
+
+
     def event_PrivateMessage(self, main, text, fail_cb):
         osm = main.osm
 
@@ -905,7 +909,7 @@ class BridgeNodeData(object):
 
                 if n.mode != 0xFF:
                     # Change mode of existing nick
-                    osm.nkm.updateNodeInfo(n, info)
+                    osm.nkm.setInfoInList(n, info)
                     
                 else:
                     # Dead nick coming back online
@@ -1013,13 +1017,7 @@ class BridgeNodeData(object):
             if not outdated:
                 # Drop this node from the nick list (if it's there)
                 osm.nkm.removeNode(n)
-
-                # If it's a real node, then strip its nick
-                if n.is_peer:
-                    n.nick = ''
-
-                # Wipe info
-                n.setInfo('')
+                n.setNoUser()
 
                 # The next valid broadcast should have pktnum+1
                 n.status_pktnum = pktnum
@@ -1047,7 +1045,7 @@ class BridgeNodeData(object):
             except IndexError:
                 info = ''
 
-            osm.nkm.updateNodeInfo(n, info)
+            osm.nkm.setInfoInList(n, info)
 
 
     def myNodeExited(self):

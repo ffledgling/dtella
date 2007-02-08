@@ -38,7 +38,7 @@ import dtella_local
 import dtella_crypto
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info,
-                         get_version_string)
+                         get_version_string, parse_dtella_tag)
 
 
 # TODO: expandpath can leave ~ intact sometimes.  Write a workaround.
@@ -49,6 +49,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: rewrite DCHandler stuff so that a DC client isn't really "online"
 #       until after the MyINFO + GetNickList
+
+# TODO: persistent mode ignores DNS query when removing the udp_port blocker
 
 
 # Miscellaneous Exceptions
@@ -154,7 +156,8 @@ class NickManager(object):
 
     def addNode(self, n):
 
-        assert n.nick
+        if not n.nick:
+            return
 
         lnick = n.nick.lower()
         
@@ -170,9 +173,10 @@ class NickManager(object):
         self.nickmap[lnick] = n
 
 
-    def updateNodeInfo(self, n, info):
+    def setInfoInList(self, n, info):
+        # Set the info of the node, and synchronize the info with
+        # an observer if it changes.
 
-        # Keep the same nick, but try setting info
         if not n.setInfo(info):
             # dcinfo hasn't changed, so there's nothing to send
             return
@@ -1776,11 +1780,13 @@ class Node(object):
         return self.dcinfo != old_dcinfo
 
 
-    def setNickAndInfo(self, nick, info):
-        # Utility function to set nick and info at the same time.
-        self.nick = nick
-
-        return self.setInfo(info)
+    def setNoUser(self):
+        # Wipe out the nick, and set info to contain only a Dt tag.
+        self.nick = ''
+        if self.dttag:
+            self.setInfo("<%s>" % self.dttag)
+        else:
+            self.setInfo("")
 
 
     def cancelPrivMsgs(self):
@@ -2346,28 +2352,35 @@ class OnlineStateManager(object):
         n.uptime = uptime
         n.persist = persist
 
-        # If there's no nick, then don't bother with info either
-        if not nick:
-            info = ''
+        # Save version info
+        n.dttag = parse_dtella_tag(info)
 
-        if nick != n.nick:
-            if n.nick:
-                self.nkm.removeNode(n, "Status Changed")
-                n.setNickAndInfo('', '')
+        if nick == n.nick:
+            # Nick hasn't changed, just update info
+            self.nkm.setInfoInList(n, info)
 
+        else:
+            # Nick has changed.
+
+            # Remove old nick, if it's in there
+            self.nkm.removeNode(n, "Nick Cleared or Changed")
+
+            # Check new nick
             reason = validateNick(nick)
             if reason:
-                n.setNickAndInfo('', '')
-            else:
-                n.setNickAndInfo(nick, info)
+                # Malformed or empty
+                n.setNoUser()
 
-                if n.nick:
-                    try:
-                        self.nkm.addNode(n)
-                    except NickError:
-                        n.setNickAndInfo('', '')
-        else:
-            self.nkm.updateNodeInfo(n, info)
+            else:
+                # Good nick, update the info
+                n.nick = nick
+                n.setInfo(info)
+
+                # Try to add the new nick
+                try:
+                    self.nkm.addNode(n)
+                except NickError:
+                    n.setNoUser()
 
         # If n isn't in nodes list, then add it
         if not n.inlist:
@@ -2414,7 +2427,8 @@ class OnlineStateManager(object):
 
         # Remove from the nick mapping
         self.nkm.removeNode(n, reason)
-        n.setNickAndInfo('', '')
+        n.dttag = ""
+        n.setNoUser()
 
         # Cancel any privmsg timeouts
         n.cancelPrivMsgs()
@@ -2472,45 +2486,45 @@ class OnlineStateManager(object):
         
         dch = self.main.getOnlineDCH()
 
-        if dch:
-            info = dch.formatMyInfo()
-            nick = dch.nick
-        else:
-            info = ''
-            nick = ''
-
-        persist = self.main.state.persistent
         me = self.me
 
-        send = (send or (me.nick, me.info_out, me.persist)
-                != (nick, info, persist))
+        old_state = (me.nick, me.info_out, me.persist)
 
-        me.persist = persist
+        me.persist = self.main.state.persistent
+        me.dttag = get_version_string()
 
-        if me.nick != nick:
-            if me.nick:
-                self.nkm.removeNode(me)
+        if dch:
+            me.info_out = dch.formatMyInfo()
+            nick = dch.nick
+        else:
+            me.info_out = "<%s>" % me.dttag
+            nick = ''
 
-            me.setNickAndInfo(nick, info)
-
-            if me.nick:
-                try:
-                    self.nkm.addNode(me)
-                except NickError:
-                    info = ''
-                    me.setNickAndInfo('', '')
-                    dch.nickCollision()
+        if me.nick == nick:
+            # Nick hasn't changed, just update info
+            self.nkm.setInfoInList(me, me.info_out)
 
         else:
-            self.nkm.updateNodeInfo(me, info)
+            # Nick has changed
 
-        # Instead of sending empty info, include version string
-        if not info:
-            info = "<%s>" % get_version_string()
+            # Remove old node, if I'm in there
+            self.nkm.removeNode(me)
 
-        me.info_out = info
+            # Set new info
+            me.nick = nick
+            me.setInfo(me.info_out)
 
-        if send and self.syncd:
+            # Add it back in, (no-op if my nick is empty)
+            try:
+                self.nkm.addNode(me)
+            except NickError:
+                me.info_out = "<%s>" % me.dttag
+                me.setNoUser()
+                dch.nickCollision()
+
+        changed = (old_state != (me.nick, me.info_out, me.persist))
+
+        if (send or changed) and self.syncd:
             self.sendMyStatus()
 
 
@@ -3961,7 +3975,6 @@ class DtellaMain_Base(object):
 
         # Pakcet Encoder
         self.pk_enc = dtella_crypto.PacketEncoder(dtella_local.network_key)
-
 
         # Register a function that runs before shutting down
         reactor.addSystemEventTrigger('before', 'shutdown',

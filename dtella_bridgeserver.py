@@ -433,7 +433,7 @@ class IRCServer(LineOnlyReceiver):
 
                 # Remove from Dtella nick list
                 osm.nkm.removeNode(n)
-                n.setNickAndInfo('', '')
+                n.setNoUser()
 
             else:
                 # Ok, send to IRC
@@ -710,7 +710,7 @@ class IRCServerData(object):
 
                     # Forget this nick
                     osm.nkm.removeNode(n)
-                    n.setNickAndInfo('', '')
+                    n.setNoUser()
 
         try:
             u = self.ulist[n00b]
