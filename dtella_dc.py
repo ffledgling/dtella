@@ -275,9 +275,12 @@ class DCHandler(LineOnlyReceiver):
 
         self.state = 'ready'
         self.main.addDCHandler(self)
-        self.main.osm.updateMyInfo()
-        self.d_GetNickList()
-        self.grabDtellaTopic()
+
+        # If Dtella's online too, then sync both ways
+        if self.isOnline():
+            self.main.osm.updateMyInfo()
+            self.d_GetNickList()
+            self.grabDtellaTopic()
 
 
     def formatMyInfo(self):
