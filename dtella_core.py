@@ -47,9 +47,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: notify when somebody else gets banned?
 
-# TODO: rewrite DCHandler stuff so that a DC client isn't really "online"
-#       until after the MyINFO + GetNickList
-
 # TODO: !version command
 
 
@@ -1951,10 +1948,10 @@ class MeNode(Node):
             fail_cb("I'm not online!")
 
     def event_ConnectToMe(self, main, port, fail_cb):
-        fail_cb("Connecting to yourself!")
+        fail_cb("can't connect to yourself!")
 
     def event_RevConnectToMe(self, main, fail_cb):
-        fail_cb("Connecting to yourself!")
+        fail_cb("can't connect to yourself!")
 
 
 

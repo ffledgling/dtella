@@ -289,13 +289,12 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
     def getOnlineDCH(self):
         # Return DCH, iff it's fully online.
 
-        if not (self.osm and self.osm.syncd):
-            return None
-        
-        if self.dch and self.dch.state=='ready':
-            return self.dch
+        dch = self.dch
 
-        return None
+        if dch and dch.isOnline():
+            return dch
+        else:
+            return None
 
 
     def getStateObserver(self):
@@ -319,10 +318,16 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self.dnsh.sendVersionMessage()
 
 
-    def removeDCHandler(self):
+    def removeDCHandler(self, dch):
         # DC client has left.
-        
-        self.dch = None
+
+        if self.pending_dch is dch:
+            self.pending_dch = None
+            return
+        elif self.dch is not dch:
+            return
+
+        self.dch = None 
 
         if self.osm:
             # Announce the DC client's departure
@@ -334,7 +339,8 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
         # If another handler is waiting, let it on.
         if self.pending_dch:
-            self.pending_dch.accept()
+            self.pending_dch.attachMeToDtella()
+            self.pending_dch = None
             return
 
         # Maybe skip the disconnect
