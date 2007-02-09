@@ -41,13 +41,7 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: make an option to disable local search replies
-
-# TODO: notify when somebody else gets banned?
-
-# TODO: !version command
-
-# TODO: !terminate command
+# TODO: find out what's wrong with Blueldr137??
 
 
 # Miscellaneous Exceptions

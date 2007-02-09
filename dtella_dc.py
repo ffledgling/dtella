@@ -356,8 +356,10 @@ class DCHandler(LineOnlyReceiver):
         packet.append(search_string)
         
         osm.mrm.newMessage(''.join(packet), tries=4)
-        
-        self.pushSearchRequest(osm.me.ipp, search_string)
+
+        # If local searching is enabled, send the search to myself
+        if self.main.state.localsearch:
+            self.pushSearchRequest(osm.me.ipp, search_string)
 
 
     def d_PrivateMsg(self, nick, _1, _2, _3, text):
@@ -677,7 +679,7 @@ class DCHandler(LineOnlyReceiver):
         nick = m.group(1)
         data = m.group(2)
 
-        # TODO: maybe make this replacement optional?
+        # If I get results from myself, map them to the bot's nick
         if nick == self.nick:
             nick = self.bot.nick
 
@@ -892,15 +894,19 @@ class DtellaBot(object):
 
     
     minihelp = [
-        ("--",         "CONTROLS"),
+        ("--",         "ACTIONS"),
         ("REJOIN",     "Hop back online after a kick or collision"),
-        ("TOPIC",      "View or change the global topic"),
-        ("SUFFIX",     "View or change the your location suffix"),
-        ("UDP",        "Change Dtella's peer communication port"),
         ("ADDPEER",    "Add the address of another node to your cache"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
+        ("TERMINATE",  "Completely kill your current Dtella process."),
+        ("--",         "SETTINGS"),
+        ("TOPIC",      "View or change the global topic"),
+        ("SUFFIX",     "View or change your location suffix"),
+        ("UDP",        "Change Dtella's peer communication port"),
+        ("LOCALSEARCH","View or toggle local search results."),
         ("PERSISTENT", "View or toggle persistent mode"),
-        ("--",         "STATISTICS"),
+        ("--",         "INFORMATION"),
+        ("VERSION",    "View information about your Dtella version."),
         ("USERS",      "Show how many users exist at each location"),
         ("SHARED",     "Show how many bytes are shared at each location"),
         ("DENSE",      "Show the bytes/user density for each location"),
@@ -937,6 +943,28 @@ class DtellaBot(object):
             "If you provide no arguments, this will display the "
             "current suffix.  To clear the suffix, just follow the command "
             "with a single space."
+            ),
+
+        "TERMINATE":(
+            "",
+            "This will completely kill your current Dtella node.  If you "
+            "want to rejoin the network afterward, you'll have to go "
+            "start up the Dtella program again."
+            ),
+
+        "VERSION":(
+            "",
+            "This will display your current Dtella version number.  If "
+            "available, it will also display the minimum required version, "
+            "the newest available version, and a download link."
+            ),
+
+        "LOCALSEARCH":(
+            "<ON | OFF>",
+            "If local searching is enabled, then when you search, you will "
+            "see search results from the *Dtella user, which are actually "
+            "hosted on your computer.  Use this command without any arguments "
+            "to see whether local searching is currently enabled or not."
             ),
 
         "USERS":(
@@ -1139,6 +1167,30 @@ class DtellaBot(object):
         self.syntaxHelp(out, 'PERSISTENT', prefix)
 
 
+    def handleCmd_LOCALSEARCH(self, out, args, prefix):
+        if len(args) == 0:
+            if self.main.state.localsearch:
+                out("Local searching is currently ON.")
+            else:
+                out("Local searching is currently OFF.")
+            return
+
+        if len(args) == 1:
+            if args[0] == 'ON':
+                out("Set local searching to ON.")
+                self.main.state.localsearch = True
+                self.main.state.saveState()
+                return
+
+            elif args[0] == 'OFF':
+                out("Set local searching to OFF.")
+                self.main.state.localsearch = False
+                self.main.state.saveState()
+                return
+
+        self.syntaxHelp(out, 'LOCALSEARCH', prefix)
+        
+
     def handleCmd_REJOIN(self, out, args, prefix):
 
         if len(args) == 0:
@@ -1331,6 +1383,29 @@ class DtellaBot(object):
             out("| %s <= %s" % (format(values[loc]), loc))
         out("|")
         out("\\_ Overall: %s _/" % format(overall))
+
+
+    def handleCmd_VERSION(self, out, args, prefix):
+        if len(args) == 0:
+            out("You have Dtella version %s." % dtella_local.version)
+
+            if self.main.dnsh.version:
+                min_v, new_v, url = self.main.dnsh.version
+                out("The minimum required version is %s." % min_v)
+                out("The latest posted version is %s." % new_v)
+                out("Download Link: %s" % url)
+
+            return
+
+        self.syntaxHelp(out, 'VERSION', prefix)
+
+
+    def handleCmd_TERMINATE(self, out, args, prefix):
+        if len(args) == 0:
+            reactor.stop()
+            return
+
+        self.syntaxHelp(out, 'TERMINATE', prefix)
 
 
     def handleCmd_VERSION_OVERRIDE(self, out, text, prefix):

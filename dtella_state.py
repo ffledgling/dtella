@@ -90,6 +90,13 @@ class StateManager(object):
         except (KeyError, struct.error):
             self.persistent = False
 
+
+        # Get LocalSearch flag
+        try:
+            self.localsearch = bool(*struct.unpack('!B', d['localsearch']))
+        except (KeyError, struct.error):
+            self.localsearch = True
+            
         # Get IP cache
         try:
             ipcache = d['ipcache']
@@ -157,6 +164,8 @@ class StateManager(object):
             d['udp_port'] = struct.pack('!H', self.udp_port)
 
             d['persistent'] = struct.pack('!B', self.persistent)
+
+            d['localsearch'] = struct.pack('!B', self.localsearch)
 
             peerdata = [struct.pack('!6sI', ipp, int(when))
                         for when, ipp in self.getYoungestPeers(128)]
