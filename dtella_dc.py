@@ -97,12 +97,12 @@ class DCHandler(LineOnlyReceiver):
 
 
     def sendLine(self, line):
-        print "<:", line
+        #print "<:", line
         LineOnlyReceiver.sendLine(self, line.replace('|','&#124;'))
 
 
     def lineReceived(self, line):
-        print ">:", line
+        #print ">:", line
         cmd = line.split(' ', 1)
 
         # Do a dict lookup to find the parameters for this command
