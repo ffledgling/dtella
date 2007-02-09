@@ -644,6 +644,8 @@ class DCHandler(LineOnlyReceiver):
         # 2. User types !REJOIN
         # 3. DC client reconnects (creates a new DCHandler)
 
+        assert self.state == 'ready'
+
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()
 

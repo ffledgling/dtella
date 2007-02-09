@@ -195,222 +195,244 @@ class IRCServer(LineOnlyReceiver):
 
     def lineReceived(self, line):
 
-        
-        # TOPIC #dtella darkhorse 1161628983 :Dtella :: Development Stage
-        # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
-
-        osm = self.main.osm
-        
-        prefix, command, args = self.parsemsg(line)
-
-        # TOOD: eventually convert this if-chain into a series of functions
+        if not line:
+            return
 
         if self.showirc:
-            pass
-            #print ">:", repr(prefix), repr(command), repr(args)
             print ">:", line
 
-        if command == "PING":
-            print "PING? PONG!"
-            if len(args) == 1:
-                self.sendLine("PONG %s :%s" % (cfg.my_host, args[0]))
-            elif len(args) == 2:
-                self.sendLine("PONG %s :%s" % (args[1], args[0]))
-
-        elif command == "PONG":
-            if self.ping_waiting:
-                self.ping_waiting = False
-                self.schedulePing()
-
-        elif command == "NICK":
-
-            if args[0][:1] == cfg.irc_to_dc_prefix:
-                self.sendLine(
-                    ":%s KILL %s :%s (nick reserved for Dtella)"
-                    % (cfg.my_host, args[0], cfg.my_host))
+        if line[0] == ':':
+            try:
+                prefix, line = line[1:].split(' ', 1)
+            except ValueError:
                 return
-                
-            if prefix:
-                self.data.changeNick(prefix, args[0])
-            else:
-                self.data.addNick(args[0])
-
-        elif command == "JOIN":
-            chans = args[0].split(',')
-            self.data.gotJoin(prefix, chans)
-
-        elif command == "PART":
-            chans = args[0].split(',')
-            self.data.gotPart(prefix, chans)
-
-        elif command == "QUIT":
-            self.data.gotQuit(prefix)
-
-        elif command == "KICK":
-            chan = args[0]
-            l33t = prefix
-            n00b = args[1]
-            reason = args[2]
-            
-            self.data.gotKick(chan, l33t, n00b, reason)
-
-        elif command == "KILL":
-            # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
-            # TODO: 'chan' should be removed, since KILL is global.
-            chan = cfg.irc_chan
-            l33t = prefix
-            n00b = args[0]
-            reason = args[1]
-            
-            #self.data.gotKick(chan, l33t, n00b, reason)
-            self.data.gotQuit(n00b)
-        
-        elif command == "TOPIC":
-            # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
-            chan = args[0]
-            whoset = args[1]
-            text = args[-1]
-            self.data.gotTopic(chan, whoset, text)
-
-        elif command == "MODE":
-            # :Paul MODE #dtella +vv aaahhh Big_Guy
-            whoset = prefix
-            chan = args[0]
-            change = args[1]
-            nicks = args[2:]
-            if chan[:1] == '#':
-                self.data.gotChanModes(whoset, chan, change, nicks)
-
-        elif command == "SERVER":
-            # If we receive this, our password was accepted, so broadcast
-            # the Dtella state information if it's available and we haven't
-            # sent it already.
-
-            if not self.readytosend:
-                self.readytosend = True
-
-                # Tell the ReconnectingClientFactory that we're cool
-                self.factory.resetDelay()
-
-                # Set up nick reservation
-                self.sendLine(
-                    ":%s TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
-                    (cfg.my_host, cfg.dc_to_irc_prefix,
-                     cfg.my_host, time.time()))
-
-                # Send my own bridge nick
-                self.pushFullJoin(
-                    cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
-
-                # Give it ops
-                self.sendLine(
-                    ":%s MODE %s +a %s" %
-                    (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
-
-                # Maybe send Dtella nicks
-                if self.main.osm and self.main.osm.syncd:
-                    self.sendState()
-
-                # Tell the server we're done
-                self.sendLine(":%s EOS" % cfg.my_host)
-
-        elif command == "EOS" and prefix == cfg.irc_server:
-            print "SYNCD!!!!"
-
-            self.showirc = True
-
-            # If we enter the syncd state, send status to Dtella, if Dtella
-            # is ready.  Otherwise, Dtella will send its own state when it
-            # becomes ready.
-
-            if not self.syncd:
-                self.syncd = True
-                
-                osm = self.main.osm
-                if osm and osm.syncd:
-                    osm.bsm.sendState()
-
-                self.schedulePing()
-
-
-        elif command == "PRIVMSG":
-            osm = self.main.osm
-            if (self.syncd and osm and osm.syncd):
-
-                target = args[0]
-                text = args[1]
-                flags = 0
-                
-                if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
-                    text = text[8:-1]
-                    flags |= dtella_core.SLASHME_BIT
-
-                if target == cfg.irc_chan:
-                    chunks = []
-                    osm.bsm.addChatChunk(
-                        chunks, irc_to_dc(prefix), text, flags)
-                    osm.bsm.sendBridgeChange(chunks)
-
-                else:
-                    try:
-                        nick = dc_from_irc(target)
-                        n = osm.nkm.lookupNick(nick)
-                    except (NickError, KeyError):
-                        return
-
-                    chunks = []
-                    osm.bsm.addMessageChunk(
-                        chunks, irc_to_dc(prefix), text, flags)
-                    osm.bsm.sendPrivateBridgeChange(n, chunks)
-
-
-        elif command == "NOTICE":
-            osm = self.main.osm
-            if (self.syncd and osm and osm.syncd):
-
-                target = args[0]
-                text = args[1]
-                flags = dtella_core.NOTICE_BIT
-
-                if target == cfg.irc_chan:
-                    chunks = []
-                    osm.bsm.addChatChunk(
-                        chunks, irc_to_dc(prefix), text, flags)
-                    osm.bsm.sendBridgeChange(chunks)
-
-                else:
-                    try:
-                        nick = dc_from_irc(target)
-                        n = osm.nkm.lookupNick(nick)
-                    except (NickError, KeyError):
-                        return
-
-                    chunks = []
-                    osm.bsm.addMessageChunk(
-                        chunks, irc_to_dc(prefix), text, flags)
-                    osm.bsm.sendPrivateBridgeChange(n, chunks)
-                
-
-    def parsemsg(self, s):
-        #this breaks up messages received from the other server into their three components:
-        # prefix, command, and args
-        prefix = ''
-        trailing = []
-        if not s:
-            raise IRCBadMessage("Empty line.")
-        if s[0] == ':':
-            prefix, s = s[1:].split(' ', 1)
-        if s.find(' :') != -1:
-            s, trailing = s.split(' :', 1)
-            args = s.split()
-            args.append(trailing)
         else:
-            args = s.split()
-        command = args.pop(0)
-        return prefix, command, args
+            prefix = ''
 
+        try:
+            line, trailing = line.split(' :', 1)
+        except ValueError:
+            args = line.split()
+        else:
+            args = line.split()
+            args.append(trailing)
+
+        try:
+            f = getattr(self, 'handleCmd_%s' % args[0].upper())
+        except AttributeError:
+            print "unhandled: %s" % args[0]
+        else:
+            f(prefix, args[1:])
+
+
+    def handleCmd_PING(self, prefix, args):
+        print "PING? PONG!"
+        if len(args) == 1:
+            self.sendLine("PONG %s :%s" % (cfg.my_host, args[0]))
+        elif len(args) == 2:
+            self.sendLine("PONG %s :%s" % (args[1], args[0]))
+
+
+    def handleCmd_PONG(self, prefix, args):
+        if self.ping_waiting:
+            self.ping_waiting = False
+            self.schedulePing()
+
+
+    def handleCmd_NICK(self, prefix, args):
+        if args[0][:1] == cfg.irc_to_dc_prefix:
+            self.sendLine(
+                ":%s KILL %s :%s (nick reserved for Dtella)"
+                % (cfg.my_host, args[0], cfg.my_host))
+            return
+            
+        if prefix:
+            self.data.changeNick(prefix, args[0])
+        else:
+            self.data.addNick(args[0])
+
+
+    def handleCmd_JOIN(self, prefix, args):
+        chans = args[0].split(',')
+        self.data.gotJoin(prefix, chans)
+
+
+    def handleCmd_PART(self, prefix, args):
+
+        chans = args[0].split(',')
+        self.data.gotPart(prefix, chans)
+
+
+    def handleCmd_QUIT(self, prefix, args):
+        self.data.gotQuit(prefix)
+
+
+    def handleCmd_KICK(self, prefix, args):
+
+        chan = args[0]
+        l33t = prefix
+        n00b = args[1]
+        reason = args[2]
+        
+        self.data.gotKick(chan, l33t, n00b, reason)
+
+
+    def handleCmd_KILL(self, prefix, args):
+
+        # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
+        # TODO: 'chan' should be removed, since KILL is global.
+        chan = cfg.irc_chan
+        l33t = prefix
+        n00b = args[0]
+        reason = args[1]
+        
+        #self.data.gotKick(chan, l33t, n00b, reason)
+        self.data.gotQuit(n00b)
+
+
+    def handleCmd_TOPIC(self, prefix, args):
+        
+        # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
+        chan = args[0]
+        whoset = args[1]
+        text = args[-1]
+        self.data.gotTopic(chan, whoset, text)
+
+
+    def handleCmd_MODE(self, prefix, args):
+
+        # :Paul MODE #dtella +vv aaahhh Big_Guy
+        whoset = prefix
+        chan = args[0]
+        change = args[1]
+        nicks = args[2:]
+        if chan[:1] == '#':
+            self.data.gotChanModes(whoset, chan, change, nicks)
+
+
+    def handleCmd_SERVER(self, prefix, args):
+
+        # If we receive this, our password was accepted, so broadcast
+        # the Dtella state information if it's available and we haven't
+        # sent it already.
+
+        osm = self.main.osm
+
+        if not self.readytosend:
+            self.readytosend = True
+
+            # Tell the ReconnectingClientFactory that we're cool
+            self.factory.resetDelay()
+
+            # Set up nick reservation
+            self.sendLine(
+                ":%s TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
+                (cfg.my_host, cfg.dc_to_irc_prefix,
+                 cfg.my_host, time.time()))
+
+            # Send my own bridge nick
+            self.pushFullJoin(
+                cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
+
+            # Give it ops
+            self.sendLine(
+                ":%s MODE %s +a %s" %
+                (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
+
+            # Maybe send Dtella nicks
+            if osm and osm.syncd:
+                self.sendState()
+
+            # Tell the server we're done
+            self.sendLine(":%s EOS" % cfg.my_host)
+
+    def handleCmd_EOS(self, prefix, args):
+
+        if prefix != cfg.irc_server:
+            return
+
+        print "SYNCD!!!!"
+
+        self.showirc = True
+
+        osm = self.main.osm
+
+        # If we enter the syncd state, send status to Dtella, if Dtella
+        # is ready.  Otherwise, Dtella will send its own state when it
+        # becomes ready.
+
+        if not self.syncd:
+            self.syncd = True
+            
+            if osm and osm.syncd:
+                osm.bsm.sendState()
+
+            self.schedulePing()
+
+    def handleCmd_PRIVMSG(self, prefix, args):
+
+        osm = self.main.osm
+
+        if (self.syncd and osm and osm.syncd):
+
+            target = args[0]
+            text = args[1]
+            flags = 0
+            
+            if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
+                text = text[8:-1]
+                flags |= dtella_core.SLASHME_BIT
+
+            if target == cfg.irc_chan:
+                chunks = []
+                osm.bsm.addChatChunk(
+                    chunks, irc_to_dc(prefix), text, flags)
+                osm.bsm.sendBridgeChange(chunks)
+
+            else:
+                try:
+                    nick = dc_from_irc(target)
+                    n = osm.nkm.lookupNick(nick)
+                except (NickError, KeyError):
+                    return
+
+                chunks = []
+                osm.bsm.addMessageChunk(
+                    chunks, irc_to_dc(prefix), text, flags)
+                osm.bsm.sendPrivateBridgeChange(n, chunks)
+
+
+    def handleCmd_NOTICE(self, prefix, args):
+
+        osm = self.main.osm
+
+        if (self.syncd and osm and osm.syncd):
+
+            target = args[0]
+            text = args[1]
+            flags = dtella_core.NOTICE_BIT
+
+            if target == cfg.irc_chan:
+                chunks = []
+                osm.bsm.addChatChunk(
+                    chunks, irc_to_dc(prefix), text, flags)
+                osm.bsm.sendBridgeChange(chunks)
+
+            else:
+                try:
+                    nick = dc_from_irc(target)
+                    n = osm.nkm.lookupNick(nick)
+                except (NickError, KeyError):
+                    return
+
+                chunks = []
+                osm.bsm.addMessageChunk(
+                    chunks, irc_to_dc(prefix), text, flags)
+                osm.bsm.sendPrivateBridgeChange(n, chunks)
+                
 
     def sendState(self):
+        
         osm = self.main.osm
         assert (self.readytosend and osm and osm.syncd)
 
@@ -438,10 +460,11 @@ class IRCServer(LineOnlyReceiver):
             else:
                 # Ok, send to IRC
                 host = Ad().setRawIPPort(n.ipp).getTextIP()
-                self.pushFullJoin(inick, "dtnode", host)
+                self.pushFullJoin(
+                    inick, "dtnode", host, "Dtella %s" % n.dttag[3:])
                 
 
-    def pushFullJoin(self, nick, user, host, name="Dtella Peer"):
+    def pushFullJoin(self, nick, user, host, name):
         self.sendLine(
             "NICK %s 0 %d %s %s %s 1 :%s" %
             (nick, time.time(), user, host, cfg.my_host, name))
@@ -535,7 +558,8 @@ class IRCServer(LineOnlyReceiver):
             raise
 
         host = Ad().setRawIPPort(n.ipp).getTextIP()
-        self.pushFullJoin(inick, "dtnode", host)
+        self.pushFullJoin(
+            inick, "dtnode", host, "Dtella %s" % n.dttag[3:])
 
 
     def event_RemoveNick(self, nick, reason):

@@ -41,9 +41,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: find out what's wrong with Blueldr137??
-
-
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
     pass
@@ -2524,8 +2521,6 @@ class OnlineStateManager(object):
 
         if self.bsm:
             # Skip this stuff for Bridge Servers.
-            # TODO: This is kinda ugly.  Would it make any sense to reorganize
-            #       stuff into a Base class, with client and server subclasses?
             return
 
         self.checkStatusLimit()
