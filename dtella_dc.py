@@ -425,7 +425,7 @@ class DCHandler(LineOnlyReceiver):
             def fail_cb(detail):
                 pass
 
-        elif self.belowMinShare():
+        elif self.isLeech():
             # I'm a leech
             return
 
@@ -453,14 +453,14 @@ class DCHandler(LineOnlyReceiver):
                 fail_cb("user doesn't seem to exist.")
             return
 
-        if self.belowMinShare():
+        if self.isLeech():
             # I'm a leech
             return
 
         n.event_RevConnectToMe(self.main, fail_cb)
 
 
-    def belowMinShare(self):
+    def isLeech(self):
         # If I don't meet the minimum share, yell and return True
 
         osm = self.main.osm
