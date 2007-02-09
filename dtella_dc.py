@@ -65,6 +65,7 @@ class DCHandler(LineOnlyReceiver):
         self.addDispatch('$MyINFO',        -3, self.d_MyInfo)
         self.addDispatch('$GetINFO',        2, self.d_GetInfo)
         self.addDispatch('',                0, self.d_KeepAlive)
+        self.addDispatch('$KillDtella',     0, self.d_KillDtella)
         
         # Chat messages waiting to be sent
         self.chatq = []
@@ -135,6 +136,10 @@ class DCHandler(LineOnlyReceiver):
     def fatalError(self, text):
         self.pushStatus("ERROR: %s" % text)
         self.transport.loseConnection()
+
+
+    def d_KillDtella(self):
+        reactor.stop()
 
 
     def d_ValidateNick(self, nick):

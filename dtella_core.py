@@ -280,6 +280,7 @@ class PeerHandler(DatagramProtocol):
                 dch.pushSearchResult(rawdata)
             return
 
+        # TODO: this is deprecated
         elif rawdata == "DTELLA_KILL" and ad.ip == (127,0,0,1):
             reactor.stop()
             return

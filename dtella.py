@@ -35,7 +35,7 @@ import dtella_local
 
 from dtella_util import dcall_discard, Ad, word_wrap
 
-
+tcp_port = 7314
 STATE_FILE = "dtella.state"
 
 
@@ -381,7 +381,6 @@ def run():
 
     twisted.python.log.startLoggingWithObserver(logObserver, setStdout=False)
 
-    tcp_port = 7314
     dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
 
     print "Dtella %s" % dtella_local.version
@@ -392,8 +391,12 @@ def run():
         except twisted.internet.error.CannotListenError:
             if first:
                 print "TCP bind failed.  Killing old process..."
-                terminate()
-                reactor.callLater(2.0, cb, False)
+                if terminate():
+                    print "Ok.  Sleeping..."
+                    reactor.callLater(2.0, cb, False)
+                else:
+                    print "Kill failed.  Giving up."
+                    reactor.stop()
             else:
                 print "Bind failed again.  Giving up."
                 reactor.stop()
@@ -408,17 +411,11 @@ def run():
 def terminate():
     # Terminate another Dtella process on the local machine
 
-    print "Finding Port..."
-    state = dtella_state.StateManager(None, STATE_FILE)
-
-    if not state.udp_port:
-        print "Not Found."
-        return False
-
     try:
         print "Sending Packet of Death..."
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto("DTELLA_KILL", 0, ('127.0.0.1', state.udp_port))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect(('127.0.0.1', tcp_port))
+        sock.sendall("$KillDtella|")
         sock.close()
     except socket.error:
         return False
