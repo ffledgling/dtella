@@ -174,7 +174,7 @@ def parse_dtella_tag(info):
 
     except ValueError:
         # This could be an 'offline info'.
-        if (info[:4], info[-1:]) != ('<Dt:','>'):
+        if (info[:4], info[-1:]) == ('<Dt:','>'):
             return info[1:-1]
 
     else:
@@ -183,7 +183,7 @@ def parse_dtella_tag(info):
         if tag:
             try:
                 pos = tag.rindex("Dt:")
-                return tag[pos:-1]
+                return tag[pos:]
             except ValueError:
                 pass
 

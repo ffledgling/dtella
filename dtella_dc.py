@@ -1493,7 +1493,7 @@ class DtellaBot(object):
 
         now = seconds()
 
-        out("Online Nodes: {ipp, nb, persist, expire, uptime, nick}")
+        out("Online Nodes: {ipp, nb, persist, expire, uptime, dttag, nick}")
 
         lines = []
 
@@ -1515,7 +1515,9 @@ class DtellaBot(object):
                 info.append("%4d" % dcall_timeleft(osm.sendStatus_dcall))
             else:
                 info.append("%4d" % dcall_timeleft(n.expire_dcall))
+
             info.append("%8d" % (now - n.uptime))
+            info.append("%8s" % n.dttag[3:])
             info.append("(%s)" % n.nick)
 
             lines.append(info)
