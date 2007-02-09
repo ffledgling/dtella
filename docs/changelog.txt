@@ -1,6 +1,7 @@
 Dtella Changelog
 
 0.9.1 (2007-02-??):
+- added new commands: !terminate, !localsearch, !version
 - fixed: persistent mode was skipping over the DNS query
 - "!debug nbs" now includes average ping times
 - fixed a crash in "!debug nodes" when not online
