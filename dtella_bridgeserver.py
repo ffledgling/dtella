@@ -2,9 +2,8 @@
 
 """
 Dtella - Bridge Server Module
-Copyright (C) 2007  Paul Marks
-Copyright (C) 2007  Jacob Feisley
-http://www.dtella.org/
+Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2007  Paul Marks, Jacob Feisley
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -36,6 +35,7 @@ import time
 import struct
 import md5
 import random
+import re
 
 import dtella_state
 import dtella_crypto
@@ -46,6 +46,12 @@ from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 
 
 import dtella_bridge_config as cfg
+
+
+# Regex for color codes and other IRC stuff.
+ircstrip_re = re.compile("\x03[0-9]{1,2}(,[0-9]{1,2})?|[\x00-\x1F\x80-\xFF]")
+
+
 
 irc_nick_chars = (
     "-0123456789"
@@ -272,7 +278,7 @@ class IRCServer(LineOnlyReceiver):
         chan = args[0]
         l33t = prefix
         n00b = args[1]
-        reason = args[2]
+        reason = self.irc_strip(args[2])
         
         self.data.gotKick(chan, l33t, n00b, reason)
 
@@ -284,7 +290,7 @@ class IRCServer(LineOnlyReceiver):
         chan = cfg.irc_chan
         l33t = prefix
         n00b = args[0]
-        reason = args[1]
+        reason = self.irc_strip(args[1])
         
         #self.data.gotKick(chan, l33t, n00b, reason)
         self.data.gotQuit(n00b)
@@ -295,7 +301,7 @@ class IRCServer(LineOnlyReceiver):
         # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
         chan = args[0]
         whoset = args[1]
-        text = args[-1]
+        text = self.irc_strip(args[-1])
         self.data.gotTopic(chan, whoset, text)
 
 
@@ -369,6 +375,13 @@ class IRCServer(LineOnlyReceiver):
 
             self.schedulePing()
 
+
+    #This probably does not belong right here. Find new home.
+    def irc_strip(self, text):
+        return ircstrip_re.sub('',text)
+
+
+
     def handleCmd_PRIVMSG(self, prefix, args):
 
         osm = self.main.osm
@@ -376,7 +389,7 @@ class IRCServer(LineOnlyReceiver):
         if (self.syncd and osm and osm.syncd):
 
             target = args[0]
-            text = args[1]
+            text = self.irc_strip(args[1])
             flags = 0
             
             if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
@@ -409,7 +422,7 @@ class IRCServer(LineOnlyReceiver):
         if (self.syncd and osm and osm.syncd):
 
             target = args[0]
-            text = args[1]
+            text = self.irc_strip(args[1])
             flags = dtella_core.NOTICE_BIT
 
             if target == cfg.irc_chan:
