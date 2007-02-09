@@ -20,7 +20,7 @@
 
 
 !define PRODUCT_NAME "Dtella@Purdue"
-!define PRODUCT_VERSION "0.9"
+!define PRODUCT_VERSION "0.9.1"
 !define PRODUCT_PUBLISHER "Dtella Labs"
 !define PRODUCT_WEB_SITE "http://www.dtella.org/"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\dtella.exe"
