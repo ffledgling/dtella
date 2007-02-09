@@ -1522,7 +1522,7 @@ class DtellaBot(object):
 
             lines.append(info)
 
-        if 1 <= sortkey <= 6:
+        if 1 <= sortkey <= 7:
             lines.sort(key=lambda l: l[sortkey-1])
 
         for line in lines:
