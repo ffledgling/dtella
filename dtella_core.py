@@ -41,13 +41,13 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: expandpath can leave ~ intact sometimes.  Write a workaround.
-
 # TODO: make an option to disable local search replies
 
 # TODO: notify when somebody else gets banned?
 
 # TODO: !version command
+
+# TODO: !terminate command
 
 
 # Miscellaneous Exceptions

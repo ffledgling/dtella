@@ -27,6 +27,7 @@ import heapq
 from twisted.internet import reactor
 import os
 import os.path
+import twisted.python.log
 
 from dtella_util import Ad, dcall_discard
 
@@ -35,10 +36,17 @@ class StateManager(object):
     def __init__(self, main, filename):
 
         path = os.path.expanduser("~/.dtella")
-        if not os.path.exists(path):
-            os.mkdir(path)
+        if path[:1] == '~':
+            # Can't get a user directory, just save to cwd.
+            self.filename = filename
+        else:
+            try:
+                if not os.path.exists(path):
+                    os.mkdir(path)
+            except OSError:
+                twisted.python.log.err()
 
-        self.filename = "%s/%s" % (path, filename)
+            self.filename = "%s/%s" % (path, filename)
 
         self.main = main
         self.peers = {}   # {ipp -> time}
@@ -156,8 +164,11 @@ class StateManager(object):
             d['ipcache'] = ''.join(peerdata)
 
             d['suffix'] = self.suffix
-            
-            self.writeDict(d)
+
+            try:
+                self.writeDict(d)
+            except:
+                twisted.python.log.err()
 
         dcall_discard(self, 'saveState_dcall')
 
