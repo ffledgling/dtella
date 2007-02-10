@@ -695,7 +695,7 @@ class BridgeNodeData(object):
 
                 if osm.syncd:
                     osm.cms.addMessage(
-                        self.parent_n.ipp, chat_pktnum, nick, text, flags)
+                        self.parent_n, chat_pktnum, nick, text, flags)
 
             elif data[ptr] == 'M':
                 ptr += 1

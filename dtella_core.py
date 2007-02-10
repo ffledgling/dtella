@@ -41,6 +41,11 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
+# TODO: Rig up a system for cancelling blocked transfers
+
+# TODO: make some fake out-of-order chat messages to test CMS.
+
+
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
     pass
@@ -139,7 +144,11 @@ class NickManager(object):
 
         so = self.main.getStateObserver()
         if so:
-            so.event_RemoveNick(n.nick, reason)
+            so.event_RemoveNick(n, reason)
+
+        # Clean up nick-specific stuff
+        if n.is_peer:
+            n.nickRemoved()
 
 
     def addNode(self, n):
@@ -155,8 +164,8 @@ class NickManager(object):
         so = self.main.getStateObserver()
         if so:
             # Might raise NickError
-            so.event_AddNick(n.nick, n)
-            so.event_UpdateInfo(n.nick, n.dcinfo)
+            so.event_AddNick(n)
+            so.event_UpdateInfo(n)
 
         self.nickmap[lnick] = n
 
@@ -179,7 +188,7 @@ class NickManager(object):
         # Push new dcinfo to dch/ircs
         so = self.main.getStateObserver()
         if so:
-            so.event_UpdateInfo(n.nick, n.dcinfo)
+            so.event_UpdateInfo(n)
 
 
     def quitEverybody(self):
@@ -188,7 +197,7 @@ class NickManager(object):
         so = self.main.getStateObserver()
         if so:
             for n in self.nickmap.itervalues():
-                so.event_RemoveNick(n.nick, "Removing All Nicks")
+                so.event_RemoveNick(n, "Removing All Nicks")
 
 
 ##############################################################################
@@ -1035,9 +1044,10 @@ class PeerHandler(DatagramProtocol):
 
             if src_n and src_n.bridge_data:
                 raise BadBroadcast("Bridge can't chat")
-            
+
             elif src_n and src_n.expire_dcall and nhash == src_n.nickHash():
-                osm.cms.addMessage(src_ipp, pktnum, src_n.nick, text, flags)
+                osm.cms.addMessage(
+                    src_n, pktnum, src_n.nick, text, flags)
 
             else:
                 raise Reject
@@ -1683,6 +1693,11 @@ class Node(object):
         self.expire_dcall = None  # dcall for expiring stale nodes
         self.status_pktnum = None # Pktnum of last status update
 
+        # ChatMessageSequencer stuff
+        self.chatq = []
+        self.chatq_base = None
+        self.chatq_dcall = None
+
         # ack_key -> timeout DelayedCall
         self.msgkeys_out = {}
         self.msgkeys_in = {}
@@ -1776,19 +1791,6 @@ class Node(object):
             self.setInfo("<%s>" % self.dttag)
         else:
             self.setInfo("")
-
-
-    def cancelPrivMsgs(self):
-        # Cancel all pending privmsg timeouts
-
-        for dcall in self.msgkeys_in.itervalues():
-            dcall.cancel()
-        
-        for dcall in self.msgkeys_out.itervalues():
-            dcall.cancel()
-
-        self.msgkeys_in.clear()
-        self.msgkeys_out.clear()
 
 
     def openRevConnectWindow(self):
@@ -1918,11 +1920,35 @@ class Node(object):
         self.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
+    def nickRemoved(self):
+
+        # Cancel all pending privmsg timeouts
+        for dcall in self.msgkeys_in.itervalues():
+            dcall.cancel()
+        
+        for dcall in self.msgkeys_out.itervalues():
+            dcall.cancel()
+
+        self.msgkeys_in.clear()
+        self.msgkeys_out.clear()
+        
+        # Bridge stuff
+        try:
+            del self.dns_pending
+        except AttributeError:
+            pass
+
+        # ChatMessageSequencer stuff
+        del self.chatq[:]
+        dcall_discard(self, 'chatq_dcall')
+        self.chatq_base = None
+
+
     def shutdown(self):
         dcall_discard(self, 'expire_dcall')
         dcall_discard(self, 'rcWindow_dcall')
-        
-        self.cancelPrivMsgs()
+
+        self.nickRemoved()
         
         if self.bridge_data:
             self.bridge_data.shutdown()
@@ -1946,10 +1972,9 @@ class MeNode(Node):
         fail_cb("can't connect to yourself!")
 
 
-
 ##############################################################################
 
-            
+
 class SyncManager(object):
 
     class SyncInfo(object):
@@ -2418,9 +2443,6 @@ class OnlineStateManager(object):
         n.dttag = ""
         n.setNoUser()
 
-        # Cancel any privmsg timeouts
-        n.cancelPrivMsgs()
-
         # Remove from the SyncManager, if it's active
         if self.sm:
             self.sm.giveUpNode(n.ipp)
@@ -2655,6 +2677,7 @@ class OnlineStateManager(object):
 
         # Shut down all nodes
         for n in self.nodes:
+            self.cms.clearQueue(n)
             n.shutdown()
 
         # Shut down the PingManager (and notify outbounds)
@@ -2668,10 +2691,6 @@ class OnlineStateManager(object):
         # Shut down the SyncRequestRoutingManager
         if self.yqrm:
             self.yqrm.shutdown()
-
-        # Shut down the ChatMessageSequencer
-        if self.cms:
-            self.cms.shutdown()
 
 
 ##############################################################################
@@ -3613,121 +3632,113 @@ class SyncRequestRoutingManager(object):
         
 
 class ChatMessageSequencer(object):
-    # This whole class is a bit sloppy, but the purpose is to delay out-of-order
-    # chat messages for a couple seconds if a message was skipped.
-    
-    class ChatInfo(object):
-        def __init__(self, pointer):
-            self.heap = []   # pktnum, nick, text
-            self.pointer = pointer
-            self.dcalls = {}
+    # If chat messages arrive out-of-order, this will delay
+    # some messages for a couple seconds waiting for packets to arrive.
+
 
     def __init__(self, main):
         self.main = main
-        self.info = {}
 
 
-    def addMessage(self, ipp, pktnum, nick, text, flags):
-        
-        so = self.main.getStateObserver()
-        if not so:
+    def addMessage(self, n, pktnum, nick, text, flags):
+
+        if not self.main.getStateObserver():
             return
-        
-        try:
-            c = self.info[ipp]
-        except KeyError:
-            c = self.info[ipp] = self.ChatInfo(pktnum)
 
-        # If the pointer is exactly where it needs to be, send and advance.
-        if c.pointer == pktnum:
-            so.event_ChatMessage(nick, text, flags)
-            self.advancePointer(ipp, c.pointer+1)
+        # False == the bridge wants us to queue everything
+        unlocked = not hasattr(n, 'dns_pending')
 
-        # If the packet number changes drastically, then just flush the
-        # queue and start over.  This is also a sloppy way of handling the
-        # 2^32 .. 0 wraparound.
-        elif abs(c.pointer - pktnum) > PKTNUM_BUF:
-            self.flushNode(ipp)
-            c.pointer = pktnum + 1
-            so.event_ChatMessage(nick, text, flags)
+        msg = (nick, text, flags)
 
-        # If the packet is lagged behind the current pointer, just send it
-        # out of sequence.
-        elif pktnum < c.pointer:
-            so.event_ChatMessage(nick, text, flags)
+        if n.chatq_base is None:
+            n.chatq_base = pktnum
 
-        # The packet is ahead of the pointer, so send up to that point
-        # in a couple seconds
+        # How far forward/back to accept messages
+        FUZZ = 10
+
+        # Find the pktnum index relative to the current base.
+        # If it's slightly older, this will be negative.
+        idx = ((pktnum - n.chatq_base + FUZZ) % 0x100000000) - FUZZ
+
+        if idx < 0:
+            # Older message, send out of order
+            if unlocked:
+                self.sendMessage(n, msg)
+
+        elif idx >= FUZZ:
+            # Way out there; put this at the end and dump everything
+            if unlocked:
+                n.chatq.append(msg)
+                self.flushQueue(n)
+
         else:
-            heapq.heappush(c.heap, (pktnum, nick, text, flags))
-            if pktnum not in c.dcalls:
-                
-                def cb(c, ipp, pktnum):
-                    del c.dcalls[pktnum]
-                    self.advancePointer(ipp, pktnum)
+            # From the near future: (0 <= idx < PKTNUM_BUF)
 
-                c.dcalls[pktnum] = reactor.callLater(2.0, cb, c, ipp, pktnum)
+            extra = (idx - len(n.chatq)) + 1
+            if extra > 0:
+                n.chatq.extend([None] * extra)
+
+            n.chatq[idx] = msg
+
+            if unlocked:
+                self.advanceQueue(n)
 
 
-    def advancePointer(self, ipp, pointer):
-        # Send all queued messages with a pktnum <= the pointer value
+    def advanceQueue(self, n):
 
-        try:
-            c = self.info[ipp]
-        except KeyError:
+        # Send first block of available messages
+        while n.chatq and n.chatq[0]:
+            msg = n.chatq.pop(0)
+            n.chatq_base = (n.chatq_base + 1) % 0x100000000
+            self.sendMessage(n, msg)
+
+        # If any messages remain, send them later.
+        if n.chatq:
+            self.scheduleSkipQueue(n)
+        else:
+            dcall_discard(n, 'chatq_dcall')
+            n.chatq_base = None
+
+
+    def scheduleSkipQueue(self, n):
+        if n.chatq_dcall:
             return
 
-        c.pointer = max(c.pointer, pointer)
+        def cb(n):
+            n.chatq_dcall = None
 
+            # Forget any missing messages at the beginning
+            while n.chatq and n.chatq[0] is None:
+                n.chatq.pop(0)
+                n.chatq_base = (n.chatq_base + 1) % 0x100000000
+
+            # Send the first block of available messages
+            self.advanceQueue(n)
+
+        n.chatq_dcall = reactor.callLater(2.0, cb, n)
+    
+
+    def flushQueue(self, n):
+        # Send all the messages in the queue, in order
+        for msg in n.chatq:
+            if msg:
+                self.sendMessage(n, msg)
+
+        self.clearQueue(n)
+
+
+    def clearQueue(self, n):
+        # Reset everything to normal
+        del n.chatq[:]
+        dcall_discard(n, 'chatq_dcall')
+        n.chatq_base = None
+
+
+    def sendMessage(self, n, msg):
         so = self.main.getStateObserver()
-
-        while c.heap:
-            pktnum, nick, text, flags = c.heap[0]
-            
-            if pktnum <= c.pointer:
-                # Pointer is ahead of, or at, this message.  Send it.
-                heapq.heappop(c.heap)
-                if so:
-                    so.event_ChatMessage(nick, text, flags)
-
-                # If the packet number exactly matches, then advance
-                if pktnum == c.pointer:
-                    c.pointer += 1
-            else:
-                break
-
-
-    def flushNode(self, ipp, kill=False):
-        # Send all the packets in this node's chat queue, in order,
-        # then wipe the queue and cancel all callbacks.
-        try:
-            c = self.info[ipp]
-        except KeyError:
-            return
-
-        if kill:
-            del self.info[ipp]
-
-        for d in c.dcalls.values():
-            d.cancel()
-        
-        c.dcalls.clear()
-
-        so = self.main.getStateObserver()
-        
-        while c.heap:
-            pktnum, nick, text, flags = heapq.heappop(c.heap)
-
-            if so:
-                so.event_ChatMessage(nick, text, flags)
-
-
-    def shutdown(self):
-        # Cancel all timeouts
-
-        for c in self.info.values():
-            for d in c.dcalls.values():
-                d.cancel()
+        if so:
+            nick, text, flags = msg
+            so.event_ChatMessage(n, nick, text, flags)
 
 
 ##############################################################################

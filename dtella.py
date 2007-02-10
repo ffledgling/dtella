@@ -333,9 +333,9 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             # Announce the DC client's departure
             self.osm.updateMyInfo()
 
-            # Cancel all private message timeouts
+            # Cancel all nick-specific stuff
             for n in self.osm.nodes:
-                n.cancelPrivMsgs()
+                n.nickRemoved()
 
         # If another handler is waiting, let it on.
         if self.pending_dch:

@@ -772,22 +772,22 @@ class DCHandler(LineOnlyReceiver):
         return (nick.lower() in (self.nick.lower(), self.bot.nick.lower()))
 
 
-    def event_AddNick(self, nick, n):
-        if not self.isProtectedNick(nick):
-            self.pushHello(nick)
+    def event_AddNick(self, n):
+        if not self.isProtectedNick(n.nick):
+            self.pushHello(n.nick)
     
 
-    def event_RemoveNick(self, nick, reason):
-        if not self.isProtectedNick(nick):
-            self.pushQuit(nick)
+    def event_RemoveNick(self, n, reason):
+        if not self.isProtectedNick(n.nick):
+            self.pushQuit(n.nick)
 
 
-    def event_UpdateInfo(self, nick, dcinfo):
-        if dcinfo:
-            self.pushInfo(nick, dcinfo)
+    def event_UpdateInfo(self, n):
+        if n.dcinfo:
+            self.pushInfo(n.nick, n.dcinfo)
 
 
-    def event_ChatMessage(self, nick, text, flags):
+    def event_ChatMessage(self, n, nick, text, flags):
         if flags & dtella_core.NOTICE_BIT:
             self.pushChatMessage(("*N# %s" % nick), text)
         elif flags & dtella_core.SLASHME_BIT:
@@ -1191,7 +1191,7 @@ class DtellaBot(object):
                 return
 
         self.syntaxHelp(out, 'LOCALSEARCH', prefix)
-        
+
 
     def handleCmd_REJOIN(self, out, args, prefix):
 

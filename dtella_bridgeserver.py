@@ -41,6 +41,8 @@ import dtella_state
 import dtella_crypto
 import dtella_local
 
+import dtella_dnslookup
+
 from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
 from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 
@@ -488,10 +490,8 @@ class IRCServer(LineOnlyReceiver):
                 n.setNoUser()
 
             else:
-                # Ok, send to IRC
-                host = Ad().setRawIPPort(n.ipp).getTextIP()
-                self.pushFullJoin(
-                    inick, "dtnode", host, "Dtella %s" % n.dttag[3:])
+                # Ok, get ready to send to IRC
+                self.main.rdns.addRequest(n)
                 
 
     def pushFullJoin(self, nick, user, host, name):
@@ -573,9 +573,9 @@ class IRCServer(LineOnlyReceiver):
         return True
 
 
-    def event_AddNick(self, nick, n):
+    def event_AddNick(self, n):
         try:
-            inick = dc_to_irc(nick)
+            inick = dc_to_irc(n.nick)
 
         except NickError, e:
             # Bad nick.  KICK!
@@ -586,25 +586,27 @@ class IRCServer(LineOnlyReceiver):
             osm.bsm.sendBridgeChange(chunks)
             raise
 
-        host = Ad().setRawIPPort(n.ipp).getTextIP()
-        self.pushFullJoin(
-            inick, "dtnode", host, "Dtella %s" % n.dttag[3:])
+        self.main.rdns.addRequest(n)
 
 
-    def event_RemoveNick(self, nick, reason):
+    def event_RemoveNick(self, n, reason):
         try:
-            inick = dc_to_irc(nick)
+            inick = dc_to_irc(n.nick)
         except NickError:
             return
 
-        self.pushQuit(inick, reason)
+        if not hasattr(n, 'dns_pending'):
+            self.pushQuit(inick, reason)
 
 
-    def event_UpdateInfo(self, nick, dcinfo):
+    def event_UpdateInfo(self, n):
         pass
 
 
-    def event_ChatMessage(self, nick, text, flags):
+    def event_ChatMessage(self, n, nick, text, flags):
+
+        assert not hasattr(n, 'dns_pending')
+
         try:
             inick = dc_to_irc(nick)
         except NickError:
@@ -798,7 +800,7 @@ class IRCServerData(object):
         except KeyError:
             return
 
-        self.chanusers.remove(u)
+        self.chanusers.discard(u)
 
 
     def gotJoin(self, nick):
@@ -1484,9 +1486,12 @@ class BridgeServerManager(object):
 
             if not n.expire_dcall:
                 raise Reject("Source node not online")
-            
+
             if src_nhash != n.nickHash():
                 raise Reject("Source nickhash mismatch")
+
+            if hasattr(n, 'dns_pending'):
+                raise Reject("Still waiting for DNS")
 
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
@@ -1530,9 +1535,12 @@ class BridgeServerManager(object):
 
             if not n.expire_dcall:
                 raise Reject("Node isn't online")
-            
+
             if src_nhash != n.nickHash():
                 raise Reject("Source nickhash mismatch")
+
+            if hasattr(n, 'dns_pending'):
+                raise Reject("Still waiting for DNS")
 
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
@@ -1557,6 +1565,95 @@ class BridgeServerManager(object):
 ##############################################################################
 
 
+class ReverseDNSManager(object):
+
+    class Entry(object):
+        def __init__(self):
+            self.waiting_ipps = set()
+            self.hostname = None
+
+
+    def __init__(self, main):
+        self.main = main
+        self.cache = {}  # raw ip -> Entry object
+
+
+    def addRequest(self, n):
+        ipp = n.ipp
+        ip = ipp[:4]
+
+        n.dns_pending = True
+
+        try:
+            ent = self.cache[ip]
+        except KeyError:
+            ent = self.cache[ip] = self.Entry()
+
+        if ent.hostname:
+            # Already have a hostname, sign on immediately.
+            self.signOn(ipp, ent.hostname)
+
+        elif ent.waiting_ipps:
+            # This hostname is already being queried.
+            ent.waiting_ipps.add(ipp)
+
+        else:
+            # Start querying
+            ent.waiting_ipps.add(ipp)
+
+            def cb(hostname):
+
+                for ipp in ent.waiting_ipps:
+                    self.signOn(ipp, hostname)
+
+                ent.waiting_ipps.clear()
+
+                if hostname is None:
+                    del self.cache[ip]
+                else:
+                    ent.hostname = hostname
+
+            ad = Ad().setRawIP(ip)
+            self.main.dnsh.ipToHostname(ad, cb)
+
+
+    def signOn(self, ipp, hostname):
+
+        osm = self.main.osm
+        ircs = self.main.ircs
+
+        if not (osm and osm.syncd):
+            return
+
+        try:
+            n = osm.lookup_ipp[ipp]
+        except KeyError:
+            return
+
+        try:
+            del n.dns_pending
+        except AttributeError:
+            return
+        
+        if not (ircs and ircs.readytosend):
+            return
+
+        if hostname is None:
+            hostname = Ad().setRawIPPort(ipp).getTextIP()
+
+        # Nick was already verified
+        inick = dc_to_irc(n.nick)
+
+        ircs.pushFullJoin(
+            inick, "dtnode", hostname, "Dtella %s" % n.dttag[3:])
+
+        # Send queued chat messages
+        osm.cms.flushQueue(n)
+
+
+##############################################################################
+
+
 class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
     def __init__(self):
@@ -1570,14 +1667,18 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
             self.state.refreshPeer(Ad().setTextIPPort(addr), 0)
 
         # Peer Handler
-        self.ph = BridgeServerProtocol(self)        
+        self.ph = BridgeServerProtocol(self)
+
+        # Reverse DNS Manager
+        self.rdns = ReverseDNSManager(self)
+
+        self.dnsh = dtella_dnslookup.DNSHandler(self)
 
         # Bind UDP Port
         try:
             reactor.listenUDP(cfg.udp_port, self.ph)
         except twisted.internet.error.BindError:
             print "Failed to bind UDP port!"
-            reactor.stop()
             raise SystemExit
 
         # IRC Server
@@ -1654,6 +1755,11 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         osm = self.osm
         if (osm and osm.syncd and ircs.syncd):
             osm.bsm.sendState()
+
+        # Cancel all the nick-specific state
+        if osm:
+            for n in self.osm.nodes:
+                n.nickRemoved()
 
 
 if __name__ == '__main__':
