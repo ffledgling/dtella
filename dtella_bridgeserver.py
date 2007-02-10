@@ -48,11 +48,6 @@ from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 import dtella_bridge_config as cfg
 
 
-# Regex for color codes and other IRC stuff.
-ircstrip_re = re.compile("\x03[0-9]{1,2}(,[0-9]{1,2})?|[\x00-\x1F\x80-\xFF]")
-
-
-
 irc_nick_chars = (
     "-0123456789"
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
@@ -169,8 +164,15 @@ def irc_from_dc(dnick):
     return inick
 
 
-class IRCBadMessage(Exception):
-    pass
+# Regex for color codes and other IRC stuff.
+ircstrip_re = re.compile(
+    "\x03[0-9]{1,2}(,[0-9]{1,2})?|[\x00-\x1F\x80-\xFF]")
+
+def irc_strip(text):
+    return ircstrip_re.sub('', text)
+
+
+##############################################################################
 
 
 class IRCServer(LineOnlyReceiver):
@@ -246,31 +248,44 @@ class IRCServer(LineOnlyReceiver):
 
 
     def handleCmd_NICK(self, prefix, args):
-        if args[0][:1] == cfg.irc_to_dc_prefix:
+
+        oldnick = prefix
+        newnick = args[0]
+        
+        if newnick[:1] == cfg.irc_to_dc_prefix:
             self.sendLine(
                 ":%s KILL %s :%s (nick reserved for Dtella)"
-                % (cfg.my_host, args[0], cfg.my_host))
+                % (cfg.my_host, newnick, cfg.my_host))
             return
             
-        if prefix:
-            self.data.changeNick(prefix, args[0])
+        if oldnick:
+            self.data.changeNick(oldnick, newnick)
         else:
-            self.data.addNick(args[0])
+            self.data.addNick(newnick)
 
 
     def handleCmd_JOIN(self, prefix, args):
+        
+        nick = prefix
         chans = args[0].split(',')
-        self.data.gotJoin(prefix, chans)
+
+        if cfg.irc_chan in chans:
+            self.data.gotJoin(nick)
 
 
     def handleCmd_PART(self, prefix, args):
 
+        nick = prefix
         chans = args[0].split(',')
-        self.data.gotPart(prefix, chans)
+
+        if cfg.irc_chan in chans:
+            self.data.gotPart(nick)
 
 
     def handleCmd_QUIT(self, prefix, args):
-        self.data.gotQuit(prefix)
+
+        nick = prefix
+        self.data.gotQuit(nick)
 
 
     def handleCmd_KICK(self, prefix, args):
@@ -278,21 +293,20 @@ class IRCServer(LineOnlyReceiver):
         chan = args[0]
         l33t = prefix
         n00b = args[1]
-        reason = self.irc_strip(args[2])
-        
-        self.data.gotKick(chan, l33t, n00b, reason)
+        reason = irc_strip(args[2])
+
+        if chan == cfg.irc_chan:
+            self.data.gotKick(l33t, n00b, reason)
 
 
     def handleCmd_KILL(self, prefix, args):
 
         # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
-        # TODO: 'chan' should be removed, since KILL is global.
-        chan = cfg.irc_chan
         l33t = prefix
         n00b = args[0]
-        reason = self.irc_strip(args[1])
+        reason = irc_strip(args[1])
         
-        #self.data.gotKick(chan, l33t, n00b, reason)
+        #self.data.gotKick(l33t, n00b, reason)
         self.data.gotQuit(n00b)
 
 
@@ -301,8 +315,10 @@ class IRCServer(LineOnlyReceiver):
         # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
         chan = args[0]
         whoset = args[1]
-        text = self.irc_strip(args[-1])
-        self.data.gotTopic(chan, whoset, text)
+        text = irc_strip(args[-1])
+
+        if chan == cfg.irc_chan:
+            self.data.gotTopic(whoset, text)
 
 
     def handleCmd_MODE(self, prefix, args):
@@ -312,8 +328,9 @@ class IRCServer(LineOnlyReceiver):
         chan = args[0]
         change = args[1]
         nicks = args[2:]
-        if chan[:1] == '#':
-            self.data.gotChanModes(whoset, chan, change, nicks)
+
+        if chan == cfg.irc_chan:
+            self.data.gotChanModes(whoset, change, nicks)
 
 
     def handleCmd_SERVER(self, prefix, args):
@@ -322,35 +339,38 @@ class IRCServer(LineOnlyReceiver):
         # the Dtella state information if it's available and we haven't
         # sent it already.
 
+        if self.readytosend:
+            return
+
+        self.readytosend = True
+
         osm = self.main.osm
 
-        if not self.readytosend:
-            self.readytosend = True
+        # Tell the ReconnectingClientFactory that we're cool
+        self.factory.resetDelay()
 
-            # Tell the ReconnectingClientFactory that we're cool
-            self.factory.resetDelay()
+        # Set up nick reservation
+        self.sendLine(
+            ":%s TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
+            (cfg.my_host, cfg.dc_to_irc_prefix,
+             cfg.my_host, time.time()))
 
-            # Set up nick reservation
-            self.sendLine(
-                ":%s TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
-                (cfg.my_host, cfg.dc_to_irc_prefix,
-                 cfg.my_host, time.time()))
+        # Send my own bridge nick
+        self.pushFullJoin(
+            cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
 
-            # Send my own bridge nick
-            self.pushFullJoin(
-                cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
+        # Give it ops
+        self.sendLine(
+            ":%s MODE %s +a %s" %
+            (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
 
-            # Give it ops
-            self.sendLine(
-                ":%s MODE %s +a %s" %
-                (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
+        # Maybe send Dtella nicks
+        if osm and osm.syncd:
+            self.sendState()
 
-            # Maybe send Dtella nicks
-            if osm and osm.syncd:
-                self.sendState()
+        # Tell the server we're done
+        self.sendLine(":%s EOS" % cfg.my_host)
 
-            # Tell the server we're done
-            self.sendLine(":%s EOS" % cfg.my_host)
 
     def handleCmd_EOS(self, prefix, args):
 
@@ -376,72 +396,68 @@ class IRCServer(LineOnlyReceiver):
             self.schedulePing()
 
 
-    #This probably does not belong right here. Find new home.
-    def irc_strip(self, text):
-        return ircstrip_re.sub('',text)
-
-
-
     def handleCmd_PRIVMSG(self, prefix, args):
 
         osm = self.main.osm
 
-        if (self.syncd and osm and osm.syncd):
+        if not (self.syncd and osm and osm.syncd):
+            return
 
-            target = args[0]
-            text = self.irc_strip(args[1])
-            flags = 0
-            
-            if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
-                text = text[8:-1]
-                flags |= dtella_core.SLASHME_BIT
+        target = args[0]
+        text = irc_strip(args[1])
+        flags = 0
+        
+        if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
+            text = text[8:-1]
+            flags |= dtella_core.SLASHME_BIT
 
-            if target == cfg.irc_chan:
-                chunks = []
-                osm.bsm.addChatChunk(
-                    chunks, irc_to_dc(prefix), text, flags)
-                osm.bsm.sendBridgeChange(chunks)
+        if target == cfg.irc_chan:
+            chunks = []
+            osm.bsm.addChatChunk(
+                chunks, irc_to_dc(prefix), text, flags)
+            osm.bsm.sendBridgeChange(chunks)
 
-            else:
-                try:
-                    nick = dc_from_irc(target)
-                    n = osm.nkm.lookupNick(nick)
-                except (NickError, KeyError):
-                    return
+        else:
+            try:
+                nick = dc_from_irc(target)
+                n = osm.nkm.lookupNick(nick)
+            except (NickError, KeyError):
+                return
 
-                chunks = []
-                osm.bsm.addMessageChunk(
-                    chunks, irc_to_dc(prefix), text, flags)
-                osm.bsm.sendPrivateBridgeChange(n, chunks)
+            chunks = []
+            osm.bsm.addMessageChunk(
+                chunks, irc_to_dc(prefix), text, flags)
+            osm.bsm.sendPrivateBridgeChange(n, chunks)
 
 
     def handleCmd_NOTICE(self, prefix, args):
 
         osm = self.main.osm
 
-        if (self.syncd and osm and osm.syncd):
+        if not (self.syncd and osm and osm.syncd):
+            return
 
-            target = args[0]
-            text = self.irc_strip(args[1])
-            flags = dtella_core.NOTICE_BIT
+        target = args[0]
+        text = irc_strip(args[1])
+        flags = dtella_core.NOTICE_BIT
 
-            if target == cfg.irc_chan:
-                chunks = []
-                osm.bsm.addChatChunk(
-                    chunks, irc_to_dc(prefix), text, flags)
-                osm.bsm.sendBridgeChange(chunks)
+        if target == cfg.irc_chan:
+            chunks = []
+            osm.bsm.addChatChunk(
+                chunks, irc_to_dc(prefix), text, flags)
+            osm.bsm.sendBridgeChange(chunks)
 
-            else:
-                try:
-                    nick = dc_from_irc(target)
-                    n = osm.nkm.lookupNick(nick)
-                except (NickError, KeyError):
-                    return
+        else:
+            try:
+                nick = dc_from_irc(target)
+                n = osm.nkm.lookupNick(nick)
+            except (NickError, KeyError):
+                return
 
-                chunks = []
-                osm.bsm.addMessageChunk(
-                    chunks, irc_to_dc(prefix), text, flags)
-                osm.bsm.sendPrivateBridgeChange(n, chunks)
+            chunks = []
+            osm.bsm.addMessageChunk(
+                chunks, irc_to_dc(prefix), text, flags)
+            osm.bsm.sendPrivateBridgeChange(n, chunks)
                 
 
     def sendState(self):
@@ -534,16 +550,15 @@ class IRCServer(LineOnlyReceiver):
     def updateTopic(self, dnick, topic):
 
         osm = self.main.osm
-        assert self.syncd and osm and osm.syncd
+        assert (self.syncd and osm and osm.syncd)
 
         # Check if the topic is locked
-        c = self.data.getChan(cfg.irc_chan)
-        if c.topic_locked:
+        if self.data.topic_locked:
             return False
 
         # Update IRC topic
-        c.topic = topic
-        c.topic_whoset = dnick
+        self.data.topic = topic
+        self.data.topic_whoset = dnick
         try:
             self.pushTopic(dc_to_irc(dnick), topic)
         except NickError:
@@ -603,26 +618,28 @@ class IRCServer(LineOnlyReceiver):
 
 
     def shutdown(self):
-        if not self.shutdown_deferred:
 
-            # Remove nick ban
-            self.sendLine(
-                ":%s TKL - Q * %s* %s" %
-                (cfg.my_host, cfg.dc_to_irc_prefix, cfg.my_host)
-                )
+        if self.shutdown_deferred:
+            return self.shutdown_deferred
+        
+        # Remove nick ban
+        self.sendLine(
+            ":%s TKL - Q * %s* %s" %
+            (cfg.my_host, cfg.dc_to_irc_prefix, cfg.my_host)
+            )
 
-            # Scream
-            self.pushQuit(cfg.dc_to_irc_bot, "AIEEEEEEE!")
+        # Scream
+        self.pushQuit(cfg.dc_to_irc_bot, "AIEEEEEEE!")
 
-            # Send SQUIT for completeness
-            self.sendLine(":%s SQUIT %s :Bridge Shutting Down"
-                          % (cfg.my_host, cfg.my_host))
+        # Send SQUIT for completeness
+        self.sendLine(":%s SQUIT %s :Bridge Shutting Down"
+                      % (cfg.my_host, cfg.my_host))
 
-            # Close connection
-            self.transport.loseConnection()
+        # Close connection
+        self.transport.loseConnection()
 
-            # This will complete after loseConnection fires
-            self.shutdown_deferred = defer.Deferred()
+        # This will complete after loseConnection fires
+        self.shutdown_deferred = defer.Deferred()
 
         return self.shutdown_deferred
 
@@ -633,7 +650,6 @@ class IRCServer(LineOnlyReceiver):
         if self.shutdown_deferred:
             self.shutdown_deferred.callback("Bye!")
 
-       
         
 ##############################################################################
 
@@ -642,67 +658,47 @@ class IRCServerData(object):
     # All users on the IRC network
 
     class User(object):
+
         def __init__(self, nick):
             self.nick = nick
-            self.chans = set()
-
-    class Channel(object):
-        def __init__(self, chan):
-            self.chan = chan
-            self.users = {}  # nick -> [mode list]
-            self.topic = ""
-            self.topic_whoset = ""
-            self.topic_locked = False
-
-        def getInfoIndex(self, nick):
-            # Get the Dtella info index for this user
-            try:
-                modelist = self.users[nick]
-            except KeyError:
-                 # virtual
-                return 6
-            try:
-                # qaohv
-                return modelist.index(True)
-            except ValueError:
-                # plain user
-                return 5
+            self.chanmodes = []
 
 
     def __init__(self, ircs):
-        self.ulist = {}
-        self.clist = {}
         self.ircs = ircs
+        
+        self.users = {} # nick -> User()
+        self.chanusers = set()
+
+        self.topic = ""
+        self.topic_whoset = ""
+        self.topic_locked = False
 
 
     def addNick(self, nick):
-        self.ulist[nick] = self.User(nick)
+        self.users[nick] = self.User(nick)
 
 
     def changeNick(self, oldnick, newnick):
         try:
-            u = self.ulist.pop(oldnick)
+            u = self.users.pop(oldnick)
         except KeyError:
             print "Nick doesn't exist"
             return
 
-        if newnick in self.ulist:
+        if newnick in self.users:
             print "New nick already exists!"
             return
 
         u.nick = newnick
-        self.ulist[newnick] = u
+        self.users[newnick] = u
 
-        for chan in u.chans:
-            c = self.getChan(chan)
-            c.users[newnick] = c.users.pop(oldnick)
-
-        if cfg.irc_chan in u.chans:
+        if u in self.chanusers:
 
             osm = self.ircs.main.osm
             if (self.ircs.syncd and osm and osm.syncd):
 
-                infoindex = self.getChan(cfg.irc_chan).getInfoIndex(newnick)
+                infoindex = self.getInfoIndex(newnick)
                 
                 chunks = []
                 osm.bsm.addChatChunk(
@@ -717,102 +713,78 @@ class IRCServerData(object):
                 osm.bsm.sendBridgeChange(chunks)
 
 
-    def gotKick(self, chan, l33t, n00b, reason):
+    def gotKick(self, l33t, n00b, reason):
 
-        if chan == cfg.irc_chan:
-            osm = self.ircs.main.osm
-            if (self.ircs.syncd and osm and osm.syncd):
+        osm = self.ircs.main.osm
+        if (self.ircs.syncd and osm and osm.syncd):
 
-                try:
-                    nick = dc_from_irc(n00b)
-                    n = osm.nkm.lookupNick(nick)
-                except (NickError, KeyError):
-                    # IRC nick
-                    chunks = []
-                    osm.bsm.addChatChunk(
-                        chunks, cfg.irc_to_dc_bot,
-                        "%s has kicked %s: %s" %
-                        (irc_to_dc(l33t), irc_to_dc(n00b), reason)
-                        )
-                    osm.bsm.addNickChunk(chunks, irc_to_dc(n00b), 0xFF)
-                    osm.bsm.sendBridgeChange(chunks)
-                    
-                else:
-                    # DC Nick
-                    chunks = []
-                    osm.bsm.addKickChunk(
-                        chunks, n, irc_to_dc(l33t), reason
-                        )
-                    osm.bsm.sendBridgeChange(chunks)
+            try:
+                nick = dc_from_irc(n00b)
+                n = osm.nkm.lookupNick(nick)
+            except (NickError, KeyError):
+                # IRC nick
+                chunks = []
+                osm.bsm.addChatChunk(
+                    chunks, cfg.irc_to_dc_bot,
+                    "%s has kicked %s: %s" %
+                    (irc_to_dc(l33t), irc_to_dc(n00b), reason)
+                    )
+                osm.bsm.addNickChunk(chunks, irc_to_dc(n00b), 0xFF)
+                osm.bsm.sendBridgeChange(chunks)
+                
+            else:
+                # DC Nick
+                chunks = []
+                osm.bsm.addKickChunk(
+                    chunks, n, irc_to_dc(l33t), reason
+                    )
+                osm.bsm.sendBridgeChange(chunks)
 
-                    # Forget this nick
-                    osm.nkm.removeNode(n)
-                    n.setNoUser()
+                # Forget this nick
+                osm.nkm.removeNode(n)
+                n.setNoUser()
 
         try:
-            u = self.ulist[n00b]
+            u = self.users[n00b]
         except KeyError:
             print "Nick doesn't exist"
             return
 
-        c = self.getChan(chan)
-        del c.users[n00b]
-        u.chans.remove(chan)
+        self.chanusers.remove(u)
 
 
-    def getChan(self, chan):
+    def gotJoin(self, nick):
         try:
-            c = self.clist[chan]
-        except KeyError:
-            c = self.clist[chan] = self.Channel(chan)
-        return c
-
-
-    def getTopic(self, chan):
-        try:
-            c = self.clist[chan]
-        except KeyError:
-            return ""
-        
-        if c.topic:
-            return c.topic
-
-        return ""
-
-
-    def gotJoin(self, nick, chans):
-        try:
-            u = self.ulist[nick]
+            u = self.users[nick]
         except KeyError:
             print "nick %s doesn't exist!" % (nick,)
             return
 
-        chans = set(chans) - u.chans
+        if u in self.chanusers:
+            print "already in channel!"
+            return
 
-        for chan in chans:
-            c = self.getChan(chan)
-            c.users[nick] = [False] * len(chan_umodes)
-            u.chans.add(chan)
+        self.chanusers.add(u)
 
-        if cfg.irc_chan in chans:
-            osm = self.ircs.main.osm
-            if (self.ircs.syncd and osm and osm.syncd):
+        u.chanmodes = [False] * len(chan_umodes)
 
-                infoindex = self.getChan(cfg.irc_chan).getInfoIndex(nick)
-                
-                chunks = []
-                osm.bsm.addNickChunk(
-                    chunks, irc_to_dc(nick), infoindex)
-                osm.bsm.sendBridgeChange(chunks)
+        osm = self.ircs.main.osm
+        if (self.ircs.syncd and osm and osm.syncd):
+
+            infoindex = self.getInfoIndex(nick)
+            
+            chunks = []
+            osm.bsm.addNickChunk(
+                chunks, irc_to_dc(nick), infoindex)
+            osm.bsm.sendBridgeChange(chunks)
 
 
-    def gotChanModes(self, whoset, chan, change, nicks):
+    def gotChanModes(self, whoset, change, nicks):
 
         val = True
         i = 0
 
         osm = self.ircs.main.osm
-        ch = self.getChan(chan)
 
         chunks = []
 
@@ -841,17 +813,15 @@ class IRCServerData(object):
                 nick = nicks[i]
                 i += 1
 
-                # Skip phantom nicks (i.e. nicks on THIS server)
-                if nick not in self.ulist:
+                try:
+                    u = self.users[nick]
+                except KeyError:
+                    # Skip phantom nicks (i.e. nicks on THIS server)
                     continue
 
-                if chan != cfg.irc_chan:
-                    ch.users[nick][modeidx] = val
-                    continue
-
-                old_infoindex = ch.getInfoIndex(nick)
-                ch.users[nick][modeidx] = val
-                new_infoindex = ch.getInfoIndex(nick)
+                old_infoindex = self.getInfoIndex(nick)
+                u.chanmodes[modeidx] = val
+                new_infoindex = self.getInfoIndex(nick)
 
                 if new_infoindex == old_infoindex:
                     continue
@@ -876,44 +846,43 @@ class IRCServerData(object):
 
     def gotQuit(self, nick):
         try:
-            u = self.ulist.pop(nick)
+            u = self.users.pop(nick)
         except KeyError:
             print "nick %s doesn't exist!" % (nick,)
             return
 
-        for chan in u.chans:
-            c = self.getChan(chan)
-            del c.users[nick]
-
-        if cfg.irc_chan in u.chans:
-            osm = self.ircs.main.osm
-            if (self.ircs.syncd and osm and osm.syncd):
-                chunks = []
-                osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
-                osm.bsm.sendBridgeChange(chunks)
-
-
-    def gotPart(self, nick, chans):
         try:
-            u = self.ulist[nick]
+            self.chanusers.remove(u)
+        except KeyError:
+            return
+
+        osm = self.ircs.main.osm
+        if (self.ircs.syncd and osm and osm.syncd):
+            chunks = []
+            osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
+            osm.bsm.sendBridgeChange(chunks)
+
+
+    def gotPart(self, nick):
+        try:
+            u = self.users[nick]
         except KeyError:
             print "nick %s doesn't exist!" % (nick,)
             return
 
-        for chan in chans:
-            c = self.getChan(chan)
-            del c.users[nick]
-            u.chans.remove(chan)
+        try:
+            self.chanusers.remove(u)
+        except KeyError:
+            return
 
-        if cfg.irc_chan in chans:
-            osm = self.ircs.main.osm
-            if (self.ircs.syncd and osm and osm.syncd):
-                chunks = []
-                osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
-                osm.bsm.sendBridgeChange(chunks)
+        osm = self.ircs.main.osm
+        if (self.ircs.syncd and osm and osm.syncd):
+            chunks = []
+            osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
+            osm.bsm.sendBridgeChange(chunks)
 
 
-    def gotTopic(self, chan, whoset, topic):
+    def gotTopic(self, whoset, topic):
 
         try:
             # DC nick
@@ -921,22 +890,35 @@ class IRCServerData(object):
         except NickError:
             # IRC nick
             whoset = irc_to_dc(whoset)
+
+        self.topic = topic
+        self.topic_whoset = whoset
         
-        c = self.getChan(chan)
-        c.topic = topic
-        c.topic_whoset = whoset
-
-        if chan == cfg.irc_chan:
-            osm = self.ircs.main.osm
-            if (self.ircs.syncd and osm and osm.syncd):
-                chunks = []
-                osm.bsm.addTopicChunk(
-                    chunks, whoset, topic, changed=True)
-                osm.bsm.sendBridgeChange(chunks)
+        osm = self.ircs.main.osm
+        if (self.ircs.syncd and osm and osm.syncd):
+            chunks = []
+            osm.bsm.addTopicChunk(
+                chunks, whoset, topic, changed=True)
+            osm.bsm.sendBridgeChange(chunks)
 
 
-    def getNicksInChan(self, chan):
-        nicks = list(self.getChan(chan).users)
+    def getInfoIndex(self, nick):
+        # Get the Dtella info index for this user
+        try:
+            u = self.users[nick]
+        except KeyError:
+             # virtual
+            return 6
+        try:
+            # qaohv
+            return u.chanmodes.index(True)
+        except ValueError:
+            # plain user
+            return 5
+
+
+    def getNicksInChan(self):
+        nicks = [u.nick for u in self.chanusers]
         nicks.sort()
         return nicks
 
@@ -1238,18 +1220,20 @@ class BridgeServerManager(object):
 
         if ircs:
             # Get IRC nick list
-            nicks = set(ircs.data.getNicksInChan(cfg.irc_chan))
+            nicks = set(ircs.data.getNicksInChan())
             nicks.update(cfg.virtual_nicks)
             nicks = list(nicks)
             nicks.sort()
 
+            data = ircs.data
+
             # Add the list of online nicks
-            c = ircs.data.getChan(cfg.irc_chan)
             for nick in nicks:
                 self.addNickChunk(
-                    chunks, irc_to_dc(nick), c.getInfoIndex(nick))
+                    chunks, irc_to_dc(nick), data.getInfoIndex(nick))
 
-            self.addTopicChunk(chunks, c.topic_whoset, c.topic, changed=False)
+            self.addTopicChunk(
+                chunks, data.topic_whoset, data.topic, changed=False)
 
         # Get bans list
         for ip, mask in osm.bsm.bans:
@@ -1469,7 +1453,7 @@ class BridgeServerManager(object):
                 except NickError:
                     raise Reject("Invalid dest nick")
                 
-                if dst_nick not in ircs.data.ulist:
+                if dst_nick not in ircs.data.users:
                     raise Reject("Dest not on IRC")
 
                 ircs.pushPrivMsg(src_nick, text, dst_nick)
