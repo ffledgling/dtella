@@ -306,8 +306,7 @@ class IRCServer(LineOnlyReceiver):
         n00b = args[0]
         reason = irc_strip(args[1])
         
-        #self.data.gotKick(l33t, n00b, reason)
-        self.data.gotQuit(n00b)
+        self.data.gotKill(l33t, n00b, reason)
 
 
     def handleCmd_TOPIC(self, prefix, args):
@@ -748,6 +747,53 @@ class IRCServerData(object):
             u = self.users[n00b]
         except KeyError:
             print "Nick doesn't exist"
+            return
+
+        self.chanusers.remove(u)
+
+
+    def gotKill(self, l33t, n00b, reason):
+
+        osm = self.ircs.main.osm
+        if (self.ircs.syncd and osm and osm.syncd):
+
+            try:
+                nick = dc_from_irc(n00b)
+                n = osm.nkm.lookupNick(nick)
+            except (NickError, KeyError):
+                # IRC Nick; see if they're in the channel.
+                try:
+                    u = self.users[n00b]
+                    if u not in self.chanusers:
+                        raise KeyError
+                except KeyError:
+                    pass
+                else:
+                    # IRC nick, in the channel
+                    chunks = []
+                    osm.bsm.addChatChunk(
+                        chunks, cfg.irc_to_dc_bot,
+                        "%s has KILL'd %s: %s" %
+                        (irc_to_dc(l33t), irc_to_dc(n00b), reason)
+                        )
+                    osm.bsm.addNickChunk(chunks, irc_to_dc(n00b), 0xFF)
+                    osm.bsm.sendBridgeChange(chunks)
+            else:
+                # DC Nick
+                chunks = []
+                osm.bsm.addKickChunk(
+                    chunks, n, irc_to_dc(l33t), ("KILL: %s" % reason)
+                    )
+                osm.bsm.sendBridgeChange(chunks)
+
+                # Forget this nick
+                osm.nkm.removeNode(n)
+                n.setNoUser()
+
+        # Forget this nick
+        try:
+            u = self.users.pop(n00b)
+        except KeyError:
             return
 
         self.chanusers.remove(u)
