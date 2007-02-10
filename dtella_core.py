@@ -2352,7 +2352,7 @@ class OnlineStateManager(object):
             # Nick has changed.
 
             # Remove old nick, if it's in there
-            self.nkm.removeNode(n, "Nick Cleared or Changed")
+            self.nkm.removeNode(n, "No DC client")
 
             # Run a sanity check on the new nick
             if nick and validateNick(nick) != '':

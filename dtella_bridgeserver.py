@@ -403,12 +403,14 @@ class IRCServer(LineOnlyReceiver):
             return
 
         target = args[0]
-        text = irc_strip(args[1])
+        text = args[1]
         flags = 0
         
         if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
             text = text[8:-1]
             flags |= dtella_core.SLASHME_BIT
+
+        text = irc_strip(text)
 
         if target == cfg.irc_chan:
             chunks = []
