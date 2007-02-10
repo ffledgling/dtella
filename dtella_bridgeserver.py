@@ -1672,7 +1672,8 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         # Reverse DNS Manager
         self.rdns = ReverseDNSManager(self)
 
-        self.dnsh = dtella_dnslookup.DNSHandler(self)
+        # DNS Handler, for performing the actual lookups
+        self.dnsh = dtella_dnslookup.DNSHandler(self, cfg.rdns_servers)
 
         # Bind UDP Port
         try:

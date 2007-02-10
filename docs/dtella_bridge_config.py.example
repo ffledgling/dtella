@@ -6,6 +6,9 @@ irc_port = 6667
 irc_password = ""
 irc_chan = "#dtella"
 
+# DNS Servers (only used for reverse IP lookup; local servers are best)
+rdns_servers = ['4.2.2.1','4.2.2.2']
+
 # Bot Parameters
 irc_to_dc_bot = "*IRC"
 dc_to_irc_bot = "Dtella"

@@ -35,7 +35,7 @@ DNS_STALE_TIME = 60*60
 
 class DNSHandler(object):
 
-    def __init__(self, main):
+    def __init__(self, main, dns_servers):
         self.main = main
 
         self.lastUpdate = seconds() - DNS_STALE_TIME - 1
@@ -44,7 +44,7 @@ class DNSHandler(object):
         self.version = None
         self.pkhashes = set()
         
-        dns_servers = list(dtella_local.dns_servers)
+        dns_servers = dns_servers[:]
         random.shuffle(dns_servers)
 
         self.resolver = client.Resolver(

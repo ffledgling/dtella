@@ -74,7 +74,8 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.state = dtella_state.StateManager(self, STATE_FILE)
 
         # DNS Handler
-        self.dnsh = dtella_dnslookup.DNSHandler(self)
+        self.dnsh = dtella_dnslookup.DNSHandler(
+            self, dtella_local.dns_servers)
 
         # Hold off on binding the UDP port until we get the TCP port
         self.addBlocker('udp_bind')
