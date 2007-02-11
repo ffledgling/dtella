@@ -654,7 +654,7 @@ class DCHandler(LineOnlyReceiver):
         self.state = 'invisible'
         del self.chatq[:]
 
-        if not rejoin_time:
+        if rejoin_time is None:
             return
 
         # Automatically rejoin the chat after a timeout period

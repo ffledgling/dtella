@@ -45,6 +45,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: make some fake out-of-order chat messages to test CMS.
 
+# TODO: check DNS periodically, instead of just on sync.
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):

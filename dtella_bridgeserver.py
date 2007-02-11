@@ -36,6 +36,7 @@ import struct
 import md5
 import random
 import re
+from collections import deque
 
 import dtella_state
 import dtella_crypto
@@ -1577,6 +1578,12 @@ class ReverseDNSManager(object):
         self.main = main
         self.cache = {}  # raw ip -> Entry object
 
+        # Queue of pending DNS requests
+        self.dnsq = deque()
+
+        # Number of simultaneous requests available
+        self.limiter = 3
+
 
     def addRequest(self, n):
         ipp = n.ipp
@@ -1600,21 +1607,35 @@ class ReverseDNSManager(object):
         else:
             # Start querying
             ent.waiting_ipps.add(ipp)
+            self.dnsq.append((ip, ent))
+            self.advanceQueue()
 
-            def cb(hostname):
 
-                for ipp in ent.waiting_ipps:
-                    self.signOn(ipp, hostname)
+    def advanceQueue(self):
 
-                ent.waiting_ipps.clear()
+        # Only continue if we have a queue, and spare capacity
+        if not (self.dnsq and self.limiter > 0):
+            return
 
-                if hostname is None:
-                    del self.cache[ip]
-                else:
-                    ent.hostname = hostname
+        self.limiter -= 1
+        ip, ent = self.dnsq.popleft()
 
-            ad = Ad().setRawIP(ip)
-            self.main.dnsh.ipToHostname(ad, cb)
+        def cb(hostname):
+          
+            for ipp in ent.waiting_ipps:
+                self.signOn(ipp, hostname)
+
+            ent.waiting_ipps.clear()
+
+            if hostname is None:
+                del self.cache[ip]
+            else:
+                ent.hostname = hostname
+
+            self.limiter += 1
+            self.advanceQueue()
+        
+        self.main.dnsh.ipToHostname(Ad().setRawIP(ip), cb)
 
 
     def signOn(self, ipp, hostname):
