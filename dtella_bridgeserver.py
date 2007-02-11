@@ -179,7 +179,7 @@ def irc_strip(text):
 
 
 class IRCServer(LineOnlyReceiver):
-    showirc = False
+    showirc = True
 
     def __init__(self, main):
         self.data = IRCServerData(self)
@@ -231,7 +231,7 @@ class IRCServer(LineOnlyReceiver):
         try:
             f = getattr(self, 'handleCmd_%s' % args[0].upper())
         except AttributeError:
-            print "unhandled: %s" % args[0]
+            pass
         else:
             f(prefix, args[1:])
 
@@ -358,8 +358,9 @@ class IRCServer(LineOnlyReceiver):
              cfg.my_host, time.time()))
 
         # Send my own bridge nick
-        self.pushFullJoin(
+        self.pushNick(
             cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
+        self.pushJoin(cfg.dc_to_irc_bot)
 
         # Give it ops
         self.sendLine(
@@ -493,12 +494,19 @@ class IRCServer(LineOnlyReceiver):
             else:
                 # Ok, get ready to send to IRC
                 self.main.rdns.addRequest(n)
-                
 
-    def pushFullJoin(self, nick, user, host, name):
+
+    def pushNick(self, nick, user, host, name):
         self.sendLine(
             "NICK %s 0 %d %s %s %s 1 :%s" %
             (nick, time.time(), user, host, cfg.my_host, name))
+
+
+    def pushMode(self, nick, mode):
+        self.sendLine(":%s MODE %s :%s" % (nick, nick, mode))
+
+
+    def pushJoin(self, nick):
         self.sendLine(":%s JOIN %s" % (nick, cfg.irc_chan))
 
 
@@ -1568,6 +1576,12 @@ class BridgeServerManager(object):
 
 class ReverseDNSManager(object):
 
+#>: NICK {Delta104 1 1171143418 dcg7D5D hawk-****.resnet.purdue.edu irc1.dhirc.com 1 :DCgate-3.2 user
+#>: :{Delta104 MODE {Delta104 :+iwx
+#>: :{Delta104 SETHOST dh-6626D905.resnet.purdue.edu
+#>: :{Delta104 JOIN #dcgate,#dcgate-data
+
+
     class Entry(object):
         def __init__(self):
             self.waiting_ipps = set()
@@ -1665,8 +1679,9 @@ class ReverseDNSManager(object):
         # Nick was already verified
         inick = dc_to_irc(n.nick)
 
-        ircs.pushFullJoin(
-            inick, "dtnode", hostname, "Dtella %s" % n.dttag[3:])
+        ircs.pushNick(inick, "dtnode", hostname, "Dtella %s" % n.dttag[3:])
+        ircs.pushMode(inick, "+iwx")
+        ircs.pushJoin(inick)
 
         # Send queued chat messages
         osm.cms.flushQueue(n)
