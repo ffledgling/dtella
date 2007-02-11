@@ -6,6 +6,13 @@ irc_port = 6667
 irc_password = ""
 irc_chan = "#dtella"
 
+# UnrealIRCd hostmasking parameters
+hostmask_prefix = "prefix"
+
+hostmask_keys = ["key1",
+                 "key2",
+                 "key3"]
+
 # DNS Servers (only used for reverse IP lookup; local servers are best)
 rdns_servers = ['4.2.2.1','4.2.2.2']
 
