@@ -576,7 +576,7 @@ class DCHandler(BaseDCProtocol):
         def fail_cb(detail):
             if err_visible:
                 self.pushStatus(
-                    "*** Connection to '%s' failed: %s" % (nick, detail))
+                    "*** Connection to <%s> failed: %s" % (nick, detail))
 
             ad = Ad().setTextIPPort(addr)
             reactor.connectTCP(
@@ -624,7 +624,7 @@ class DCHandler(BaseDCProtocol):
         def fail_cb(detail):
             if err_visible:
                 self.pushStatus(
-                    '*** Connection to '%s' failed: %s" % (nick, detail))
+                    "*** Connection to <%s> failed: %s" % (nick, detail))
 
             self.main.abort_nick = nick
             self.sendLine(
@@ -885,7 +885,7 @@ class DCHandler(BaseDCProtocol):
         self.goInvisible()
 
         self.pushStatus(
-            "The nick '%s' is already in use on this network." % self.nick)
+            "The nick <%s> is already in use on this network." % self.nick)
         self.pushStatus(
             "Please change your nick, or type !REJOIN to try again.")
 
@@ -1461,7 +1461,7 @@ class DtellaBot(object):
             try:
                 target = osm.nkm.lookupNick(args[0])
             except KeyError:
-                out("The nick '%s' cannot be located." % args[0])
+                out("The nick <%s> cannot be located." % args[0])
                 return
         else:
             self.syntaxHelp(out, 'RANK', prefix)
