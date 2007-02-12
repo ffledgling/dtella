@@ -47,8 +47,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: implement channel/network bans on the bridge
 
-# TODO: *maybe* make the sequencer work for private messages?
-
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -3678,11 +3676,15 @@ class ChatMessageSequencer(object):
         else:
             # From the near future: (0 <= idx < PKTNUM_BUF)
 
+            # Make sure the queue is big enough;
+            # put a timestamp in the empty spaces.
             extra = (idx - len(n.chatq)) + 1
             if extra > 0:
-                n.chatq.extend([None] * extra)
+                n.chatq.extend([seconds()] * extra)
 
-            n.chatq[idx] = msg
+            # Insert the current message into its space
+            if (type(n.chatq[idx]) is float):
+                n.chatq[idx] = msg
 
             if unlocked:
                 self.advanceQueue(n)
@@ -3691,40 +3693,38 @@ class ChatMessageSequencer(object):
     def advanceQueue(self, n):
 
         # Send first block of available messages
-        while n.chatq and n.chatq[0]:
+        while n.chatq and (type(n.chatq[0]) is not float):
             msg = n.chatq.pop(0)
             n.chatq_base = (n.chatq_base + 1) % 0x100000000
             self.sendMessage(n, msg)
 
+        dcall_discard(n, 'chatq_dcall')
+
         # If any messages remain, send them later.
-        if n.chatq:
-            self.scheduleSkipQueue(n)
-        else:
-            dcall_discard(n, 'chatq_dcall')
-
-
-    def scheduleSkipQueue(self, n):
-        if n.chatq_dcall:
+        if not n.chatq:
             return
 
         def cb(n):
             n.chatq_dcall = None
 
             # Forget any missing messages at the beginning
-            while n.chatq and n.chatq[0] is None:
+            while n.chatq and (type(n.chatq[0]) is float):
                 n.chatq.pop(0)
                 n.chatq_base = (n.chatq_base + 1) % 0x100000000
 
             # Send the first block of available messages
             self.advanceQueue(n)
 
-        n.chatq_dcall = reactor.callLater(2.0, cb, n)
+        # The first queue entry contains a timestamp.
+        # Let the gap survive for 2 seconds total.
+        when = max(0, n.chatq[0] + 2.0 - seconds())
+        n.chatq_dcall = reactor.callLater(when, cb, n)
     
 
     def flushQueue(self, n):
         # Send all the messages in the queue, in order
         for msg in n.chatq:
-            if msg:
+            if (type(msg) is not float):
                 self.sendMessage(n, msg)
 
         self.clearQueue(n)
