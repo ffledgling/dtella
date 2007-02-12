@@ -42,6 +42,8 @@ import binascii
 # ...
 
 
+LOCK_STR = "EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=DTELLA"
+
 
 class BaseDCProtocol(LineOnlyReceiver):
 
@@ -54,12 +56,12 @@ class BaseDCProtocol(LineOnlyReceiver):
 
 
     def sendLine(self, line):
-        print "<:", line
+        #print "<:", line
         LineOnlyReceiver.sendLine(self, line.replace('|','&#124;'))
 
 
     def lineReceived(self, line):
-        print ">:", line
+        #print ">:", line
         cmd = line.split(' ', 1)
 
         # Do a dict lookup to find the parameters for this command
@@ -91,6 +93,8 @@ class BaseDCProtocol(LineOnlyReceiver):
 
 ##############################################################################
 
+# These next 3 classes implement a small subset of the DC client-client
+# protocol, in order to impersonate a remote peer and generate an error.
 
 class AbortTransfer_Factory(ClientFactory):
 
@@ -109,13 +113,14 @@ class AbortTransfer_Out(BaseDCProtocol):
     # send $MyNick + $Lock
     # (catch $Lock)
     # wait for $Key
-    # -> $Key, send $Direction, $Key, $Error
+    # -> send $Supports + $Direction + $Key + $Error
 
     def __init__(self, nick):
 
         self.nick = nick
-        self.key = None
+        self.lock = ""
 
+        # If we're not done in 5 seconds, something's fishy.
         def cb():
             self.timeout_dcall = None
             self.transport.loseConnection()
@@ -130,17 +135,19 @@ class AbortTransfer_Out(BaseDCProtocol):
         self.addDispatch('$Key',  -1, self.d_Key)
 
         self.sendLine("$MyNick %s" % self.nick)
-        self.sendLine("$Lock FOO Pk=BAR")
+        self.sendLine("$Lock %s" % LOCK_STR)
 
 
     def d_Lock(self, lock, pk):
-        self.key = lock2key(lock)
+        self.lock = lock
 
 
     def d_Key(self, key):
+        if self.lock.startswith("EXTENDEDPROTOCOL"):
+            self.sendLine("$Supports ADCGet TTHL TTHF")
         self.sendLine("$Direction Upload 12345")
-        self.sendLine("$Key %s" % self.key)
-        self.sendLine("$Error Cancelled by Dtella")
+        self.sendLine("$Key %s" % lock2key(self.lock))
+        self.sendLine("$Error File Not Available")
         self.transport.loseConnection()
 
 
@@ -148,13 +155,12 @@ class AbortTransfer_Out(BaseDCProtocol):
         dcall_discard(self, 'timeout_dcall')
 
 
-
 class AbortTransfer_In(BaseDCProtocol):
 
     # if I receive the connection:
     # receive $MyNick
     # wait for $Lock
-    # -> send $MyNick + $Lock + $Direction + $Key
+    # -> send $MyNick + $Lock + $Supports + $Direction + $Key
     # wait for $Key
     # -> send $Error
 
@@ -171,6 +177,7 @@ class AbortTransfer_In(BaseDCProtocol):
         self._buffer = dch._buffer
         dch.lineReceived = self.lineReceived
 
+        # If we're not done in 5 seconds, something's fishy.
         def cb():
             self.timeout_dcall = None
             self.transport.loseConnection()
@@ -186,7 +193,9 @@ class AbortTransfer_In(BaseDCProtocol):
 
     def d_Lock(self, lock, pk):
         self.sendLine("$MyNick %s" % self.nick)
-        self.sendLine("$Lock FOO Pk=BAR")
+        self.sendLine("$Lock %s" % LOCK_STR)
+        if lock.startswith("EXTENDEDPROTOCOL"):
+            self.sendLine("$Supports ADCGet TTHL TTHF")
         self.sendLine("$Direction Upload 12345")
         self.sendLine("$Key %s" % lock2key(lock))
 
@@ -194,7 +203,7 @@ class AbortTransfer_In(BaseDCProtocol):
 
 
     def d_Key(self, key):
-        self.sendLine("$Error Cancelled by Dtella")
+        self.sendLine("$Error File Not Available")
         self.transport.loseConnection()
 
 
@@ -275,7 +284,7 @@ class DCHandler(BaseDCProtocol):
             return
 
         if not self.main.abort_nick:
-            self.loseConnection()
+            self.transport.loseConnection()
             return
 
         # Transfer my state to the connection abort handler
