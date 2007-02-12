@@ -3701,7 +3701,6 @@ class ChatMessageSequencer(object):
             self.scheduleSkipQueue(n)
         else:
             dcall_discard(n, 'chatq_dcall')
-            n.chatq_base = None
 
 
     def scheduleSkipQueue(self, n):
