@@ -41,11 +41,13 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: Rig up a system for cancelling blocked transfers
-
 # TODO: make some fake out-of-order chat messages to test CMS.
 
 # TODO: check DNS periodically, instead of just on sync.
+
+# TODO: implement channel/network bans on the bridge
+
+# TODO: *maybe* make the sequencer work for private messages?
 
 
 # Miscellaneous Exceptions

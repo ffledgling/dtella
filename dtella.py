@@ -62,6 +62,9 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.dch = None
         self.pending_dch = None
 
+        # Nick used for passive-mode transfer aborting
+        self.abort_nick = None
+
         # Peer Handler
         try:
             import dtella_bridgeclient

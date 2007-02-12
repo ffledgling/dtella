@@ -19,14 +19,15 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
 from twisted.protocols.basic import LineOnlyReceiver
-from twisted.internet.protocol import ServerFactory, Protocol
+from twisted.internet.protocol import ServerFactory, ClientFactory
 from twisted.internet import reactor
 from twisted.python.runtime import seconds
 import twisted.python.log
 
 from dtella_util import (Ad, validateNick, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard,
-                         format_bytes, dcall_timeleft, get_version_string)
+                         format_bytes, dcall_timeleft, get_version_string,
+                         lock2key)
 import dtella_core
 import dtella_local
 import struct
@@ -41,69 +42,24 @@ import binascii
 # ...
 
 
-class DCHandler(LineOnlyReceiver):
 
-    MAX_LENGTH = 2**20
-    delimiter = '|'
+class BaseDCProtocol(LineOnlyReceiver):
 
+    delimiter='|'
 
-    def __init__(self, main):
-        self.main = main
-        
 
     def connectionMade(self):
         self.transport.setTcpNoDelay(True)
-        
         self.dispatch = {}
-        self.info = ''
-        self.nick = ''
-        self.bot = DtellaBot(self, '*Dtella')
-
-        # Handlers which can be used before attaching to Dtella
-        self.addDispatch('$ValidateNick',   1, self.d_ValidateNick)
-        self.addDispatch('$GetNickList',    0, self.d_GetNickList)
-        self.addDispatch('$MyINFO',        -3, self.d_MyInfo)
-        self.addDispatch('$GetINFO',        2, self.d_GetInfo)
-        self.addDispatch('',                0, self.d_KeepAlive)
-        self.addDispatch('$KillDtella',     0, self.d_KillDtella)
-        
-        # Chat messages waiting to be sent
-        self.chatq = []
-        self.chat_counter = 99999
-        self.chatRate_dcall = None
-
-        # ['login_N', 'login_G', 'login_I', 'queued', 'ready', 'invisible']
-        self.state = 'login_N'
-
-        self.queued_dcall = None
-        self.autoRejoin_dcall = None
-
-        self.sendLine("$Lock FOO Pk=BAR")
-        self.pushTopic()
-
-        self.scheduleChatRateControl()
-
-
-    def isOnline(self):
-        osm = self.main.osm
-        return (self.state == 'ready' and osm and osm.syncd)
-
-
-    def connectionLost(self, reason):
-
-        self.main.removeDCHandler(self)
-
-        dcall_discard(self, 'chatRate_dcall')
-        dcall_discard(self, 'autoRejoin_dcall')
 
 
     def sendLine(self, line):
-        #print "<:", line
+        print "<:", line
         LineOnlyReceiver.sendLine(self, line.replace('|','&#124;'))
 
 
     def lineReceived(self, line):
-        #print ">:", line
+        print ">:", line
         cmd = line.split(' ', 1)
 
         # Do a dict lookup to find the parameters for this command
@@ -133,6 +89,176 @@ class DCHandler(LineOnlyReceiver):
         self.dispatch[command] = (nargs, fn)
 
 
+##############################################################################
+
+
+class AbortTransfer_Factory(ClientFactory):
+
+    def __init__(self, nick):
+        self.nick = nick
+
+    def buildProtocol(self, addr):
+        p = AbortTransfer_Out(self.nick)
+        p.factory = self
+        return p
+
+
+class AbortTransfer_Out(BaseDCProtocol):
+
+    # if I initiate the connection:
+    # send $MyNick + $Lock
+    # (catch $Lock)
+    # wait for $Key
+    # -> $Key, send $Direction, $Key, $Error
+
+    def __init__(self, nick):
+
+        self.nick = nick
+        self.key = None
+
+        def cb():
+            self.timeout_dcall = None
+            self.transport.loseConnection()
+
+        self.timeout_dcall = reactor.callLater(5.0, cb)
+
+
+    def connectionMade(self):
+        BaseDCProtocol.connectionMade(self)
+
+        self.addDispatch('$Lock',  2, self.d_Lock)
+        self.addDispatch('$Key',  -1, self.d_Key)
+
+        self.sendLine("$MyNick %s" % self.nick)
+        self.sendLine("$Lock FOO Pk=BAR")
+
+
+    def d_Lock(self, lock, pk):
+        self.key = lock2key(lock)
+
+
+    def d_Key(self, key):
+        self.sendLine("$Direction Upload 12345")
+        self.sendLine("$Key %s" % self.key)
+        self.sendLine("$Error Cancelled by Dtella")
+        self.transport.loseConnection()
+
+
+    def connectionLost(self, reason):
+        dcall_discard(self, 'timeout_dcall')
+
+
+
+class AbortTransfer_In(BaseDCProtocol):
+
+    # if I receive the connection:
+    # receive $MyNick
+    # wait for $Lock
+    # -> send $MyNick + $Lock + $Direction + $Key
+    # wait for $Key
+    # -> send $Error
+
+    def __init__(self, nick, dch):
+
+        self.nick = nick
+        
+        # Steal connection from the DCHandler
+        self.factory = dch.factory
+        self.makeConnection(dch.transport)
+        self.transport.protocol = self
+
+        # Steal the rest of the data
+        self._buffer = dch._buffer
+        dch.lineReceived = self.lineReceived
+
+        def cb():
+            self.timeout_dcall = None
+            self.transport.loseConnection()
+
+        self.timeout_dcall = reactor.callLater(5.0, cb)
+
+
+    def connectionMade(self):
+        BaseDCProtocol.connectionMade(self)
+
+        self.addDispatch('$Lock', 2, self.d_Lock)
+
+
+    def d_Lock(self, lock, pk):
+        self.sendLine("$MyNick %s" % self.nick)
+        self.sendLine("$Lock FOO Pk=BAR")
+        self.sendLine("$Direction Upload 12345")
+        self.sendLine("$Key %s" % lock2key(lock))
+
+        self.addDispatch('$Key', -1, self.d_Key)
+
+
+    def d_Key(self, key):
+        self.sendLine("$Error Cancelled by Dtella")
+        self.transport.loseConnection()
+
+
+    def connectionLost(self, reason):
+        dcall_discard(self, 'timeout_dcall')
+
+
+##############################################################################
+
+
+class DCHandler(BaseDCProtocol):
+
+
+    def __init__(self, main):
+        self.main = main
+
+
+    def connectionMade(self):
+        BaseDCProtocol.connectionMade(self)
+
+        self.info = ''
+        self.nick = ''
+        self.bot = DtellaBot(self, '*Dtella')
+
+        # Handlers which can be used before attaching to Dtella
+        self.addDispatch('$ValidateNick',   1, self.d_ValidateNick)
+        self.addDispatch('$GetNickList',    0, self.d_GetNickList)
+        self.addDispatch('$MyINFO',        -3, self.d_MyInfo)
+        self.addDispatch('$GetINFO',        2, self.d_GetInfo)
+        self.addDispatch('',                0, self.d_KeepAlive)
+        self.addDispatch('$KillDtella',     0, self.d_KillDtella)
+
+        self.addDispatch('$MyNick',         1, self.d_MyNick)
+        
+        # Chat messages waiting to be sent
+        self.chatq = []
+        self.chat_counter = 99999
+        self.chatRate_dcall = None
+
+        # ['login_N', 'login_G', 'login_I', 'queued', 'ready', 'invisible']
+        self.state = 'login_N'
+
+        self.queued_dcall = None
+        self.autoRejoin_dcall = None
+
+        self.sendLine("$Lock FOO Pk=BAR")
+        #self.pushTopic()
+
+        self.scheduleChatRateControl()
+
+
+    def isOnline(self):
+        osm = self.main.osm
+        return (self.state == 'ready' and osm and osm.syncd)
+
+
+    def connectionLost(self, reason):
+
+        self.main.removeDCHandler(self)
+
+        dcall_discard(self, 'chatRate_dcall')
+        dcall_discard(self, 'autoRejoin_dcall')
+
+
     def fatalError(self, text):
         self.pushStatus("ERROR: %s" % text)
         self.transport.loseConnection()
@@ -140,6 +266,21 @@ class DCHandler(LineOnlyReceiver):
 
     def d_KillDtella(self):
         reactor.stop()
+
+
+    def d_MyNick(self, nick):
+        # This indicates a file transfer connection.
+        if self.state != 'login_N':
+            self.fatalError("$MyNick not expected.")
+            return
+
+        if not self.main.abort_nick:
+            self.loseConnection()
+            return
+
+        # Transfer my state to the connection abort handler
+        AbortTransfer_In(self.main.abort_nick, self)
+        self.main.abort_nick = None
 
 
     def d_ValidateNick(self, nick):
@@ -411,6 +552,12 @@ class DCHandler(LineOnlyReceiver):
             self.pushStatus(
                 "*** Connection to '%s' failed: %s" % (nick, detail))
 
+            # TODO: doesn't catch everything
+            ad = Ad().setTextIPPort(addr)
+            reactor.connectTCP(
+                '127.0.0.1', ad.port, AbortTransfer_Factory(nick))
+
+
         if not self.isOnline():
             fail_cb("you're not online.")
             return
@@ -449,6 +596,12 @@ class DCHandler(LineOnlyReceiver):
         def fail_cb(detail):
             self.pushStatus(
                 "*** Connection to '%s' failed: %s" % (nick, detail))
+
+            # TODO: doesn't catch everything
+            self.main.abort_nick = nick
+            self.sendLine(
+                "$ConnectToMe %s 127.0.0.1:%d"
+                % (self.nick, self.factory.listen_port))
 
         if not self.isOnline():
             fail_cb("you're not online.")
