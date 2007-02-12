@@ -69,9 +69,6 @@ class DNSHandler(object):
 
         self.main.addBlocker('dns')
 
-        d = self.resolver.query(
-            dns.Query(dtella_local.dnshost, type=dns.TXT))
-
         def err(text):
             self.main.showLoginStatus(
                 "DNS query failed!  Trying to proceed without it...")
@@ -81,6 +78,13 @@ class DNSHandler(object):
                 self.pkhashes = set(self.main.state.pkhashes)
             
             self.main.removeBlocker('dns')
+
+        try:
+            d = self.resolver.query(
+                dns.Query(dtella_local.dnshost, type=dns.TXT))
+        except Exception, e:
+            err(str(e))
+            return
 
         d.addCallback(self.handleTXT)
         d.addErrback(err)
@@ -227,9 +231,6 @@ class DNSHandler(object):
         revip = '.'.join('%d' % o for o in reversed(ad.ip))
         host = "%s.in-addr.arpa" % revip
 
-        d = self.resolver.query(
-            dns.Query(host, type=dns.PTR))
-
         def success(reply):
             try:
                 hostname = reply[0][0].payload.name.name
@@ -241,6 +242,12 @@ class DNSHandler(object):
 
         def err(why):
             cb(None)
+
+        try:
+            d = self.resolver.query(dns.Query(host, type=dns.PTR))
+        except Exception, e:
+            err(str(e))
+            return
 
         d.addCallback(success)
         d.addErrback(err)
