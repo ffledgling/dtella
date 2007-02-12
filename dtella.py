@@ -331,7 +331,8 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         elif self.dch is not dch:
             return
 
-        self.dch = None 
+        self.dch = None
+        self.abort_nick = None
 
         if self.osm:
             # Announce the DC client's departure

@@ -249,10 +249,18 @@ class DCHandler(BaseDCProtocol):
         self.queued_dcall = None
         self.autoRejoin_dcall = None
 
-        self.sendLine("$Lock FOO Pk=BAR")
-        #self.pushTopic()
-
         self.scheduleChatRateControl()
+
+        # If we're expecting a fake revconnect, delay the inital hub text.
+        def cb():
+            self.init_dcall = None
+            self.sendLine("$Lock FOO Pk=BAR")
+            self.pushTopic()
+
+        if self.main.abort_nick:
+            self.init_dcall = reactor.callLater(1.0, cb)
+        else:
+            cb()
 
 
     def isOnline(self):
@@ -264,6 +272,7 @@ class DCHandler(BaseDCProtocol):
 
         self.main.removeDCHandler(self)
 
+        dcall_discard(self, 'init_dcall')
         dcall_discard(self, 'chatRate_dcall')
         dcall_discard(self, 'autoRejoin_dcall')
 
@@ -278,7 +287,10 @@ class DCHandler(BaseDCProtocol):
 
 
     def d_MyNick(self, nick):
-        # This indicates a file transfer connection.
+        # This is a fake RevConnect that we should terminate.
+        
+        dcall_discard(self, 'init_dcall')
+        
         if self.state != 'login_N':
             self.fatalError("$MyNick not expected.")
             return
@@ -293,6 +305,8 @@ class DCHandler(BaseDCProtocol):
 
 
     def d_ValidateNick(self, nick):
+
+        dcall_discard(self, 'init_dcall')
 
         if self.state != 'login_N':
             self.fatalError("$ValidateNick not expected.")
@@ -557,11 +571,13 @@ class DCHandler(BaseDCProtocol):
 
         osm = self.main.osm
 
-        def fail_cb(detail):
-            self.pushStatus(
-                "*** Connection to '%s' failed: %s" % (nick, detail))
+        err_visible = True
 
-            # TODO: doesn't catch everything
+        def fail_cb(detail):
+            if err_visible:
+                self.pushStatus(
+                    "*** Connection to '%s' failed: %s" % (nick, detail))
+
             ad = Ad().setTextIPPort(addr)
             reactor.connectTCP(
                 '127.0.0.1', ad.port, AbortTransfer_Factory(nick))
@@ -588,11 +604,12 @@ class DCHandler(BaseDCProtocol):
 
         if n.checkRevConnectWindow():
             # If we're responding to a RevConnect, disable errors
-            def fail_cb(detail):
-                pass
+            err_visible = False
 
         elif self.isLeech():
             # I'm a leech
+            err_visible = False
+            fail_cb(None)
             return
 
         n.event_ConnectToMe(self.main, dc_ad.port, fail_cb)
@@ -602,11 +619,13 @@ class DCHandler(BaseDCProtocol):
 
         osm = self.main.osm
 
-        def fail_cb(detail):
-            self.pushStatus(
-                "*** Connection to '%s' failed: %s" % (nick, detail))
+        err_visible = True
 
-            # TODO: doesn't catch everything
+        def fail_cb(detail):
+            if err_visible:
+                self.pushStatus(
+                    '*** Connection to '%s' failed: %s" % (nick, detail))
+
             self.main.abort_nick = nick
             self.sendLine(
                 "$ConnectToMe %s 127.0.0.1:%d"
@@ -627,6 +646,8 @@ class DCHandler(BaseDCProtocol):
 
         if self.isLeech():
             # I'm a leech
+            err_visible = False
+            fail_cb(None)
             return
 
         n.event_RevConnectToMe(self.main, fail_cb)
