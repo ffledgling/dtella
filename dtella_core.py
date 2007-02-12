@@ -45,6 +45,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: check DNS periodically, instead of just on sync.
 
+# TODO: BUG! if DNS fails, it just gets re-requested again.
+
 # TODO: implement channel/network bans on the bridge
 
 
