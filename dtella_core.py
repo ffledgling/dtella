@@ -41,7 +41,7 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: implement channel/network bans on the bridge
+# TODO: convert "TKL + G" and "TKL + Z" into net bans
 
 
 # Miscellaneous Exceptions
