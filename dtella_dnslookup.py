@@ -213,7 +213,6 @@ class DNSHandler(object):
         if self.override_vc < min_vc:
 
             self.main.shutdown(reconnect='no')
-            dcall_discard(self, 'cfgRefresh_dcall')
             
             text = (
                 " ",

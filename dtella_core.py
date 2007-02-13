@@ -4001,6 +4001,7 @@ class DtellaMain_Base(object):
 
         def cb():
             icm = self.icm
+            self.icm = None
             
             if icm.node_ipps:
                 self.startNodeSync(icm.node_ipps)
@@ -4044,9 +4045,6 @@ class DtellaMain_Base(object):
                     self.showLoginStatus(
                         "No online nodes found.")
                     self.shutdown(reconnect='normal')
-
-            # shutdown() should have wiped this out already, but...
-            self.icm = None
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
@@ -4098,11 +4096,10 @@ class DtellaMain_Base(object):
     def shutdown(self, reconnect):
         # Do a total shutdown of this Dtella node
 
-        if not (self.icm or self.osm):
-            # Nothing to do.
-            return
-
-        self.showLoginStatus("Shutting down.")
+        # It's possible for these both to be None, but we still
+        # want to reconnect.  (i.e. after an ICM failure)
+        if (self.icm or self.osm):
+            self.showLoginStatus("Shutting down.")
 
         dcall_discard(self, 'reconnect_dcall')
 
