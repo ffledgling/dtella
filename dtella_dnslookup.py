@@ -87,7 +87,6 @@ class DNSHandler(object):
             return
 
         def err_cb(text):
-            print "err"
             if cb:
                 self.main.showLoginStatus(
                     "DNS query failed!  Trying to proceed without it...")
