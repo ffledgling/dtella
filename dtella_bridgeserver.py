@@ -41,6 +41,7 @@ from collections import deque
 import dtella_state
 import dtella_crypto
 import dtella_local
+import dtella_hostmask
 
 import dtella_dnslookup
 
@@ -179,7 +180,7 @@ def irc_strip(text):
 
 
 class IRCServer(LineOnlyReceiver):
-    showirc = True
+    showirc = False
 
     def __init__(self, main):
         self.data = IRCServerData(self)
@@ -493,6 +494,7 @@ class IRCServer(LineOnlyReceiver):
 
             else:
                 # Ok, get ready to send to IRC
+                n.inick = inick
                 self.main.rdns.addRequest(n)
 
 
@@ -557,7 +559,7 @@ class IRCServer(LineOnlyReceiver):
         self.ping_dcall = reactor.callLater(60.0, cb)
 
 
-    def updateTopic(self, dnick, topic):
+    def updateTopic(self, n, topic):
 
         osm = self.main.osm
         assert (self.syncd and osm and osm.syncd)
@@ -568,15 +570,15 @@ class IRCServer(LineOnlyReceiver):
 
         # Update IRC topic
         self.data.topic = topic
-        self.data.topic_whoset = dnick
+        self.data.topic_whoset = n.nick
         try:
-            self.pushTopic(dc_to_irc(dnick), topic)
+            self.pushTopic(n.inick, topic)
         except NickError:
             return False
 
         # Broadcast change
         chunks = []
-        osm.bsm.addTopicChunk(chunks, dnick, topic, changed=True)
+        osm.bsm.addTopicChunk(chunks, n.nick, topic, changed=True)
         osm.bsm.sendBridgeChange(chunks)
 
         return True
@@ -595,17 +597,13 @@ class IRCServer(LineOnlyReceiver):
             osm.bsm.sendBridgeChange(chunks)
             raise
 
+        n.inick = inick
         self.main.rdns.addRequest(n)
 
 
     def event_RemoveNick(self, n, reason):
-        try:
-            inick = dc_to_irc(n.nick)
-        except NickError:
-            return
-
-        if not hasattr(n, 'dns_pending'):
-            self.pushQuit(inick, reason)
+        if hasattr(n, 'inick') and not hasattr(n, 'dns_pending'):
+            self.pushQuit(n.inick, reason)
 
 
     def event_UpdateInfo(self, n):
@@ -616,17 +614,12 @@ class IRCServer(LineOnlyReceiver):
 
         assert not hasattr(n, 'dns_pending')
 
-        try:
-            inick = dc_to_irc(nick)
-        except NickError:
-            return
-
         if flags & dtella_core.NOTICE_BIT:
-            self.pushNotice(inick, text)
+            self.pushNotice(n.inick, text)
         elif flags & dtella_core.SLASHME_BIT:
-            self.pushPrivMsg(inick, text, action=True)
+            self.pushPrivMsg(n.inick, text, action=True)
         else:
-            self.pushPrivMsg(inick, text)
+            self.pushPrivMsg(n.inick, text)
 
 
     def shutdown(self):
@@ -685,6 +678,8 @@ class IRCServerData(object):
         self.topic = ""
         self.topic_whoset = ""
         self.topic_locked = False
+
+        self.chanbans = {}  # string -> compiled regex
 
 
     def addNick(self, nick):
@@ -860,6 +855,14 @@ class IRCServerData(object):
             elif c == 'l':
                 # Skip over channel user limit
                 i += 1
+            elif c == 'b':
+                banmask = nicks[i]
+                i += 1
+                if val:
+                    self.addChanBan(banmask)
+                else:
+                    self.chanbans.pop(banmask, None)
+                print "bans=", self.chanbans.keys()
             else:
                 try:
                     # Check if this is a user mode
@@ -901,6 +904,37 @@ class IRCServerData(object):
                     )
 
             osm.bsm.sendBridgeChange(chunks)
+
+
+    def addChanBan(self, banmask):
+        if banmask in self.chanbans:
+            return
+
+        regex_badchars = r".^$+?{}\[]|():"
+
+        ban_re = '^'
+        for c in banmask:
+            if c == '*':
+                ban_re += '.*'
+            elif c in regex_badchars:
+                ban_re += '\\' + c
+            else:
+                ban_re += c
+        ban_re += '$'
+
+        self.chanbans[banmask] = re.compile(ban_re)
+
+
+    def nodeBannedInChan(self, n):
+
+        h1 = "%s!dtnode@%s" % (n.inick, n.hostname)
+        h2 = "%s!dtnode@%s" % (n.inick, n.hostmask)
+        
+        for ban_re in self.chanbans.itervalues():
+            if ban_re.match(h1) or ban_re.match(h2):
+                return True
+
+        return False
 
 
     def gotQuit(self, nick):
@@ -1476,6 +1510,17 @@ class BridgeServerManager(object):
         self.main.ph.sendPacket(''.join(packet), ad.getAddrTuple())
 
 
+    def nickRemoved(self, n):
+
+        dels = ('dns_pending', 'hostname', 'hostmask', 'inick')
+
+        for d in dels:
+            try:
+                delattr(n, d)
+            except AttributeError:
+                pass
+
+
     def receivedPrivateMessage(self, src_ipp, ack_key,
                                src_nhash, dst_nick, text):
 
@@ -1506,11 +1551,6 @@ class BridgeServerManager(object):
                 # Haven't seen this message before, so handle it
 
                 try:
-                    src_nick = dc_to_irc(n.nick)
-                except NickError:
-                    raise Reject("Invalid src nick")
-
-                try:
                     dst_nick = irc_from_dc(dst_nick)
                 except NickError:
                     raise Reject("Invalid dest nick")
@@ -1518,7 +1558,7 @@ class BridgeServerManager(object):
                 if dst_nick not in ircs.data.users:
                     raise Reject("Dest not on IRC")
 
-                ircs.pushPrivMsg(src_nick, text, dst_nick)
+                ircs.pushPrivMsg(n.inick, text, dst_nick)
 
         except Reject:
             ack_flags |= dtella_core.ACK_REJECT_BIT
@@ -1554,7 +1594,7 @@ class BridgeServerManager(object):
             if n.pokePMKey(ack_key):
                 # Haven't seen this message before, so handle it
 
-                if not ircs.updateTopic(n.nick, topic):
+                if not ircs.updateTopic(n, topic):
                     raise Reject("Topic locked")
 
         except Reject:
@@ -1611,8 +1651,8 @@ class ReverseDNSManager(object):
             ent = self.cache[ip] = self.Entry()
 
         if ent.hostname:
-            # Already have a hostname, sign on immediately.
-            self.signOn(ipp, ent.hostname)
+            # Already have a hostname, sign on really soon
+            reactor.callLater(0, self.signOn, ipp, ent.hostname)
 
         elif ent.waiting_ipps:
             # This hostname is already being queried.
@@ -1669,15 +1709,32 @@ class ReverseDNSManager(object):
             del n.dns_pending
         except AttributeError:
             return
-        
+
         if not (ircs and ircs.readytosend):
             return
 
         if hostname is None:
             hostname = Ad().setRawIPPort(ipp).getTextIP()
+            hostmask = dtella_hostmask.mask_ipv4(hostname)
+        else:
+            hostmask = dtella_hostmask.mask_hostname(hostname)
 
-        # Nick was already verified
-        inick = dc_to_irc(n.nick)
+        n.hostname = hostname
+        n.hostmask = hostmask
+
+        # Check channel ban
+        if ircs.data.nodeBannedInChan(n):
+            chunks = []
+            osm.bsm.addKickChunk(
+                chunks, n, cfg.irc_to_dc_bot, "Channel Ban", rejoin=True)
+            osm.bsm.sendBridgeChange(chunks)
+
+            # Remove from Dtella nick list
+            osm.nkm.removeNode(n)
+            n.setNoUser()
+            return
+
+        inick = n.inick
 
         ircs.pushNick(inick, "dtnode", hostname, "Dtella %s" % n.dttag[3:])
         ircs.pushMode(inick, "+iwx")
@@ -1796,7 +1853,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         # Cancel all the nick-specific state
         if osm:
             for n in self.osm.nodes:
-                n.nickRemoved()
+                n.nickRemoved(self)
 
 
 if __name__ == '__main__':

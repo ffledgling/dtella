@@ -147,7 +147,7 @@ class NickManager(object):
 
         # Clean up nick-specific stuff
         if n.is_peer:
-            n.nickRemoved()
+            n.nickRemoved(self.main)
 
 
     def addNode(self, n):
@@ -1919,7 +1919,9 @@ class Node(object):
         self.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
-    def nickRemoved(self):
+    def nickRemoved(self, main):
+
+        osm = main.osm
 
         # Cancel all pending privmsg timeouts
         for dcall in self.msgkeys_in.itervalues():
@@ -1930,24 +1932,19 @@ class Node(object):
 
         self.msgkeys_in.clear()
         self.msgkeys_out.clear()
+
+        osm.cms.clearQueue(self)
         
         # Bridge stuff
-        try:
-            del self.dns_pending
-        except AttributeError:
-            pass
-
-        # ChatMessageSequencer stuff
-        del self.chatq[:]
-        dcall_discard(self, 'chatq_dcall')
-        self.chatq_base = None
+        if osm.bsm:
+            osm.bsm.nickRemoved(self)
 
 
-    def shutdown(self):
+    def shutdown(self, main):
         dcall_discard(self, 'expire_dcall')
         dcall_discard(self, 'rcWindow_dcall')
 
-        self.nickRemoved()
+        self.nickRemoved(main)
         
         if self.bridge_data:
             self.bridge_data.shutdown()
@@ -2252,6 +2249,9 @@ class OnlineStateManager(object):
         # BanManager
         self.banm = BanManager(main)
 
+        # ChatMessageSequencer
+        self.cms = ChatMessageSequencer(main)
+
         # BridgeClientManager / BridgeServerManager
         self.bcm = bcm
         self.bsm = bsm
@@ -2261,7 +2261,6 @@ class OnlineStateManager(object):
 
         # Init all these when sync is established:
         self.yqrm = None        # SyncRequestRoutingManager
-        self.cms = None         # ChatMessageSequencer
         
         self.sendStatus_dcall = None
 
@@ -2315,7 +2314,6 @@ class OnlineStateManager(object):
 
         # Get ready to handle Sync requests from other nodes
         self.yqrm = SyncRequestRoutingManager(self.main)
-        self.cms = ChatMessageSequencer(self.main)
         self.syncd = True
 
         if self.bsm:
@@ -2676,8 +2674,7 @@ class OnlineStateManager(object):
 
         # Shut down all nodes
         for n in self.nodes:
-            self.cms.clearQueue(n)
-            n.shutdown()
+            n.shutdown(self.main)
 
         # Shut down the PingManager (and notify outbounds)
         if self.pgm:

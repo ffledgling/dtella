@@ -343,7 +343,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
             # Cancel all nick-specific stuff
             for n in self.osm.nodes:
-                n.nickRemoved()
+                n.nickRemoved(self)
 
         # If another handler is waiting, let it on.
         if self.pending_dch:
