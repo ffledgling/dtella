@@ -4001,7 +4001,6 @@ class DtellaMain_Base(object):
 
         def cb():
             icm = self.icm
-            self.icm = None
             
             if icm.node_ipps:
                 self.startNodeSync(icm.node_ipps)
@@ -4020,13 +4019,34 @@ class DtellaMain_Base(object):
                     self.shutdown(reconnect='max')
 
                 elif reason == 'dead_port':
-                    self.reportDeadPort()
+                    self.showLoginStatus(
+                        "*** UDP PORT FORWARD REQUIRED ***")
+
+                    text = (
+                        "In order for Dtella to communicate properly, it "
+                        "needs to receive UDP traffic from the Internet.  "
+                        "Dtella is currently listening on UDP port %d, but "
+                        "the packets appear to be getting blocked, most "
+                        "likely by a firewall or a router.  If this is the "
+                        "case, then you will have to configure your firewall "
+                        "or router to allow UDP traffic through on this "
+                        "port.  You may tell Dtella to use a different port "
+                        "from now on by typing !UDP followed by a number."
+                        % self.state.udp_port
+                        )
+                    
+                    for line in word_wrap(text):
+                        self.showLoginStatus(line)
+
                     self.shutdown(reconnect='max')
 
                 else:
                     self.showLoginStatus(
                         "No online nodes found.")
                     self.shutdown(reconnect='normal')
+
+            # shutdown() should have wiped this out already, but...
+            self.icm = None
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
@@ -4069,27 +4089,6 @@ class DtellaMain_Base(object):
 
     def logPacket(self, text):
         raise NotImplemented("Override me!")
-
-
-    def reportDeadPort(self):
-
-        port = self.state.udp_port
-
-        self.showLoginStatus("*** UDP PORT FORWARD REQUIRED ***")
-
-        text = (
-            "In order for Dtella to communicate properly, it needs to "
-            "receive UDP traffic from the Internet.  Dtella is currently "
-            "listening on UDP port %d, but the packets appear to be "
-            "getting blocked, most likely by a firewall or a router. "
-            "If this is the case, then you will have to configure your "
-            "firewall or router to allow UDP traffic through on this port. "
-            "You may tell Dtella to use a different port from now on by "
-            "typing !UDP followed by a number." % self.state.udp_port
-            )
-        
-        for line in word_wrap(text):
-            self.showLoginStatus(line)
 
 
     def showLoginStatus(self, text, counter=None):
