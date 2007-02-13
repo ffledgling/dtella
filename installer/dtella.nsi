@@ -69,7 +69,18 @@ ShowUnInstDetails show
 Section -Pre
   SetShellVarContext all
   ExecWait '"$INSTDIR\dtella.exe" --terminate'
+
+push $R0
+  StrCpy $R0 "{88D0F3EF-D185-4B94-9667-05F042C63B08}"
+  Call UninstallDCgate
+pop $R0
+
+
 SectionEnd
+
+
+
+
 
 Section "!Dtella (Required)" Section_EXE
   SectionIn 1 RO
@@ -145,3 +156,18 @@ Section Uninstall
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
 SectionEnd
+
+
+Function UninstallDCgate
+  push $R1
+  ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\$R0" "UninstallString"
+  StrCmp $R1 "" UninstallMSI_nomsi
+    MessageBox MB_YESNOCANCEL|MB_ICONQUESTION  "We have detected a copy of DCgate on your computer. We strongly recommend you remove this first.$\n$\n Do you want to do that now?" IDNO UninstallMSI_nomsi IDYES UninstallMSI_yesmsi
+      Abort
+UninstallMSI_yesmsi:
+    ExecWait '"taskkill.exe" /f /im dcgate.exe'
+    ExecWait '"msiexec.exe" /x $R0'
+    MessageBox MB_OK|MB_ICONINFORMATION "Click OK to continue upgrading to Dtella"
+UninstallMSI_nomsi: 
+  pop $R1
+FunctionEnd
