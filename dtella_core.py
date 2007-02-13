@@ -41,12 +41,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: make some fake out-of-order chat messages to test CMS.
-
-# TODO: check DNS periodically, instead of just on sync.
-
-# TODO: BUG! if DNS fails, it just gets re-requested again.
-
 # TODO: implement channel/network bans on the bridge
 
 
@@ -88,6 +82,7 @@ GOTACK_BIT = 0x02
 REQ_BIT = 0x04
 ACK_BIT = 0x08
 NBLIST_BIT = 0x10
+OFFLINE_BIT = 0x20
 
 # Broadcast Flags
 REJECT_BIT = 0x1
@@ -3146,6 +3141,10 @@ class PingManager(object):
         # For now, include neighbor list only when requesting an ack.
         nblist = i_req
 
+        # Offline bit is set if this neighbor is not recognized.
+        # (this just gets ignored, but it could be useful someday)
+        offline = osm.syncd and (not n.expire_dcall)
+
         # Build packet
         packet = ['PG']
         packet.append(osm.me.ipp)
@@ -3154,7 +3153,8 @@ class PingManager(object):
                  (n.got_ack and GOTACK_BIT)  |
                  (i_req and REQ_BIT)         |
                  (bool(ack_key) and ACK_BIT) |
-                 (nblist and NBLIST_BIT)
+                 (nblist and NBLIST_BIT)     |
+                 (offline and OFFLINE_BIT)
                  )
         
         packet.append(struct.pack('!B', flags))
