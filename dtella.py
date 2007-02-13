@@ -90,7 +90,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
 
     def connectionPermitted(self):
-        return (self.dch or self.persistent)
+        return (self.dch or self.state.persistent)
 
 
     def cleanupOnExit(self):
