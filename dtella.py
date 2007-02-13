@@ -27,6 +27,7 @@ from twisted.internet import reactor
 import sys
 import socket
 import time
+import random
 
 import dtella_state
 import dtella_dc
@@ -54,9 +55,9 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.login_counter = 0
         self.login_text = ""
 
-        # Synchronization stuff
-        self.blockers = set()
+        # Port state stuff
         self.changing_port = False
+        self.udp_bound = False
 
         # DC Handler(s)
         self.dch = None
@@ -80,19 +81,16 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.dnsh = dtella_dnslookup.DNSHandler(
             self, dtella_local.dns_servers)
 
-        # Hold off on binding the UDP port until we get the TCP port
-        self.addBlocker('udp_bind')
+
+    def listenComplete(self):
+        # This gets called after binding the TCP port
+        
+        if self.bindUDPPort() and self.state.persistent:
+            self.newConnectionRequest()
 
 
     def connectionPermitted(self):
-
-        if self.blockers:
-            return False
-
-        if not (self.dch or self.state.persistent):
-            return False
-
-        return True
+        return (self.dch or self.persistent)
 
 
     def cleanupOnExit(self):
@@ -101,22 +99,6 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self.dch.state = 'shutdown'
         self.shutdown(reconnect='no')
         self.state.saveState()
-
-
-    def addBlocker(self, name):
-        # Add a blocker.  Connecting will be prevented until the
-        # blocker is removed.
-        self.blockers.add(name)
-        self.shutdown(reconnect='no')
-
-
-    def removeBlocker(self, name):
-        # Remove a blocker
-        self.blockers.remove(name)
-
-        # Start connecting, if there's a reason to.
-        if self.connectionPermitted():
-            self.newConnectionRequest()
 
 
     def changeUDPPort(self, udp_port):
@@ -132,22 +114,22 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.state.saveState()
 
         def cb(result):
-            self.bindUDPPort()
             self.changing_port = False
+            self.newConnectionRequest()
 
         self.unbindUDPPort(cb)
         return True
 
 
     def bindUDPPort(self):
+        # Returns True if the UDP port is bound
 
-        # This blocker should be set iff the udp port isn't bound already
-        if 'udp_bind' not in self.blockers:
-            return False
+        if self.udp_bound:
+            return True
 
         try:
             reactor.listenUDP(self.state.udp_port, self.ph)
-            self.removeBlocker('udp_bind')
+            self.udp_bound = True
 
         except twisted.internet.error.BindError:
 
@@ -167,37 +149,54 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             for line in word_wrap(text):
                 self.showLoginStatus(line)
 
+        return self.udp_bound
+
 
     def unbindUDPPort(self, cb):
         # Release the UDP port, and call cb when done
-        
-        if 'udp_bind' in self.blockers:
-            # Not bound yet
-            reactor.callLater(0, cb, None)
+
+        if self.udp_bound:
+            self.shutdown(reconnect='no')
+            self.udp_bound = False
+            self.ph.transport.stopListening().addCallback(cb)
 
         else:
-            self.addBlocker('udp_bind')
-            self.ph.transport.stopListening().addCallback(cb)
-            
+            # Not bound yet, just do the callback
+            reactor.callLater(0, cb, None)
+
 
     def newConnectionRequest(self):
         # This fires when the DC client connects and wants to be online
+
+        # Only continue if the UDP port is ready
+        if not self.bindUDPPort():
+            return
 
         if self.icm or self.osm:
             # Already in progress; return description.
             return self.login_text
 
-        self.login_text = ""
+        # Get config from DNS
+        def dns_cb():
+            if self.dnsh.belowMinimumVersion():
+                return
 
-        # If we don't have the UDP port, then try again now.
-        if self.bindUDPPort():
-            return
+            self.dnsh.reportNewVersion()
 
-        # If an update is necessary, this will add a blocker
-        self.dnsh.updateIfStale()
+            try:
+                when, ipps = self.state.dns_ipcache
+            except ValueError:
+                pass
+            else:
+                random.shuffle(ipps)
+                age = max(time.time() - when, 0)
+                for ipp in ipps:
+                    ad = Ad().setRawIPPort(ipp)
+                    self.state.refreshPeer(ad, age)
 
-        # Start connecting now if there are no blockers
-        self.startConnecting()
+            self.startConnecting()
+
+        self.dnsh.getConfigFromDNS(dns_cb)
 
 
     def queryLocation(self, my_ipp):
@@ -289,6 +288,9 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         if self.dch:
             self.dch.dtellaShutdown()
 
+        # Cancel the dns update timer
+        self.dnsh.dtellaShutdown()
+
 
     def getOnlineDCH(self):
         # Return DCH, iff it's fully online.
@@ -314,12 +316,13 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         # Start connecting, or get status of current connection
         text = self.newConnectionRequest()
         if text:
+            # We must already be connecting/online.
+            # Show the last status message.
             dch.pushStatus(text)
 
-        # If we're not hung up on anything, then notify the user
-        # about new versions.
-        if not self.blockers:
-            self.dnsh.sendVersionMessage()
+            # Send a message if there's a newer version
+            self.dnsh.resetReportedVersion()
+            self.dnsh.reportNewVersion()
 
 
     def removeDCHandler(self, dch):
@@ -407,7 +410,7 @@ def run():
                 reactor.stop()
         else:
             print "Listening on 127.0.0.1:%d" % tcp_port
-            dtMain.bindUDPPort()
+            dtMain.listenComplete()
 
     cb(True)
     reactor.run()

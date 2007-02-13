@@ -113,7 +113,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
 
             # Make sure public key matches a hash in DNS
             pkhash = md5.new(pubkey).digest()
-            if pkhash not in self.main.dnsh.pkhashes:
+            if pkhash not in self.main.state.dns_pkhashes:
                 # Not useful to me, but still forward it
                 return
 
@@ -192,7 +192,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
 
             # Make sure public key matches a hash in DNS
             pkhash = md5.new(pubkey).digest()
-            if pkhash not in self.main.dnsh.pkhashes:
+            if pkhash not in self.main.state.dns_pkhashes:
                 raise Skip
 
             # Generate RSA object from public key
@@ -440,11 +440,11 @@ class NickNode(object):
 
 
     def event_ConnectToMe(self, main, port, fail_cb):
-        fail_cb("This user has no files.")
+        fail_cb("IRC users don't have any files.")
 
 
     def event_RevConnectToMe(self, main, fail_cb):
-        fail_cb("This user has no files.")
+        fail_cb("IRC users don't have any files.")
 
 
     def checkRevConnectWindow(self):

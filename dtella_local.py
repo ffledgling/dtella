@@ -26,6 +26,9 @@ network_key = 'PurdueDtella-11'
 
 hub_name = "Dtella@Purdue"
 
+# Set a reasonable upper limit on the DNS minshare (=100GB)
+minshare_cap = 100 * (1024**3)
+
 dns_servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222']
 dnshost = 'purdue.config.dtella.org'
 

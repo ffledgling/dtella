@@ -305,7 +305,6 @@ def word_wrap(line, max_len=80):
                 word = ' ' + word
                 if len(cur_line) + len(word) > max_len:
                     break
-            
 
             cur_line += word
             i += 1

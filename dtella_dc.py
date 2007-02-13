@@ -1594,10 +1594,10 @@ class DtellaBot(object):
 
 
     def handleCmd_VERSION_OVERRIDE(self, out, text, prefix):
-        if 'old_version' in self.main.blockers:
+        if self.main.dnsh.overrideVersion():
             out("Overriding minimum version!  Don't be surprised "
                 "if something breaks.")
-            self.main.removeBlocker('old_version')
+            self.main.newConnectionRequest()
         else:
             out("%sVERSION_OVERRIDE not needed." % prefix)
 

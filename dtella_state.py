@@ -100,10 +100,9 @@ class StateManager(object):
         # Get IP cache
         try:
             ipcache = d['ipcache']
+            if len(ipcache) % 10 != 0:
+                raise KeyError
         except KeyError:
-            ipcache = ''
-
-        if len(ipcache) % 10 != 0:
             ipcache = ''
 
         now = time.time()
@@ -118,11 +117,24 @@ class StateManager(object):
         except KeyError:
             self.suffix = ""
 
-        # Get cached public key hashes
+        # Get saved DNS pkhashes
         try:
-            self.pkhashes = self.unpackStrs(d['pkhashes'])
+            self.dns_pkhashes = set(self.unpackStrs(d['dns_pkhashes']))
         except KeyError:
-            self.pkhashes = []
+            self.dns_pkhashes = set()
+
+        # Get saved DNS ipcache
+        try:
+            dns_ipcache = d['dns_ipcache']
+            if len(dns_ipcache) % 6 != 4:
+                raise KeyError
+        except KeyError:
+            self.dns_ipcache = (0, [])
+        else:
+            when, = struct.unpack('!I', dns_ipcache[:4])
+            ipps = [dns_ipcache[i:i+6]
+                    for i in range(4, len(dns_ipcache), 6)]
+            self.dns_ipcache = (when, ipps)
 
 
     def packStrs(self, strs):
@@ -159,18 +171,20 @@ class StateManager(object):
 
             d = {}
 
-            d['pkhashes'] = self.packStrs(self.pkhashes)
-
             d['udp_port'] = struct.pack('!H', self.udp_port)
 
             d['persistent'] = struct.pack('!B', self.persistent)
 
             d['localsearch'] = struct.pack('!B', self.localsearch)
 
-            peerdata = [struct.pack('!6sI', ipp, int(when))
-                        for when, ipp in self.getYoungestPeers(128)]
-            
-            d['ipcache'] = ''.join(peerdata)
+            ipcache = [struct.pack('!6sI', ipp, int(when))
+                       for when, ipp in self.getYoungestPeers(128)]
+            d['ipcache'] = ''.join(ipcache)
+
+            when, ipps = self.dns_ipcache
+            d['dns_ipcache'] = struct.pack('!I', when) + ''.join(ipps)
+
+            d['dns_pkhashes'] = self.packStrs(self.dns_pkhashes)
 
             d['suffix'] = self.suffix
 

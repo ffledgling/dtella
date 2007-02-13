@@ -20,9 +20,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import dtella_local
 import dtella_crypto
-from dtella_util import Ad, cmpify_version, word_wrap, parse_bytes
+from dtella_util import (Ad, cmpify_version, word_wrap, parse_bytes,
+                         dcall_discard)
 
 from twisted.python.runtime import seconds
+from twisted.internet import reactor
 
 import binascii
 import struct
@@ -31,19 +33,24 @@ import random
 
 from twisted.names import client, dns
 
-DNS_STALE_TIME = 60*60
 
 class DNSHandler(object):
 
     def __init__(self, main, dns_servers):
         self.main = main
 
-        self.lastUpdate = seconds() - DNS_STALE_TIME - 1
+        self.override_vc = cmpify_version(dtella_local.version)
+        self.resetReportedVersion()
+
+        self.cfg_lastUpdate = seconds() - 9999
+        self.cfg_busy = False
+        self.cfg_cb = None
+
+        self.cfgRefresh_dcall = None
 
         self.minshare = 1
         self.version = None
-        self.pkhashes = set()
-        
+
         dns_servers = dns_servers[:]
         random.shuffle(dns_servers)
 
@@ -52,50 +59,63 @@ class DNSHandler(object):
             timeout=(1,2,3))
 
 
-    def updateIfStale(self):
+    def resetReportedVersion(self):
+        self.reported_vc = cmpify_version(dtella_local.version)
+
+
+    def getConfigFromDNS(self, cb):
         # Requery the TXT record if we haven't gotten an update in the
         # last hour.
 
-        if seconds() - self.lastUpdate < DNS_STALE_TIME:
-            if self.versionBelowMinimum():
-                self.main.addBlocker('old_version')
+        stale = (seconds() - self.cfg_lastUpdate >= 60*5)
+
+        if cb:
+            self.cfg_cb = cb
+
+            if stale or self.cfg_busy:
+                self.main.showLoginStatus(
+                    "Requesting config from %s..." % dtella_local.dnshost,
+                    counter=0)
+
+        # If an update is already in progress, just wait for it.
+        if self.cfg_busy:
             return
 
-        self.main.showLoginStatus(
-            "Requesting config from %s..." % dtella_local.dnshost, counter=0)
-
-        if 'dns' in self.main.blockers:
+        # If we've done an update recently, then skip the query
+        if (not stale) and cb:
+            cb()
             return
 
-        self.main.addBlocker('dns')
+        def err_cb(text):
+            print "err"
+            if cb:
+                self.main.showLoginStatus(
+                    "DNS query failed!  Trying to proceed without it...")
 
-        def err(text):
-            self.main.showLoginStatus(
-                "DNS query failed!  Trying to proceed without it...")
+            self.doneGettingConfig()
 
-            # Pull out cached copy of the public key(s)
-            if not self.pkhashes and self.main.state.pkhashes:
-                self.pkhashes = set(self.main.state.pkhashes)
-            
-            self.main.removeBlocker('dns')
-
+        # Do Query
+        self.cfg_busy = True
         try:
             d = self.resolver.query(
                 dns.Query(dtella_local.dnshost, type=dns.TXT))
         except Exception, e:
-            err(str(e))
+            err_cb(str(e))
             return
 
         d.addCallback(self.handleTXT)
-        d.addErrback(err)
+        d.addErrback(err_cb)
 
 
     def handleTXT(self, reply):
 
-        # Clear out old values
+        state = self.main.state
+
+        # Defaults
         self.minshare = 1
         self.version = None
-        self.pkhashes = set()
+        state.dns_pkhashes = set()
+        state.dns_ipcache = (0, [])
         
         for a in reply[0]:
             data = a.payload.data[0]
@@ -105,129 +125,158 @@ class DNSHandler(object):
             except ValueError:
                 continue
 
-            try:
-                f = getattr(self, 'handleTXT_' + name.lower())
-            except AttributeError:
-                continue
+            name = name.lower()
 
-            f(value)
+            if name == 'minshare':
+                try:
+                    self.minshare = parse_bytes(value)
+                except ValueError:
+                    pass
+                else:
+                    cap = dtella_local.minshare_cap
+                    if (cap is not None) and (self.minshare > cap):
+                        self.minshare = cap
 
-        self.lastUpdate = seconds()
+            elif name == 'version':
+                try:
+                    min_v, new_v, url = value.split()
+                except ValueError:
+                    pass
+                else:
+                    self.version = (min_v, new_v, url)
 
-        # Update local cache of public keys
-        self.main.state.pkhashes = list(self.pkhashes)
+            elif name == 'pkhash':
+                h = binascii.a2b_base64(value)
+                state.dns_pkhashes.add(h)
+            
+            elif name == 'ipcache':
+                try:
+                    data = binascii.a2b_base64(value)
+                    data = self.main.pk_enc.decrypt(data)
+                except (ValueError, binascii.Error):
+                    continue
 
-        # Check for minimum version
-        if self.versionBelowMinimum():
-            self.main.addBlocker('old_version')
+                if (len(data)-4) % 6 != 0:
+                    continue
+
+                when, = struct.unpack("!I", data[:4])
+                ipps = [data[i:i+6] for i in range(4, len(data), 6)]
+
+                state.dns_ipcache = (when, ipps)
+
+        self.cfg_lastUpdate = seconds()
+        self.doneGettingConfig()
+
+
+    def doneGettingConfig(self):
+
+        self.cfg_busy = False
+
+        self.schedulePeriodicUpdates()
+
+        if self.cfg_cb:
+            self.cfg_cb()
+            self.cfg_cb = None
+
         else:
-            if 'old_version' in self.main.blockers:
-                self.main.removeBlocker('old_version')
+            if self.belowMinimumVersion():
+                return
 
-            # We know they have the minimum version, but
-            # now check if they have the *latest* version.
-            self.sendVersionMessage()
-
-        self.main.removeBlocker('dns')
+            self.reportNewVersion()
 
 
-    def handleTXT_minshare(self, value):
-        try:
-            self.minshare = parse_bytes(value)
-        except ValueError:
-            self.minshare = 1
+    def schedulePeriodicUpdates(self):
+        # Automatically query DNS a couple times a day
+        when = random.uniform(3600*12, 3600*24)
+
+        if self.cfgRefresh_dcall:
+            self.cfgRefresh_dcall.reset(when)
+
+        def cb():
+            self.cfgRefresh_dcall = None
+            self.getConfigFromDNS(None)
+        
+        self.cfgRefresh_dcall = reactor.callLater(when, cb)
 
 
-    def handleTXT_version(self, value):
-        try:
-            min_v, new_v, url = value.split()
-        except ValueError:
-            return
-        else:
-            self.version = (min_v, new_v, url)
+    def dtellaShutdown(self):
+        dcall_discard(self, 'cfgRefresh_dcall')
 
 
-    def handleTXT_pkhash(self, value):
-        h = binascii.a2b_base64(value)
-        self.pkhashes.add(h)
-
-
-    def handleTXT_ipcache(self, value):
-
-        try:
-            data = binascii.a2b_base64(value)
-            data = self.main.pk_enc.decrypt(data)
-        except (ValueError, binascii.Error), why:
-            return
-
-        if (len(data)-4) % 6 != 0:
-            return
-
-        tm, = struct.unpack("!I", data[:4])
-
-        age = max(time.time() - tm, 0)
-
-        ipps = [data[i:i+6] for i in range(4, len(data), 6)]
-        random.shuffle(ipps)
-
-        for ipp in ipps:
-            ad = Ad().setRawIPPort(ipp)
-            self.main.state.refreshPeer(ad, age)
-
-
-    def sendVersionMessage(self):
+    def belowMinimumVersion(self):
 
         if not self.version:
             return False
 
         min_v, new_v, url = self.version
-        my_v = dtella_local.version
-        my_vc = cmpify_version(my_v)
-        new_vc = cmpify_version(new_v)
-
-        if my_vc < new_vc:
-            if self.main.dch:
-                self.main.dch.bot.say(
-                    "Your version of Dtella (%s) is outdated.  Get "
-                    "version %s here:" % (my_v, new_v))
-                self.main.dch.bot.say(url)
-
-
-    def versionBelowMinimum(self):
-
-        if not self.version:
-            return False
-
-        min_v, new_v, url = self.version
-        my_v = dtella_local.version
-        my_vc = cmpify_version(my_v)
         min_vc = cmpify_version(min_v)
 
-        if my_vc < min_vc:
+        if self.override_vc < min_vc:
+
+            self.main.shutdown(reconnect='no')
+            dcall_discard(self, 'cfgRefresh_dcall')
+            
             text = (
+                " ",
                 "Your version of Dtella (%s) is too old to be used on this "
-                "network.  Please upgrade to the latest version (%s).  "
-                "(If you *REALLY* want to try using your old version, type "
-                "!VERSION_OVERRIDE.)"
-                % (my_v, new_v)
+                "network.  Please upgrade to the latest version (%s)."
+                % (dtella_local.version, new_v),
+                " ",
+                "[If unusual circumstances prevent you from upgrading, "
+                "type !VERSION_OVERRIDE to attempt to connect using this "
+                "unsupported client.]",
+                " ",
+                "Download link: %s" % url
                 )
 
-            for line in word_wrap(text):
-                self.main.showLoginStatus(line)
-
-            self.main.showLoginStatus(" ")
-            self.main.showLoginStatus("Download link: %s" % url)
+            for par in text:
+                for line in word_wrap(par):
+                    self.main.showLoginStatus(line)
             return True
 
-        else:
-            return False
+        return False
+
+
+    def reportNewVersion(self):
+
+        if not self.version:
+            return
+
+        min_v, new_v, url = self.version
+        new_vc = cmpify_version(new_v)
+
+        if self.reported_vc < new_vc:
+            
+            if self.main.dch:
+                say = self.main.dch.bot.say
+                say("You have Dtella version %s.  "
+                    "A newer version (%s) is available."
+                    % (dtella_local.version, new_v))
+                say("Download link: %s" % url)
+                
+                self.reported_vc = new_vc
+
+
+    def overrideVersion(self):
+        # User requested skipping of the minimum version control
+
+        if self.version:
+            min_v, new_v, url = self.version
+            min_vc = cmpify_version(min_v)
+
+            if not (self.override_vc < min_vc):
+                return False
+
+            self.override_vc = min_vc
+
+        return True
 
 
     def ipToHostname(self, ad, cb):
         # Try to determine the hostname of the provided address.
         # When done, call the cb function.  If it fails, the
         # argument is None.
-        
+
         revip = '.'.join('%d' % o for o in reversed(ad.ip))
         host = "%s.in-addr.arpa" % revip
 
