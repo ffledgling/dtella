@@ -49,6 +49,7 @@ SetCompressor lzma
 !insertmacro MUI_PAGE_FINISH
 
 ; Uninstaller pages
+!insertmacro MUI_UNPAGE_COMPONENTS
 !insertmacro MUI_UNPAGE_INSTFILES
 
 ; Language files
@@ -83,10 +84,7 @@ Section -Pre
 SectionEnd
 
 
-
-
-
-Section "!Dtella (Required)" Section_EXE
+Section "!Dtella (Required)" INST_DTELLA
   SectionIn 1 RO
   SetOutPath "$INSTDIR"
   File "dtella.exe"
@@ -100,7 +98,7 @@ Section "!Dtella (Required)" Section_EXE
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk" "$INSTDIR\changelog.txt"
 SectionEnd
 
-Section /o "Source Code" Section_SOURCE
+Section /o "Source Code" INST_SOURCE
   SetOutPath "$INSTDIR"
   File "dtella-purdue-${PRODUCT_VERSION}.tar.bz2"
 SectionEnd
@@ -122,23 +120,20 @@ SectionEnd
 
 ; Section Descriptions
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-  !insertmacro MUI_DESCRIPTION_TEXT ${Section_EXE} "The main Dtella program."
-  !insertmacro MUI_DESCRIPTION_TEXT ${Section_Source} "If you don't know what this is for, then you don't need it."
+  !insertmacro MUI_DESCRIPTION_TEXT ${INST_DTELLA} "The main Dtella program."
+  !insertmacro MUI_DESCRIPTION_TEXT ${INST_SOURCE} "If you don't know what this is for, then you don't need it."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 
 ; Uninstaller Stuff
 
-Function un.onInit
-  MessageBox MB_ICONQUESTION|MB_YESNO|MB_DEFBUTTON2 "Are you sure you want to completely remove $(^Name) and all of its components?" IDYES +2
-  Abort
-FunctionEnd
-
-Section Uninstall
+Section -un.Pre
   SetShellVarContext all
-  
   ExecWait '"$INSTDIR\dtella.exe" --terminate'
+SectionEnd
 
+Section "un.Dtella" UNINST_DTELLA
+  SectionIn 1 RO
   Delete "$INSTDIR\uninst.exe"
   Delete "$INSTDIR\readme.txt"
   Delete "$INSTDIR\changelog.txt"
@@ -147,9 +142,6 @@ Section Uninstall
   Delete "$INSTDIR\dtella-purdue-*.tar.bz2"
   RMDir "$INSTDIR"
 
-  Delete "$PROFILE\.dtella\dtella.state"
-  RmDir "$PROFILE\.dtella"
-  
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Dtella (Run in Background).lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk"
@@ -160,6 +152,18 @@ Section Uninstall
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
 SectionEnd
+
+Section "un.Dtella Settings File" UNINST_SETTINGS
+  Delete "$PROFILE\.dtella\dtella.state"
+  RmDir "$PROFILE\.dtella"
+SectionEnd
+
+
+; Uninstall Section Descriptions
+!insertmacro MUI_UNFUNCTION_DESCRIPTION_BEGIN
+  !insertmacro MUI_DESCRIPTION_TEXT ${UNINST_DTELLA} "Uninstalls the main Dtella program."
+  !insertmacro MUI_DESCRIPTION_TEXT ${UNINST_SETTINGS} "This file contains Dtella's UDP port, along with other temporary data."
+!insertmacro MUI_UNFUNCTION_DESCRIPTION_END
 
 ;This will prompt for the uninstallation of DCgate
 ;Activate this code upon release of Dtella 
