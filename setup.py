@@ -14,7 +14,7 @@ setup(
         
         "py2app":{
             "argv_emulation":True,
-            "iconfile": "dtella.icns",
+            "iconfile": "icons/dtella.icns",
             "plist":{'LSBackgroundOnly':True}
         }
     },
@@ -24,7 +24,7 @@ setup(
     zipfile=None,
     windows=[{
         "script": "dtella.py",
-        "icon_resources": [(1, "dtella.ico")]
+        "icon_resources": [(1, "icons/dtella.ico")]
     }]
 
     #console=[{
