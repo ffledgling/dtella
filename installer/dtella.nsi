@@ -20,7 +20,7 @@
 
 
 !define PRODUCT_NAME "Dtella@Purdue"
-!define PRODUCT_VERSION "0.9.1"
+!define PRODUCT_VERSION "SVN"
 !define PRODUCT_PUBLISHER "Dtella Labs"
 !define PRODUCT_WEB_SITE "http://www.dtella.org/"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\dtella.exe"
@@ -93,7 +93,7 @@ Section "!Dtella (Required)" INST_DTELLA
   File "changelog.txt"
   CreateDirectory "$SMPROGRAMS\${PRODUCT_NAME}"
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Dtella (Run in Background).lnk" "$INSTDIR\dtella.exe"
-  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk" "$INSTDIR\dtella.exe" "--terminate"
+  CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Kill Dtella.lnk" "$INSTDIR\dtella.exe" "--terminate" "$INSTDIR\dtella.exe" 1
   CreateShortCut "$SMPROGRAMS\${PRODUCT_NAME}\Readme.lnk" "$INSTDIR\readme.txt"
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk" "$INSTDIR\changelog.txt"
 SectionEnd

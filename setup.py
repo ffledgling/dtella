@@ -24,7 +24,7 @@ setup(
     zipfile=None,
     windows=[{
         "script": "dtella.py",
-        "icon_resources": [(1, "icons/dtella.ico")]
+        "icon_resources": [(1, "icons/dtella.ico"), (10, "icons/kill.ico")],
     }]
 
     #console=[{
