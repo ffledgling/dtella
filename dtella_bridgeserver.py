@@ -180,7 +180,7 @@ def irc_strip(text):
 
 
 class IRCServer(LineOnlyReceiver):
-    showirc = False
+    showirc = True
 
     def __init__(self, main):
         self.data = IRCServerData(self)
@@ -300,7 +300,10 @@ class IRCServer(LineOnlyReceiver):
         reason = irc_strip(args[2])
 
         if chan == cfg.irc_chan:
-            self.data.gotKick(l33t, n00b, reason)
+            if n00b == cfg.dc_to_irc_bot:
+                self.pushBotJoin()
+            else:
+                self.data.gotKick(l33t, n00b, reason)
 
 
     def handleCmd_KILL(self, prefix, args):
@@ -309,8 +312,11 @@ class IRCServer(LineOnlyReceiver):
         l33t = prefix
         n00b = args[0]
         reason = irc_strip(args[1])
-        
-        self.data.gotKill(l33t, n00b, reason)
+
+        if n00b == cfg.dc_to_irc_bot:
+            self.pushBotJoin(do_nick=True)
+        else:
+            self.data.gotKill(l33t, n00b, reason)
 
 
     def handleCmd_TOPIC(self, prefix, args):
@@ -336,6 +342,58 @@ class IRCServer(LineOnlyReceiver):
             self.data.gotChanModes(whoset, change, nicks)
 
 
+    def handleCmd_TKL(self, prefix, args):
+
+        #:irc1.dhirc.com TKL + Z * 128.10.12.0/24 darkhorse!admin@dhirc.com 0 1171427130 :no reason
+        
+        addrem = args[0]
+        kind = args[1]
+
+        osm = self.main.osm
+
+        if kind == 'Z' and args[2] == '*':
+            ipmask = args[3]
+
+            try:
+                ip, subnet = ipmask.split('/', 1)
+            except ValueError:
+                ip, subnet = ip, "32"
+
+            print "ip,subnet=", (ip,subnet)
+
+            try:
+                ip, = struct.unpack('!i', Ad().setTextIP(ip).getRawIP())
+            except (ValueError, struct.error):
+                print "Invalid IP format"
+                return
+
+            print "ip=", ip
+
+            try:
+                subnet = int(subnet)
+            except ValueError:
+                print "Subnet not a number"
+                return
+
+            print "subnet=", subnet
+
+            if subnet == 0:
+                mask = 0
+            elif 1 <= subnet <= 32:
+                mask = ~0 << (32-subnet)
+            else:
+                print "Subnet out of range"
+                return
+
+            print "kind=", kind
+            print "ip,mask=", (ip, mask)
+
+            if addrem == '+':
+                self.data.addNetBan(ip, mask)
+            elif addrem == '-':
+                self.data.removeNetBan(ip, mask)
+
+
     def handleCmd_SERVER(self, prefix, args):
 
         # If we receive this, our password was accepted, so broadcast
@@ -359,14 +417,7 @@ class IRCServer(LineOnlyReceiver):
              cfg.my_host, time.time()))
 
         # Send my own bridge nick
-        self.pushNick(
-            cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
-        self.pushJoin(cfg.dc_to_irc_bot)
-
-        # Give it ops
-        self.sendLine(
-            ":%s MODE %s +a %s" %
-            (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
+        self.pushBotJoin(do_nick=True)
 
         # Maybe send Dtella nicks
         if osm and osm.syncd:
@@ -464,7 +515,7 @@ class IRCServer(LineOnlyReceiver):
             osm.bsm.addMessageChunk(
                 chunks, irc_to_dc(prefix), text, flags)
             osm.bsm.sendPrivateBridgeChange(n, chunks)
-                
+
 
     def sendState(self):
         
@@ -536,6 +587,18 @@ class IRCServer(LineOnlyReceiver):
         if target is None:
             target = cfg.irc_chan
         self.sendLine(":%s NOTICE %s :%s" % (nick, target, text))
+
+
+    def pushBotJoin(self, do_nick=False):
+        if do_nick:
+            self.pushNick(
+                cfg.dc_to_irc_bot, "dtbridge", cfg.my_host, "Dtella Bridge")
+
+        self.pushJoin(cfg.dc_to_irc_bot)
+
+        self.sendLine(
+            ":%s MODE %s +o %s" %
+            (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
 
 
     def schedulePing(self):
@@ -680,6 +743,8 @@ class IRCServerData(object):
         self.topic_locked = False
 
         self.chanbans = {}  # string -> compiled regex
+
+        self.bans = set()  # network bans: 2 ints: (ip, mask)
 
 
     def addNick(self, nick):
@@ -937,6 +1002,45 @@ class IRCServerData(object):
         return False
 
 
+    def addNetBan(self, ip, mask):
+        
+        if (ip, mask) in self.bans:
+            print "Duplicate ban"
+            return
+
+        self.bans.add((ip, mask))
+
+        print "* Ban Added"
+
+        osm = self.ircs.main.osm
+
+        if (self.ircs.syncd and osm and osm.syncd):
+            chunks = []
+            osm.bsm.addBanChunk(chunks, ip, mask, True)
+            osm.bsm.sendBridgeChange(chunks)
+
+        if osm:
+            osm.banm.enforceNewBan((ip, mask))
+
+
+    def removeNetBan(self, ip, mask):
+
+        try:
+            self.bans.remove((ip, mask))
+        except KeyError:
+            print "Ban not found"
+            return
+
+        print "* Ban Removed"
+
+        osm = self.ircs.main.osm
+
+        if (self.ircs.syncd and osm and osm.syncd):
+            chunks = []
+            osm.bsm.addBanChunk(chunks, ip, mask, False)
+            osm.bsm.sendBridgeChange(chunks)
+
+
     def gotQuit(self, nick):
         try:
             u = self.users.pop(nick)
@@ -950,6 +1054,7 @@ class IRCServerData(object):
             return
 
         osm = self.ircs.main.osm
+
         if (self.ircs.syncd and osm and osm.syncd):
             chunks = []
             osm.bsm.addNickChunk(chunks, irc_to_dc(nick), 0xFF)
@@ -1136,12 +1241,6 @@ class BridgeServerManager(object):
 
         self.cached_blocks = {}  # hash -> CachedBlock()
 
-        # TESTING !!!
-        #ip, = struct.unpack('!i', Ad().setTextIP("128.10.0.0").getRawIP())
-        #mask = ~0 << 16
-        #self.bans = set([(ip, mask)])
-        self.bans = set()
-
 
     def nextPktNum(self):
 
@@ -1311,7 +1410,7 @@ class BridgeServerManager(object):
         # Add info strings
         self.addInfoChunk(chunks)
 
-        if ircs:
+        if (ircs and ircs.syncd):
             # Get IRC nick list
             nicks = set(ircs.data.getNicksInChan())
             nicks.update(cfg.virtual_nicks)
@@ -1328,9 +1427,9 @@ class BridgeServerManager(object):
             self.addTopicChunk(
                 chunks, data.topic_whoset, data.topic, changed=False)
 
-        # Get bans list
-        for ip, mask in osm.bsm.bans:
-            self.addBanChunk(chunks, ip, mask, True)
+            # Get bans list
+            for ip, mask in data.bans:
+                self.addBanChunk(chunks, ip, mask, True)
 
         chunks = ''.join(chunks)
 
@@ -1801,7 +1900,8 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
 
     def logPacket(self, text):
-        print "pkt: %s" % text
+        #print "pkt: %s" % text
+        pass
 
 
     def showLoginStatus(self, text, counter=None):

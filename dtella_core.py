@@ -41,7 +41,11 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: convert "TKL + G" and "TKL + Z" into net bans
+# TODO: when a node is stuck in a reconnect loop, it doesn't query DNS
+
+# TODO: if DNS fails, the re-request interval should be shorter.
+
+# TODO: nodes who were banned shouldn't hop online from a YQ.
 
 
 # Miscellaneous Exceptions
@@ -3785,11 +3789,12 @@ class BanManager(object):
                             osm.pgm.instaKillNeighbor(n)
 
                 # Check myself
-                ip, = struct.unpack('!i', osm.me.ipp[:4])
-                if self.matchBan(ban_ip, ban_mask, ip):
-                    self.main.showLoginStatus("You were banned.")
-                    self.main.shutdown(reconnect='max')
-                    break
+                if not osm.bsm:
+                    ip, = struct.unpack('!i', osm.me.ipp[:4])
+                    if self.matchBan(ban_ip, ban_mask, ip):
+                        self.main.showLoginStatus("You were banned.")
+                        self.main.shutdown(reconnect='max')
+                        break
 
             self.newbans.clear()
 
@@ -3826,8 +3831,8 @@ class BanManager(object):
                     if self.matchBan(ban_ip, ban_mask, ip):
                         return True
 
-        elif osm.bsm:
-            for ban_ip, ban_mask in osm.bsm.bans:
+        elif osm.bsm and self.main.ircs:
+            for ban_ip, ban_mask in self.main.ircs.data.bans:
                 if self.matchBan(ban_ip, ban_mask, ip):
                     return True
 
@@ -4002,46 +4007,46 @@ class DtellaMain_Base(object):
             
             if icm.node_ipps:
                 self.startNodeSync(icm.node_ipps)
+                return
+
+            reason = icm.getFailReason()
+
+            if reason == 'banned_ip':
+                self.showLoginStatus(
+                    "Your IP seems to be banned from this network.")
+                self.shutdown(reconnect='max')
+
+            elif reason == 'foreign_ip':
+                self.showLoginStatus(
+                    "Your IP address is not authorized to use this network.")
+                self.shutdown(reconnect='max')
+
+            elif reason == 'dead_port':
+                self.showLoginStatus(
+                    "*** UDP PORT FORWARD REQUIRED ***")
+
+                text = (
+                    "In order for Dtella to communicate properly, it "
+                    "needs to receive UDP traffic from the Internet.  "
+                    "Dtella is currently listening on UDP port %d, but "
+                    "the packets appear to be getting blocked, most "
+                    "likely by a firewall or a router.  If this is the "
+                    "case, then you will have to configure your firewall "
+                    "or router to allow UDP traffic through on this "
+                    "port.  You may tell Dtella to use a different port "
+                    "from now on by typing !UDP followed by a number."
+                    % self.state.udp_port
+                    )
+                
+                for line in word_wrap(text):
+                    self.showLoginStatus(line)
+
+                self.shutdown(reconnect='max')
+
             else:
-                reason = icm.getFailReason()
-
-                if reason == 'banned_ip':
-                    self.showLoginStatus(
-                        "You seem to be banned.")
-                    self.shutdown(reconnect='max')
-
-                elif reason == 'foreign_ip':
-                    self.showLoginStatus(
-                        "Your IP address is not authorized to use "
-                        "this network.")
-                    self.shutdown(reconnect='max')
-
-                elif reason == 'dead_port':
-                    self.showLoginStatus(
-                        "*** UDP PORT FORWARD REQUIRED ***")
-
-                    text = (
-                        "In order for Dtella to communicate properly, it "
-                        "needs to receive UDP traffic from the Internet.  "
-                        "Dtella is currently listening on UDP port %d, but "
-                        "the packets appear to be getting blocked, most "
-                        "likely by a firewall or a router.  If this is the "
-                        "case, then you will have to configure your firewall "
-                        "or router to allow UDP traffic through on this "
-                        "port.  You may tell Dtella to use a different port "
-                        "from now on by typing !UDP followed by a number."
-                        % self.state.udp_port
-                        )
-                    
-                    for line in word_wrap(text):
-                        self.showLoginStatus(line)
-
-                    self.shutdown(reconnect='max')
-
-                else:
-                    self.showLoginStatus(
-                        "No online nodes found.")
-                    self.shutdown(reconnect='normal')
+                self.showLoginStatus(
+                    "No online nodes found.")
+                self.shutdown(reconnect='normal')
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)

@@ -108,6 +108,10 @@ class DNSHandler(object):
 
     def handleTXT(self, reply):
 
+        if not reply[0]:
+            # Empty response; hop to the error callback
+            raise ValueError("Empty DNS Reply")
+
         state = self.main.state
 
         # Defaults
