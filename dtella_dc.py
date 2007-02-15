@@ -1391,7 +1391,7 @@ class DtellaBot(object):
         self.syntaxHelp(out, 'REJOIN', prefix)
 
 
-    def handleCmd_USERS(self, out, args, preifx):
+    def handleCmd_USERS(self, out, args, prefix):
 
         if not self.dch.isOnline():
             out("You must be online to use %sUSERS." % prefix)
@@ -1406,7 +1406,7 @@ class DtellaBot(object):
             )
 
 
-    def handleCmd_SHARED(self, out, args, preifx):
+    def handleCmd_SHARED(self, out, args, prefix):
 
         if not self.dch.isOnline():
             out("You must be online to use %sSHARED." % prefix)

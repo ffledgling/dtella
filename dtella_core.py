@@ -41,9 +41,7 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: enforce global nick bans
-
-# TODO: the bridge should respond to WHOIS somehow
+# TODO: implement a subset of +m
 
 
 # Miscellaneous Exceptions
