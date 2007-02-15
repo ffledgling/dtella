@@ -41,8 +41,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: nodes who were banned shouldn't hop online from a YQ.
-
 # TODO: enforce global nick bans
 
 # TODO: the bridge should respond to WHOIS somehow
@@ -669,13 +667,14 @@ class PeerHandler(DatagramProtocol):
             except ValueError:
                 pass
 
-        elif self.main.reconnect_dcall and my_ad.auth_s():
+        elif (self.main.reconnect_dcall and self.main.accept_IQ_trigger
+              and my_ad.auth_s()):
             # If we've recently failed to connect, then go online
             # as the sole node on the network.  Then report our node ipp
             # so this other node can try to join us.
 
             self.main.addMyIPReport(src_ad, my_ad)
-            self.main.startNodeSync()
+            self.main.startNodeSync(())
 
             osm = self.main.osm
             node_ipps = [osm.me.ipp]
@@ -3970,6 +3969,8 @@ class DtellaMain_Base(object):
         # Neighbor Connection Manager
         self.osm = None
 
+        self.accept_IQ_trigger = False
+
         # Pakcet Encoder
         self.pk_enc = dtella_crypto.PacketEncoder(dtella_local.network_key)
 
@@ -4044,11 +4045,15 @@ class DtellaMain_Base(object):
                     "No online nodes found.")
                 self.shutdown(reconnect='normal')
 
+                # If we receive an IQ packet after finding no nodes, then
+                # assume we're a root node and form an empty network
+                self.main.accept_IQ_trigger = True
+
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
 
 
-    def startNodeSync(self, node_ipps=()):
+    def startNodeSync(self, node_ipps):
         # Determine my IP address and enable the osm
 
         assert not (self.icm or self.osm)
@@ -4100,6 +4105,7 @@ class DtellaMain_Base(object):
             self.showLoginStatus("Shutting down.")
 
         dcall_discard(self, 'reconnect_dcall')
+        self.accept_IQ_trigger = False
 
         # Shut down InitialContactManager
         if self.icm:

@@ -353,6 +353,10 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self.pending_dch = None
             return
 
+        # Maybe forget about reconnecting
+        if not self.reconnectDesired():
+            dcall_discard(self, 'reconnect_dcall')
+
         # Maybe skip the disconnect
         if self.state.persistent or not (self.icm or self.osm):
             return
