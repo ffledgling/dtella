@@ -1,5 +1,14 @@
 Dtella Changelog
 
+0.9.3 (2007-02-15):
+- Added support for +m (moderated) mode
+- Fixed typo which caused an error if !users run while offline.
+- bugfix: a failed DNS reply was sometimes tagged as a success; this resulted
+in all the bridge traffic becoming invisible
+- In uninstaller, removal of dtella.state is now optional.
+- "Kill Dtella" link has its own icon now.
+- If a DNS query fails, it will now try again periodically while online.
+
 0.9.2 (2007-02-13):
 - bugfix: Wasn't trying to reconnect after a connection failure.
 - bugfix: Connection didn't proceed in the event of a DNS failure.
