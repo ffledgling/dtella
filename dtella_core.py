@@ -41,8 +41,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: implement a subset of +m
-
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
