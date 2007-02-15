@@ -41,13 +41,13 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: when a node is stuck in a reconnect loop, it doesn't query DNS
-
 # TODO: if DNS fails, the re-request interval should be shorter.
 
 # TODO: nodes who were banned shouldn't hop online from a YQ.
 
 # TODO: enforce global nick bans
+
+# TODO: the bridge should respond to WHOIS somehow
 
 
 # Miscellaneous Exceptions
@@ -285,11 +285,6 @@ class PeerHandler(DatagramProtocol):
                 dch.pushSearchResult(rawdata)
             return
 
-        # TODO: this is deprecated
-        elif rawdata == "DTELLA_KILL" and ad.ip == (127,0,0,1):
-            reactor.stop()
-            return
-        
         try:
             try:
                 data = self.main.pk_enc.decrypt(rawdata)
@@ -3989,19 +3984,20 @@ class DtellaMain_Base(object):
         raise NotImplemented("Override me!")
 
 
-    def connectionPermitted(self):
+    def reconnectDesired(self):
         raise NotImplemented("Override me!")
 
 
     def startConnecting(self):
+        raise NotImplemented("Override me!")
+
+
+    def startInitialContact(self):
         # If all the conditions are right, start connection procedure
 
         assert not (self.icm or self.osm)
 
         dcall_discard(self, 'reconnect_dcall')
-
-        if not self.connectionPermitted():
-            return
 
         def cb():
             icm = self.icm
@@ -4123,7 +4119,7 @@ class DtellaMain_Base(object):
         # Schedule a Reconnect (maybe) ...
 
         # Check if a reconnect makes sense right now
-        if not self.connectionPermitted():
+        if not self.reconnectDesired():
             return
 
         if reconnect == 'no':

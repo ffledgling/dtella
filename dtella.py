@@ -82,14 +82,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self, dtella_local.dns_servers)
 
 
-    def listenComplete(self):
-        # This gets called after binding the TCP port
-        
-        if self.bindUDPPort() and self.state.persistent:
-            self.newConnectionRequest()
-
-
-    def connectionPermitted(self):
+    def reconnectDesired(self):
         return (self.dch or self.state.persistent)
 
 
@@ -115,7 +108,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
         def cb(result):
             self.changing_port = False
-            self.newConnectionRequest()
+            self.startConnecting()
 
         self.unbindUDPPort(cb)
         return True
@@ -165,11 +158,17 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             reactor.callLater(0, cb, None)
 
 
-    def newConnectionRequest(self):
+    def startConnecting(self):
         # This fires when the DC client connects and wants to be online
+
+        dcall_discard(self, 'reconnect_dcall')
 
         # Only continue if the UDP port is ready
         if not self.bindUDPPort():
+            return
+
+        # Any reason to be online?
+        if not self.reconnectDesired():
             return
 
         if self.icm or self.osm:
@@ -194,7 +193,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
                     ad = Ad().setRawIPPort(ipp)
                     self.state.refreshPeer(ad, age)
 
-            self.startConnecting()
+            self.startInitialContact()
 
         self.dnsh.getConfigFromDNS(dns_cb)
 
@@ -308,13 +307,16 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
 
     def addDCHandler(self, dch):
+
+        assert (not self.dch)
+        
         self.dch = dch
 
         # Cancel the disconnect timeout
         dcall_discard(self, 'disconnect_dcall')
 
         # Start connecting, or get status of current connection
-        text = self.newConnectionRequest()
+        text = self.startConnecting()
         if text:
             # We must already be connecting/online.
             # Show the last status message.
@@ -410,7 +412,7 @@ def run():
                 reactor.stop()
         else:
             print "Listening on 127.0.0.1:%d" % tcp_port
-            dtMain.listenComplete()
+            dtMain.startConnecting()
 
     cb(True)
     reactor.run()

@@ -1269,7 +1269,7 @@ class DtellaBot(object):
         if len(args) == 0:
             out("Rebooting Node...")
             self.main.shutdown(reconnect='no')
-            self.main.newConnectionRequest()
+            self.main.startConnecting()
             return
 
         self.syntaxHelp(out, 'REBOOT', prefix)
@@ -1308,7 +1308,7 @@ class DtellaBot(object):
                     out("Added to peer cache: %s" % ad.getTextIPPort())
 
                     # Jump-start stuff if it's not already going
-                    self.main.newConnectionRequest()
+                    self.main.startConnecting()
                 else:
                     out("The address '%s' is not permitted on this network."
                         % ad.getTextIPPort())
@@ -1337,7 +1337,7 @@ class DtellaBot(object):
                 if self.main.osm:
                     self.main.osm.updateMyInfo()
 
-                self.main.newConnectionRequest()
+                self.main.startConnecting()
                 return
 
             elif args[0] == 'OFF':
@@ -1597,7 +1597,7 @@ class DtellaBot(object):
         if self.main.dnsh.overrideVersion():
             out("Overriding minimum version!  Don't be surprised "
                 "if something breaks.")
-            self.main.newConnectionRequest()
+            self.main.startConnecting()
         else:
             out("%sVERSION_OVERRIDE not needed." % prefix)
 

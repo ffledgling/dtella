@@ -612,7 +612,6 @@ class IRCServer(LineOnlyReceiver):
             return
         
         def cb():
-            print "PING cb():", time.time()
             self.ping_dcall = None
 
             if self.ping_waiting:
@@ -621,7 +620,7 @@ class IRCServer(LineOnlyReceiver):
             else:
                 self.sendLine("PING :%s" % cfg.my_host)
                 self.ping_waiting = True
-                self.ping_dcall = reactor.callLater(30.0, cb)
+                self.ping_dcall = reactor.callLater(60.0, cb)
 
         self.ping_dcall = reactor.callLater(60.0, cb)
 
@@ -1852,6 +1851,15 @@ class ReverseDNSManager(object):
 
 class DNSUpdateManager(object):
 
+    # This code doesn't really have to reside in the bridge, but it's the
+    # most convenient place to put it.
+
+    # It calls the 'dnsup_update_func' function in dtella_bridge_config,
+    # which accepts a dictionary of key=value pairs, and returns a twisted
+    # Deferred object.  We currently have a module which writes to a text
+    # file, and another which performs a Dynamic DNS update.  Other modules
+    # could potentially be written for free DNS hosting services.
+
     def __init__(self, main):
         self.main = main
         self.update_dcall = None
@@ -1894,16 +1902,17 @@ class DNSUpdateManager(object):
         self.scheduleUpdate(cfg.dnsup_interval)
 
 
-    def b64(self, arg):
-        return binascii.b2a_base64(arg).rstrip()
-
-
     def getEntries(self):
+        # Build and return a dict of entries which should be sent to DNS
+
+        def b64(arg):
+            return binascii.b2a_base64(arg).rstrip()
+        
         osm = self.main.osm
 
         # Generate public key hash
         pubkey = long_to_bytes(RSA.construct(cfg.private_key).n)
-        pkhash = self.b64(md5.new(pubkey).digest())
+        pkhash = b64(md5.new(pubkey).digest())
 
         # Collect IPPs for the ipcache string
         GOAL = 16
@@ -1941,7 +1950,7 @@ class DNSUpdateManager(object):
         random.shuffle(ipcache)
 
         ipcache = '\xFF\xFF\xFF\xFF' + ''.join(ipcache)
-        ipcache = self.b64(self.main.pk_enc.encrypt(ipcache))
+        ipcache = b64(self.main.pk_enc.encrypt(ipcache))
 
         entries = cfg.dnsup_fixed_entries.copy()
 
@@ -2002,7 +2011,11 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
             return self.ircs.shutdown()
 
 
-    def connectionPermitted(self):
+    def startConnecting(self):
+        self.startInitialContact()
+
+
+    def reconnectDesired(self):
         return True
 
 
