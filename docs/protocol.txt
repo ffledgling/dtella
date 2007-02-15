@@ -575,4 +575,5 @@ chunks:
 2-byte reason len
 + reason
 
-'R' - trigger node reboot
+'F' - channel flags
+bit 0 = Moderated

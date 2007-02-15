@@ -107,6 +107,9 @@ CHANGE_BIT = 0x1
 # Bridge Kick flags
 REJOIN_BIT = 0x1
 
+# Bridge general flags
+MODERATED_BIT = 0x1
+
 # Init response codes
 CODE_IP_OK = 0
 CODE_IP_FOREIGN = 1
@@ -1039,6 +1042,12 @@ class PeerHandler(DatagramProtocol):
 
             if src_n and src_n.bridge_data:
                 raise BadBroadcast("Bridge can't chat")
+
+            if osm.isModerated():
+                # Note: this may desync the sender's chat_pktnum, causing
+                # their next valid message to be delayed by 2 seconds, but
+                # it's better than broadcasting useless traffic.
+                raise BadBroadcast("Chat is moderated")
 
             elif src_n and src_n.expire_dcall and nhash == src_n.nickHash():
                 osm.cms.addMessage(
@@ -2593,6 +2602,17 @@ class OnlineStateManager(object):
             self.main.shutdown(reconnect='max')
 
         self.statusLimit_dcall = reactor.callLater(0, cb)
+
+
+    def isModerated(self):
+
+        if self.bcm:
+            return self.bcm.isModerated()
+
+        if self.bsm:
+            return self.bsm.isModerated()
+
+        return False
 
 
     def sendLoginEcho(self):

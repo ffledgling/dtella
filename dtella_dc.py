@@ -694,6 +694,11 @@ class DCHandler(BaseDCProtocol):
             self.pushStatus("*** You must be online to chat!")
             return
 
+        if self.main.osm.isModerated():
+            self.pushStatus(
+                "*** Can't send text; the chat is currently moderated.")
+            return
+
         text = text.replace('\r\n','\n').replace('\r','\n')
 
         for line in text.split('\n'):
@@ -801,6 +806,12 @@ class DCHandler(BaseDCProtocol):
         assert self.isOnline()
 
         osm = self.main.osm
+
+        if osm.isModerated():
+            # If the channel went moderated with something in the queue,
+            # wipe it out and don't send.
+            del self.chatq[:]
+            return
 
         packet = osm.mrm.broadcastHeader('CH', osm.me.ipp)
         packet.append(struct.pack('!I', osm.mrm.getPacketNumber_chat()))

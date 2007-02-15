@@ -471,6 +471,8 @@ class BridgeNodeData(object):
         self.status_pktnum = None
 
         self.topic_flag = False
+        
+        self.moderated = False
 
         self.last_assembled_pktnum = None
         self.nicks = {} # {nick: NickNode()}
@@ -599,6 +601,9 @@ class BridgeNodeData(object):
 
         # This will be toggled back to True if the topic is set
         self.topic_flag = False
+
+        # Default to disabled
+        self.moderated = False
 
         try:
             self.processChunks(data, self.status_pktnum)
@@ -841,6 +846,19 @@ class BridgeNodeData(object):
                         self.parent_n, nick, topic, changed)
 
                     self.topic_flag = True
+
+            elif data[ptr] == 'F':
+                ptr += 1
+
+                try:
+                    (flags,
+                     ) = struct.unpack("!B", data[ptr:ptr+1])
+                    ptr += 1
+                except struct.error:
+                    raise ChunkError("F: struct error")
+
+                if not outdated:
+                    self.moderated = bool(flags & dtella_core.MODERATED_BIT)
 
             else:
                 raise ChunkError("Unknown Chunk '%s'" % data[ptr])
@@ -1128,6 +1146,14 @@ class BridgeClientManager(object):
 
         # Every BridgeNodeData gets registered here
         self.bridges = set()
+
+
+    def isModerated(self):
+        for b in self.bridges:
+            if b.moderated:
+                return True
+
+        return False
 
 
     def signatureExpired(self, pktnum):

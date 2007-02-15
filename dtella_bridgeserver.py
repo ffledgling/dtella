@@ -837,6 +837,8 @@ class IRCServerData(object):
         self.topic_whoset = ""
         self.topic_locked = False
 
+        self.moderated = False
+
         self.chanbans = {}  # string -> compiled regex
         self.qlines = {}  # string -> compiled regex
 
@@ -1011,7 +1013,10 @@ class IRCServerData(object):
             elif c == '-':
                 val = False
             elif c == 't':
-                ch.topic_locked = val
+                self.topic_locked = val
+            elif c == 'm':
+                self.moderated = val
+                osm.bsm.addModeratedChunk(chunks, val)
             elif c == 'k':
                 # Skip over channel key
                 i += 1
@@ -1051,20 +1056,18 @@ class IRCServerData(object):
                 if new_infoindex == old_infoindex:
                     continue
 
-                if (self.ircs.syncd and osm and osm.syncd):
-                    osm.bsm.addNickChunk(
-                        chunks, irc_to_dc(nick), new_infoindex)
+                osm.bsm.addNickChunk(
+                    chunks, irc_to_dc(nick), new_infoindex)
 
-        if chunks:
-            if whoset:
-                # Might want to make this formatted better
-                text = ' '.join([change]+nicks)
+        if self.ircs.syncd and osm and osm.syncd:
 
-                osm.bsm.addChatChunk(
-                    chunks, cfg.irc_to_dc_bot,
-                    "%s sets mode: %s" % 
-                    (irc_to_dc(whoset), text)
-                    )
+            # Might want to make this formatted better
+            text = ' '.join([change]+nicks)
+
+            osm.bsm.addChatChunk(
+                chunks, cfg.irc_to_dc_bot,
+                "%s sets mode: %s" % (irc_to_dc(whoset), text)
+                )
 
             osm.bsm.sendBridgeChange(chunks)
 
@@ -1321,6 +1324,11 @@ class BridgeServerManager(object):
         self.cached_blocks = {}  # hash -> CachedBlock()
 
 
+    def isModerated(self):
+        ircs = self.main.ircs
+        return (ircs and ircs.data.moderated)
+
+
     def nextPktNum(self):
 
         t = long(time.time())
@@ -1510,6 +1518,9 @@ class BridgeServerManager(object):
             for ip, mask in data.bans:
                 self.addBanChunk(chunks, ip, mask, True)
 
+            if data.moderated:
+                self.addModeratedChunk(chunks, True)
+
         chunks = ''.join(chunks)
 
         # Split data string into 1k blocks
@@ -1667,6 +1678,12 @@ class BridgeServerManager(object):
         text = text[:512]
         chunks.append(struct.pack('!H', len(text)))
         chunks.append(text)
+
+
+    def addModeratedChunk(self, chunks, enable):
+        flags = (enable and dtella_core.MODERATED_BIT)
+        chunks.append('F')
+        chunks.append(struct.pack('!B', flags))
 
 
     def receivedBlockRequest(self, src_ipp, bhash):
@@ -1837,8 +1854,6 @@ class ReverseDNSManager(object):
 
 
     def advanceQueue(self):
-
-        if not self.dnsq and self.ircs.
 
         # Only continue if we have a queue, and spare capacity
         if not (self.dnsq and self.limiter > 0):
