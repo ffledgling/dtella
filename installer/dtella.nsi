@@ -36,6 +36,7 @@ SetCompressor lzma
 !define MUI_ABORTWARNING
 !define MUI_ICON "..\icons\labs.ico"
 !define MUI_UNICON "..\icons\labs.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP ".\resources\welcome.bmp"
 
 !define MUI_COMPONENTSPAGE_SMALLDESC
 !define MUI_FINISHPAGE_RUN "$INSTDIR\dtella.exe"
