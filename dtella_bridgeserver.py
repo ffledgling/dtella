@@ -36,6 +36,7 @@ import struct
 import md5
 import random
 import re
+import binascii
 from collections import deque
 
 import dtella_state
@@ -180,7 +181,7 @@ def irc_strip(text):
 
 
 class IRCServer(LineOnlyReceiver):
-    showirc = True
+    showirc = False
 
     def __init__(self, main):
         self.data = IRCServerData(self)
@@ -201,7 +202,10 @@ class IRCServer(LineOnlyReceiver):
 
     def sendLine(self, line):
         line = line.replace('\r', '').replace('\n', '')
-        print "<:", line
+        
+        if self.showirc:
+            print "<:", line
+            
         LineOnlyReceiver.sendLine(self, line)
 
 
@@ -434,7 +438,7 @@ class IRCServer(LineOnlyReceiver):
 
         print "SYNCD!!!!"
 
-        self.showirc = True
+        #self.showirc = True
 
         osm = self.main.osm
 
@@ -964,7 +968,7 @@ class IRCServerData(object):
 
                 osm.bsm.addChatChunk(
                     chunks, cfg.irc_to_dc_bot,
-                    "%s set mode: %s" % 
+                    "%s sets mode: %s" % 
                     (irc_to_dc(whoset), text)
                     )
 
@@ -1846,6 +1850,110 @@ class ReverseDNSManager(object):
 ##############################################################################
 
 
+class DNSUpdateManager(object):
+
+    def __init__(self, main):
+        self.main = main
+        self.update_dcall = None
+        self.busy = False
+
+        self.scheduleUpdate(30.0)
+
+
+    def scheduleUpdate(self, when):
+
+        if self.update_dcall or self.busy:
+            return
+
+        def cb():
+            self.update_dcall = None
+            entries = self.getEntries()
+
+            self.busy = True
+            
+            d = cfg.dnsup_update_func(entries)
+            d.addCallback(self.updateSuccess)
+            d.addErrback(self.updateFailed)
+
+        self.update_dcall = reactor.callLater(when, cb)
+
+
+    def updateSuccess(self, result):
+        self.busy = False
+
+        print "DNS Update Successful:", result
+        
+        self.scheduleUpdate(cfg.dnsup_interval)
+
+
+    def updateFailed(self, why):
+        self.busy = False
+
+        print "DNS Update Failed:", why
+        
+        self.scheduleUpdate(cfg.dnsup_interval)
+
+
+    def b64(self, arg):
+        return binascii.b2a_base64(arg).rstrip()
+
+
+    def getEntries(self):
+        osm = self.main.osm
+
+        # Generate public key hash
+        pubkey = long_to_bytes(RSA.construct(cfg.private_key).n)
+        pkhash = self.b64(md5.new(pubkey).digest())
+
+        # Collect IPPs for the ipcache string
+        GOAL = 16
+        ipps = set()
+
+        if osm:
+            ipps.add(osm.me.ipp)
+
+        if (osm and osm.syncd):
+
+            now = time.time()
+
+            def n_uptime(n):
+                uptime = max(0, now - n.uptime)
+                if n.persist:
+                    uptime *= 1.5
+                return -uptime
+            
+            nodes = osm.nodes[:]
+            nodes.sort(key=n_uptime)
+
+            for n in nodes[:GOAL-1]:
+                ipps.add(n.ipp)
+
+        more = (GOAL - len(ipps)) * 2
+
+        if more:
+            for when,ipp in self.main.state.getYoungestPeers(more):
+                ipps.add(ipp)
+
+                if len(ipps) >= GOAL:
+                    break
+
+        ipcache = list(ipps)
+        random.shuffle(ipcache)
+
+        ipcache = '\xFF\xFF\xFF\xFF' + ''.join(ipcache)
+        ipcache = self.b64(self.main.pk_enc.encrypt(ipcache))
+
+        entries = cfg.dnsup_fixed_entries.copy()
+
+        entries['pkhash'] = pkhash
+        entries['ipcache'] = ipcache
+
+        return entries
+
+
+##############################################################################
+
+
 class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
     def __init__(self):
@@ -1863,6 +1971,9 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
         # Reverse DNS Manager
         self.rdns = ReverseDNSManager(self)
+
+        # DNS Update Manager
+        self.dum = DNSUpdateManager(self)
 
         # DNS Handler, for performing the actual lookups
         self.dnsh = dtella_dnslookup.DNSHandler(self, cfg.rdns_servers)

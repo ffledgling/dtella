@@ -47,6 +47,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: nodes who were banned shouldn't hop online from a YQ.
 
+# TODO: enforce global nick bans
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):

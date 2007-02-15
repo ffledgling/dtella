@@ -28,3 +28,30 @@ udp_port = 41236
 ip_cache = ['1.2.3.4:41234']
 
 private_key = ()  # Tuple of long integers
+
+# DNS Updater Stuff
+dnsup_fixed_entries = {
+    'minshare': '256M',
+    'version': '13.37 13.38 http://www.example.com/'
+    }
+
+dnsup_interval = 60*15
+
+# Select a plugin for dnsup_update_func
+
+# -- Write to a plain text file --
+import dtella_dnsup_textfile
+dnsup_update_func = dtella_dnsup_textfile.TextFileUpdater(
+    fname="test-dns.txt"
+    ).update
+
+# -- Use Dynamic DNS --
+##import dtella_dnsup_dynamic
+##dnsup_update_func = dtella_dnsup_dynamic.DynamicDNSUpdater(
+##    tsig_key = {'keyname': 'keyvalue'},
+##    zone = "foo.config.dtella.org",
+##    record = "",
+##    ttl = 300,
+##    dns_ip = '1.2.3.4'
+##    ).update
+
