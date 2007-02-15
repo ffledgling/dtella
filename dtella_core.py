@@ -4047,7 +4047,7 @@ class DtellaMain_Base(object):
 
                 # If we receive an IQ packet after finding no nodes, then
                 # assume we're a root node and form an empty network
-                self.main.accept_IQ_trigger = True
+                self.accept_IQ_trigger = True
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
