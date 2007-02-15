@@ -46,6 +46,9 @@ class DNSHandler(object):
         self.cfg_busy = False
         self.cfg_cb = None
 
+        # Increases logarithmically until we get a first DNS reply
+        self.fail_delay = 10.0
+
         self.cfgRefresh_dcall = None
 
         self.minshare = 1
@@ -195,7 +198,8 @@ class DNSHandler(object):
             when = random.uniform(3600*12, 3600*24)
         else:
             # If we've never gotten an update, request sooner
-            when = random.uniform(60*10, 60*20)
+            when = self.fail_delay * random.uniform(0.8, 1.2)
+            self.fail_delay = min(3600*2, self.fail_delay *= 1.5)
 
         if self.cfgRefresh_dcall:
             self.cfgRefresh_dcall.reset(when)
