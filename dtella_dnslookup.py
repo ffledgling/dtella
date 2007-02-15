@@ -199,7 +199,7 @@ class DNSHandler(object):
         else:
             # If we've never gotten an update, request sooner
             when = self.fail_delay * random.uniform(0.8, 1.2)
-            self.fail_delay = min(3600*2, self.fail_delay *= 1.5)
+            self.fail_delay = min(3600*2, self.fail_delay * 1.5)
 
         if self.cfgRefresh_dcall:
             self.cfgRefresh_dcall.reset(when)
