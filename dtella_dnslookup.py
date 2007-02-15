@@ -42,7 +42,7 @@ class DNSHandler(object):
         self.override_vc = cmpify_version(dtella_local.version)
         self.resetReportedVersion()
 
-        self.cfg_lastUpdate = seconds() - 9999
+        self.cfg_lastUpdate = None
         self.cfg_busy = False
         self.cfg_cb = None
 
@@ -67,7 +67,8 @@ class DNSHandler(object):
         # Requery the TXT record if we haven't gotten an update in the
         # last hour.
 
-        stale = (seconds() - self.cfg_lastUpdate >= 60*5)
+        stale = ((self.cfg_lastUpdate is None) or
+                 (seconds() - self.cfg_lastUpdate >= 60*5))
 
         if cb:
             self.cfg_cb = cb
@@ -189,8 +190,12 @@ class DNSHandler(object):
 
 
     def schedulePeriodicUpdates(self):
-        # Automatically query DNS a couple times a day
-        when = random.uniform(3600*12, 3600*24)
+        if self.cfg_lastUpdate is not None:
+            # Automatically query DNS a couple times a day
+            when = random.uniform(3600*12, 3600*24)
+        else:
+            # If we've never gotten an update, request sooner
+            when = random.uniform(60*10, 60*20)
 
         if self.cfgRefresh_dcall:
             self.cfgRefresh_dcall.reset(when)

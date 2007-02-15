@@ -41,8 +41,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: if DNS fails, the re-request interval should be shorter.
-
 # TODO: nodes who were banned shouldn't hop online from a YQ.
 
 # TODO: enforce global nick bans
