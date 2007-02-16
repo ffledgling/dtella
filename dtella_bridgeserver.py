@@ -1005,6 +1005,9 @@ class IRCServerData(object):
 
         osm = self.ircs.main.osm
 
+        unset_modes = []
+        unset_nicks = []
+
         chunks = []
 
         for c in change:
@@ -1046,7 +1049,15 @@ class IRCServerData(object):
                 try:
                     u = self.users[nick]
                 except KeyError:
-                    # Skip phantom nicks (i.e. nicks on THIS server)
+                    try:
+                        osm.nkm.lookupNick(dc_from_irc(nick))
+                    except (NickError, KeyError):
+                        continue
+
+                    # If we're setting a mode for a Dt node, unset it.
+                    if val:
+                        unset_modes.append(c)
+                        unset_nicks.append(nick)
                     continue
 
                 old_infoindex = self.getInfoIndex(nick)
@@ -1070,6 +1081,12 @@ class IRCServerData(object):
                 )
 
             osm.bsm.sendBridgeChange(chunks)
+
+        if unset_modes:
+            self.ircs.sendLine(
+                ":%s MODE %s -%s %s" % (
+                    cfg.dc_to_irc_bot, cfg.irc_chan,
+                    ''.join(unset_modes), ' '.join(unset_nicks)))
 
 
     def nodeBannedInChan(self, n):
