@@ -43,6 +43,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
 
 # TODO: make Dtella nicks reject user modes
 
+# TODO: solve TheLegendOfMouse's DC protocol error
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -461,7 +463,7 @@ class PeerHandler(DatagramProtocol):
             self.main.logPacket("Bad Broadcast: %s" % str(e))
             
             # Mark that we've seen this message, but don't forward it.
-            osm.mrm.newMessage(data, nb_ipp, tries=0)
+            osm.mrm.newMessage(data, tries=0, nb_ipp=nb_ipp)
 
             # Ack and skip the rest
             self.sendAckPacket(nb_ipp, ACK_BROADCAST, ack_flags, ack_key)
@@ -492,7 +494,7 @@ class PeerHandler(DatagramProtocol):
         
             # Pass this message to MessageRoutingManager, so it will be
             # forwarded to all of my neighbors.
-            osm.mrm.newMessage(''.join(packet), nb_ipp, tries=2)
+            osm.mrm.newMessage(''.join(packet), tries=2, nb_ipp=nb_ipp)
 
         # Ack the neighbor
         self.sendAckPacket(nb_ipp, ACK_BROADCAST, ack_flags, ack_key)
@@ -3278,14 +3280,15 @@ class MessageRoutingManager(object):
                 else:
                     self.nbs[nb_ipp] = None
 
+            data = self.data
+            tries = self.tries
+
             # If we're passing an NF to the node who's dying, then up the
             # number of retries to 8, because it's rather important.
             if data[0:2] == 'NF' and data[10:16] == nb_ipp:
                 tries = 8
-            else:
-                tries = self.tries
 
-            cb(self.data, tries)
+            cb(data, tries)
 
 
         def shutdown(self):
@@ -3377,7 +3380,7 @@ class MessageRoutingManager(object):
         return True
 
 
-    def newMessage(self, data, nb_ipp=None, tries):
+    def newMessage(self, data, tries, nb_ipp=None):
         # Forward a new message to my neighbors
 
         ack_key = self.generateKey(data)
