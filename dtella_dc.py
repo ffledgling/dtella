@@ -33,6 +33,7 @@ import dtella_local
 import struct
 import re
 import binascii
+import socket
 
 # Login Procedure
 # H>C $HubName
@@ -51,7 +52,10 @@ class BaseDCProtocol(LineOnlyReceiver):
 
 
     def connectionMade(self):
-        self.transport.setTcpNoDelay(True)
+        try:
+            self.transport.setTcpNoDelay(True)
+        except socket.error:
+            pass
         self.dispatch = {}
 
 
