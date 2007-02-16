@@ -1,0 +1,6 @@
+config data:
+
+version=<minver> <newver> http://foo.bar.baz/dtella.zip
+minshare=256M
+pkhash=[base64-encoded MD5 hash of public key]
+ipcache=[time4 + ipport + ipport + ipport (up to 16)] encrypted as a packet, then base64-encoded (~150 bytes)
