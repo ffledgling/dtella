@@ -247,8 +247,10 @@ class DCHandler(BaseDCProtocol):
         self.chat_counter = 99999
         self.chatRate_dcall = None
 
-        # ['login_N', 'login_G', 'login_I', 'queued', 'ready', 'invisible']
-        self.state = 'login_N'
+        # ['login_1', 'login_2', 'queued', 'ready', 'invisible']
+        self.state = 'login_1'
+
+        self.loginblockers = set(('MyINFO', 'GetNickList'))
 
         self.queued_dcall = None
         self.autoRejoin_dcall = None
@@ -295,7 +297,7 @@ class DCHandler(BaseDCProtocol):
         
         dcall_discard(self, 'init_dcall')
         
-        if self.state != 'login_N':
+        if self.state != 'login_1':
             self.fatalError("$MyNick not expected.")
             return
 
@@ -312,12 +314,12 @@ class DCHandler(BaseDCProtocol):
 
         dcall_discard(self, 'init_dcall')
 
-        if self.state != 'login_N':
+        if self.state != 'login_1':
             self.fatalError("$ValidateNick not expected.")
             return
 
-        # Next, we expect $GetNickList
-        self.state = 'login_G'
+        # Next, we expect $GetNickList+$MyINFO
+        self.state = 'login_2'
 
         reason = validateNick(nick)
 
@@ -353,13 +355,9 @@ class DCHandler(BaseDCProtocol):
 
     def d_GetNickList(self):
 
-        if self.state == 'login_N':
+        if self.state == 'login_1':
             self.fatalError("Got $GetNickList, expected $ValidateNick")
             return
-
-        # Next, we expect $MyINFO
-        if self.state == 'login_G':
-            self.state = 'login_I'
 
         # Me and the bot are ALWAYS online
         nicks = [self.bot.nick, self.nick]
@@ -375,30 +373,38 @@ class DCHandler(BaseDCProtocol):
         self.sendLine("$NickList %s$$" % '$$'.join(nicks))
         self.sendLine("$OpList %s$$" % self.bot.nick)
 
+        if self.state == 'login_2':
+            self.removeLoginBlocker('GetNickList')
+
 
     def d_MyInfo(self, _1, _2, info):
 
-        if self.state == 'login_N':
+        if self.state == 'login_1':
             self.fatalError("Got $MyINFO, expected $ValidateNick")
-            return
-
-        elif self.state == 'login_G':
-            self.fatalError("Got $MyINFO, expected $GetNickList")
             return
 
         # Save my new info
         self.info = info.replace('\r','').replace('\n','')
 
-        if self.state == 'login_I':
-            self.loginComplete()
+        if self.state == 'login_2':
+            self.removeLoginBlocker('MyINFO')
 
         elif self.isOnline():
             self.main.osm.updateMyInfo()
 
 
-    def loginComplete(self):
+    def removeLoginBlocker(self, blocker):
 
-        assert self.state == 'login_I'
+        assert self.state == 'login_2'
+
+        try:
+            self.loginblockers.remove(blocker)
+            if self.loginblockers:
+                return
+        except KeyError:
+            return
+
+        # None left, continue connecting...
 
         if self.main.dch is None:
             self.attachMeToDtella()
