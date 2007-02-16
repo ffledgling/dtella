@@ -41,6 +41,8 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
+# TODO: make Dtella nicks reject user modes
+
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
@@ -490,7 +492,7 @@ class PeerHandler(DatagramProtocol):
         
             # Pass this message to MessageRoutingManager, so it will be
             # forwarded to all of my neighbors.
-            osm.mrm.newMessage(''.join(packet), nb_ipp)
+            osm.mrm.newMessage(''.join(packet), nb_ipp, tries=2)
 
         # Ack the neighbor
         self.sendAckPacket(nb_ipp, ACK_BROADCAST, ack_flags, ack_key)
@@ -2988,7 +2990,7 @@ class PingManager(object):
             packet.append(pkt_id)
             packet.append(n.sesid)
 
-            osm.mrm.newMessage(''.join(packet))
+            osm.mrm.newMessage(''.join(packet), tries=2)
 
             osm.scheduleNodeExpire(n, NODE_EXPIRE_EXTEND)
 
@@ -3254,17 +3256,14 @@ class MessageRoutingManager(object):
 
 
         def sendToNeighbor(self, nb_ipp, ph):
-            # If we don't need to transmit this message, 
-            
+            # Pass this current message to the given neighbor
+           
             if nb_ipp in self.nbs:
                 # This neighbor has already seen our message
                 return
 
             def cb(data, tries):
                 # Ack timeout callback
-
-                # The number of tries may be reduced externally
-                tries = min(tries, self.tries)
 
                 # Make an attempt now
                 if tries > 0:
@@ -3279,7 +3278,14 @@ class MessageRoutingManager(object):
                 else:
                     self.nbs[nb_ipp] = None
 
-            cb(self.data, self.tries)
+            # If we're passing an NF to the node who's dying, then up the
+            # number of retries to 8, because it's rather important.
+            if data[0:2] == 'NF' and data[10:16] == nb_ipp:
+                tries = 8
+            else:
+                tries = self.tries
+
+            cb(self.data, tries)
 
 
         def shutdown(self):
@@ -3371,7 +3377,7 @@ class MessageRoutingManager(object):
         return True
 
 
-    def newMessage(self, data, nb_ipp=None, tries=2):
+    def newMessage(self, data, nb_ipp=None, tries):
         # Forward a new message to my neighbors
 
         ack_key = self.generateKey(data)

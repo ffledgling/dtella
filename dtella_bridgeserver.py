@@ -1464,7 +1464,7 @@ class BridgeServerManager(object):
                 packet.append(self.nextPktNum())
                 packet.append(struct.pack("!H", len(b)))
                 packet.append(b)
-                osm.mrm.newMessage(''.join(packet))
+                osm.mrm.newMessage(''.join(packet), tries=4)
 
         self.sendState_dcall = reactor.callLater(0, cb)
 
@@ -1557,7 +1557,7 @@ class BridgeServerManager(object):
 
         self.signPacket(packet, broadcast=True)
 
-        osm.mrm.newMessage(''.join(packet))
+        osm.mrm.newMessage(''.join(packet), tries=4)
 
 
     def sendPrivateBridgeChange(self, n, chunks):
