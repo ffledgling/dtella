@@ -1,5 +1,13 @@
 Dtella Changelog
 
+0.9.4 (2007-02-16):
+- New bitmap and icon for installer.
+- Catch exceptions raised by setTcpNoDelay
+- Fix support for some older clients (like StrongDC 1.0) that send $MyINFO
+before $GetNickList.
+- More agressive sending of NF (Node Failure) messages during the last hop to
+the failed node.  This should help somewhat to prevent random dropouts.
+
 0.9.3 (2007-02-15):
 - Added support for +m (moderated) mode
 - Fixed typo which caused an error if !users run while offline.

@@ -41,8 +41,6 @@ from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          get_version_string, parse_dtella_tag)
 
 
-# TODO: solve TheLegendOfMouse's DC protocol error (StrongDC 1.0 RC10)
-
 # TODO: Better formatting of mode changes
 
 
