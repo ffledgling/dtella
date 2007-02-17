@@ -168,7 +168,7 @@ Function UninstallDCgate
   push $R1
   ReadRegStr $R1 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\$R0" "UninstallString"
   StrCmp $R1 "" UninstallMSI_nomsi
-    MessageBox MB_YESNOCANCEL|MB_ICONQUESTION  "We have detected a copy of DCgate on your computer. We strongly recommend you remove this ;first.$\n$\n Do you want to do that now?" IDNO UninstallMSI_nomsi IDYES UninstallMSI_yesmsi
+    MessageBox MB_YESNO|MB_ICONQUESTION "We have detected a copy of DCgate on your computer.$\nDCgate will no longer be useful, so we recommend that you remove it.$\n$\nDo you want to remove DCgate?" IDNO UninstallMSI_nomsi IDYES UninstallMSI_yesmsi
       Abort
 UninstallMSI_yesmsi:
     ExecWait '"taskkill.exe" /f /im dcgate.exe'

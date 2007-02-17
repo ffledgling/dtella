@@ -2,6 +2,11 @@ Dtella README (The basic important stuff!)
 
 --
 
+If you run into any roadblocks, you can go to dtella.org and
+click [IRC] to chat with all the Dtella users from your browser.
+
+--
+
 When you start Dtella, it just runs invisibly in the background.
 In order to accomplish anything useful, you'll have to connect to it
 with a DC client.  The most common one is DC++:
@@ -33,4 +38,3 @@ File > Settings > Sharing
 --
 
 Type !help into the main chat to see a list of Dtella commands.
-
