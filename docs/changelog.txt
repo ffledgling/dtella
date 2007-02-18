@@ -1,5 +1,9 @@
 Dtella Changelog
 
+1.0.1 (2007-02-18):
+- Fixed the "node_ipps" bug.
+- Fixed the fixable part of the "malformed address" bug.
+
 1.0.0 (2007-02-16):
 - New bitmap and icon for installer.
 - Catch exceptions raised by setTcpNoDelay
