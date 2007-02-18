@@ -1363,10 +1363,10 @@ class InitialContactManager(DatagramProtocol):
         __lt__ = lambda self,other: self.seen >  other.seen
         __le__ = lambda self,other: self.seen >= other.seen
         
-        def __init__(self, ipp, seen, inheap=False):
+        def __init__(self, ipp, seen):
             self.ipp = ipp
             self.seen = seen
-            self.inheap = inheap
+            self.inheap = True
             self.timeout_dcall = None
             
             self.alt_reply = False
@@ -1392,7 +1392,7 @@ class InitialContactManager(DatagramProtocol):
         self.peers = {}  # {IPPort -> PeerInfo object}
 
         for ipp, seen in self.main.state.peers.iteritems():
-            self.peers[ipp] = self.PeerInfo(ipp, seen, inheap=True)
+            self.peers[ipp] = self.PeerInfo(ipp, seen)
 
         self.heap = self.peers.values()
         heapq.heapify(self.heap)
