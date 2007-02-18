@@ -268,21 +268,17 @@ class StateManager(object):
             age = 0
 
         seen = time.time() - age
-        icm = self.main.icm
 
         try:
             old_seen = self.peers[ipp]
-
         except KeyError:
             self.peers[ipp] = seen
-            if icm:
-                icm.newPeer(ipp, seen)
-
         else:
             if seen > old_seen:
                 self.peers[ipp] = seen
-                if icm:
-                    icm.youngerPeer(ipp, seen)
+
+        if self.main.icm:
+            self.main.icm.newPeer(ipp, seen)
 
         # Truncate the peer cache if it grows too large
         target = 100

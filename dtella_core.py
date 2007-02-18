@@ -1412,26 +1412,25 @@ class InitialContactManager(DatagramProtocol):
 
     def newPeer(self, ipp, seen):
         # Called by PeerAddressManager
-        
-        p = self.PeerInfo(ipp, seen)
-        self.peers[ipp] = p
-        heapq.heappush(self.heap, p)
-        self.scheduleInitRequest()
 
-
-    def youngerPeer(self, ipp, seen):
-        # Called by PeerAddressManager
-        
-        p = self.peers[ipp]
-        p.seen = seen
-        
-        # Bubble it up the heap.
-        # This takes O(n) and uses an undocumented heapq function...
-        if p.inheap:
-            heapq._siftdown(self.heap, 0, self.heap.index(p))
+        try:
+            p = self.peers[ipp]
+        except KeyError:
+            p = self.peers[ipp] = self.PeerInfo(ipp, seen)
+            heapq.heappush(self.heap, p)
+            self.scheduleInitRequest()
+        else:
+            if seen > p.seen:
+                p.seen = seen
+                
+                # Bubble it up the heap.
+                # This takes O(n) and uses an undocumented heapq function...
+                if p.inheap:
+                    heapq._siftdown(self.heap, 0, self.heap.index(p))
 
 
     def scheduleInitRequest(self):
+
         if self.initrequest_dcall:
             return
 
@@ -1462,7 +1461,6 @@ class InitialContactManager(DatagramProtocol):
             except (AttributeError, socket.error):
                 pass
             else:
-                self.waitreply.add(p)
                 self.schedulePeerContactTimeout(p)
             
             self.initrequest_dcall = reactor.callLater(0.05, cb)
@@ -1479,6 +1477,10 @@ class InitialContactManager(DatagramProtocol):
 
 
     def schedulePeerContactTimeout(self, p):
+
+        assert (p not in self.waitreply)
+
+        self.waitreply.add(p)
         
         def cb(p):
             p.timeout_dcall = None
