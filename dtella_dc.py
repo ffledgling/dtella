@@ -583,24 +583,30 @@ class DCHandler(BaseDCProtocol):
 
         err_visible = True
 
+        # Extract TCP port number from connect message
+        try:
+            port = int(addr[addr.rindex(':')+1:])
+            if not (1 <= port <= 65535):
+                raise ValueError
+        except ValueError:
+            port = None
+
         def fail_cb(detail):
             if err_visible:
                 self.pushStatus(
                     "*** Connection to <%s> failed: %s" % (nick, detail))
 
-            ad = Ad().setTextIPPort(addr)
-            reactor.connectTCP(
-                '127.0.0.1', ad.port, AbortTransfer_Factory(nick))
+            if port:
+                reactor.connectTCP(
+                    '127.0.0.1', port, AbortTransfer_Factory(nick))
 
 
         if not self.isOnline():
             fail_cb("you're not online.")
             return
 
-        try:
-            dc_ad = Ad().setTextIPPort(addr)
-        except ValueError:
-            fail_cb("malformed address.")
+        if not port:
+            fail_cb("malformed address: <%s>" % addr)
             return
 
         try:
@@ -622,7 +628,7 @@ class DCHandler(BaseDCProtocol):
             fail_cb(None)
             return
 
-        n.event_ConnectToMe(self.main, dc_ad.port, fail_cb)
+        n.event_ConnectToMe(self.main, port, fail_cb)
 
 
     def d_RevConnectToMe(self, _, nick):
