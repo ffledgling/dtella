@@ -3248,7 +3248,8 @@ class MessageRoutingManager(object):
                 return
 
             def cb(msgs, ack_key):
-                self.shutdown()
+                self.expire_dcall = None
+                self.forgetTimeouts()
                 del msgs[ack_key]
 
             self.expire_dcall = reactor.callLater(60.0, cb, msgs, ack_key)
@@ -3288,7 +3289,7 @@ class MessageRoutingManager(object):
             cb(data, tries)
 
 
-        def shutdown(self):
+        def forgetTimeouts(self):
             # Cancel any pending retransmits
             
             for d in self.nbs.itervalues():
@@ -3399,6 +3400,7 @@ class MessageRoutingManager(object):
                 # Save my last NS message, so that if it gets rejected,
                 # it can be interpreted as a remote nick collision.
                 self.rcollide_last_NS = m
+                self.rcollide_ipps.clear()
 
         if tries > 0:
             # Put message into the outbox
@@ -3475,7 +3477,9 @@ class MessageRoutingManager(object):
 
         for m in self.msgs.values():
             dcall_discard(m, 'expire_dcall')
-            m.shutdown()
+            m.forgetTimeouts()
+
+        self.msgs.clear()
 
         # Immediately broadcast NX to my neighbors
 
@@ -3499,7 +3503,7 @@ class SyncRequestRoutingManager(object):
     
     class Message(object):
         
-        def __init__(self, msgs, key):
+        def __init__(self):
             self.nbs = {}   # {ipp: max hop count}
             self.expire_dcall = None
 
@@ -3539,7 +3543,7 @@ class SyncRequestRoutingManager(object):
             m = self.msgs[key]
             isnew = False
         except KeyError:
-            m = self.msgs[key] = self.Message(self.msgs, key)
+            m = self.msgs[key] = self.Message()
             isnew = True
 
         # Expire the message in a while
