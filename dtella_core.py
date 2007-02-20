@@ -1961,7 +1961,7 @@ class MeNode(Node):
     info_out = ""
     
     def event_PrivateMessage(self, main, text, fail_cb):
-        dch = self.main.getOnlineDCH()
+        dch = main.getOnlineDCH()
         if dch:
             dch.pushPrivMsg(dch.nick, text)
         else:
