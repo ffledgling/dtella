@@ -73,8 +73,6 @@ mode_info = [
 
 chan_umodes = 'qaohv'
 
-N_USER = "dtnode"
-
 B_USER = "dtbridge"
 B_REALNAME = "Dtella Bridge"
 
@@ -95,6 +93,11 @@ def base_convert(chars, from_digits, to_digits, min_len=1):
     return out
 
 
+def n_user(ipp):
+    h = binascii.hexlify(md5.new(ipp).digest())[:6]
+    return "dt" + h.upper()
+
+
 def wild_to_regex(in_str):
     # Build a regular expression from a string containing *'s
     
@@ -110,7 +113,7 @@ def wild_to_regex(in_str):
             out += c
     out += '$'
 
-    return re.compile(out)
+    return re.compile(out, re.IGNORECASE)
 
 
 def dc_to_irc(dnick):
@@ -526,7 +529,7 @@ class IRCServer(LineOnlyReceiver):
                 return
 
             self.pushWhoisReply(
-                311, src, who, N_USER, n.hostmask, '*',
+                311, src, who, n_user(n.ipp), n.hostmask, '*',
                 "Dtella %s" % n.dttag[3:])
 
         self.pushWhoisReply(
@@ -681,8 +684,8 @@ class IRCServer(LineOnlyReceiver):
         self.pushJoin(cfg.dc_to_irc_bot)
 
         self.sendLine(
-            ":%s MODE %s +o %s" %
-            (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot))
+            ":%s MODE %s +ao %s %s" %
+            (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
 
 
     def schedulePing(self):
@@ -738,7 +741,10 @@ class IRCServer(LineOnlyReceiver):
                 if q.match(inick):
                     raise NickError("Nick is Q-lined: %s" % reason)
 
+            print "Nick is okay"
+
         except NickError, e:
+            print "Nick is not okay"
             # Bad nick.  KICK!
             osm = self.main.osm
             chunks = []
@@ -758,9 +764,19 @@ class IRCServer(LineOnlyReceiver):
         n.inick = inick
         self.main.rdns.addRequest(n)
 
+        n.jointime = time.time()
+
 
     def event_RemoveNick(self, n, reason):
         if hasattr(n, 'inick') and not hasattr(n, 'dns_pending'):
+
+            try:
+                t = n.jointime
+            except AttributeError:
+                pass
+            else:
+                reason += " [%d sec]" % int(time.time() - t)
+            
             self.pushQuit(n.inick, reason)
 
 
@@ -1067,8 +1083,9 @@ class IRCServerData(object):
                 if new_infoindex == old_infoindex:
                     continue
 
-                osm.bsm.addNickChunk(
-                    chunks, irc_to_dc(nick), new_infoindex)
+                if osm:
+                    osm.bsm.addNickChunk(
+                        chunks, irc_to_dc(nick), new_infoindex)
 
         if self.ircs.syncd and osm and osm.syncd:
 
@@ -1091,8 +1108,8 @@ class IRCServerData(object):
 
     def nodeBannedInChan(self, n):
 
-        h1 = "%s!%s@%s" % (n.inick, N_USER, n.hostname)
-        h2 = "%s!%s@%s" % (n.inick, N_USER, n.hostmask)
+        h1 = "%s!%s@%s" % (n.inick, n_user(n.ipp), n.hostname)
+        h2 = "%s!%s@%s" % (n.inick, n_user(n.ipp), n.hostmask)
         
         for ban_re in self.chanbans.itervalues():
             if ban_re.match(h1) or ban_re.match(h2):
@@ -1723,7 +1740,7 @@ class BridgeServerManager(object):
 
     def nickRemoved(self, n):
 
-        dels = ('dns_pending', 'hostname', 'hostmask', 'inick')
+        dels = ('dns_pending', 'hostname', 'hostmask', 'inick', 'jointime')
 
         for d in dels:
             try:
@@ -1942,7 +1959,8 @@ class ReverseDNSManager(object):
 
         inick = n.inick
 
-        ircs.pushNick(inick, N_USER, hostname, "Dtella %s" % n.dttag[3:])
+        ircs.pushNick(
+            inick, n_user(n.ipp), hostname, "Dtella %s" % n.dttag[3:])
         ircs.pushMode(inick, "+iwx")
         ircs.pushJoin(inick)
 
