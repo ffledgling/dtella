@@ -1710,6 +1710,8 @@ class Node(object):
         self.dcinfo = ''
         self.location = ''
         self.shared = 0
+
+        self.dttag = ""
         
         self.infohash = None
 
