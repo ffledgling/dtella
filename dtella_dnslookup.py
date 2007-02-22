@@ -102,8 +102,8 @@ class DNSHandler(object):
         try:
             d = self.resolver.query(
                 dns.Query(dtella_local.dnshost, type=dns.TXT))
-        except Exception, e:
-            err_cb(str(e))
+        except:
+            err_cb(None)
             return
 
         d.addCallback(self.handleTXT)
@@ -300,15 +300,15 @@ class DNSHandler(object):
                 hostname = None
             cb(hostname)
 
-        def err(why):
+        def err_cb(text):
             cb(None)
 
         try:
             d = self.resolver.query(dns.Query(host, type=dns.PTR))
-        except Exception, e:
-            err(str(e))
+        except:
+            err_cb(None)
             return
 
         d.addCallback(success)
-        d.addErrback(err)
+        d.addErrback(err_cb)
 
