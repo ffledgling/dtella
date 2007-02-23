@@ -570,6 +570,16 @@ class IRCServer(LineOnlyReceiver):
             osm.bsm.addChatChunk(
                 chunks, irc_to_dc(prefix), text, flags)
             osm.bsm.sendBridgeChange(chunks)
+	
+	#Format> :Global PRIVMSG $irc3.dhirc.com :TESTING....
+        #Handle global messages delivered to the bridge.
+	if target == "$" + cfg.my_host:
+            flags |= dtella_core.NOTICE_BIT
+            chunks = []
+            osm.bsm.addChatChunk(
+                chunks, irc_to_dc(prefix), text, flags)
+            osm.bsm.sendBridgeChange(chunks)
+            
 
         else:
             try:
