@@ -132,7 +132,7 @@ class NickManager(object):
         return self.nickmap[nick.lower()]
 
 
-    def removeNode(self, n, reason=""):
+    def removeNode(self, n, reason):
         try:
             if self.nickmap[n.nick.lower()] is not n:
                 raise KeyError
@@ -2008,6 +2008,9 @@ class SyncManager(object):
         self.stats_total = len(self.main.osm.nodes)
         self.stats_lastbar = -1
 
+        self.n_sent = 0
+        self.n_recv = 0
+
         self.main.showLoginStatus("Network Sync In Progress...", counter='inc')
 
         self.showProgress_dcall = None
@@ -2087,6 +2090,9 @@ class SyncManager(object):
             hops = 2
             flags = (s.fail_limit < 2) and TIMEDOUT_BIT
 
+            #self.debug_nsent += 1
+            #print self.debug_nsent, self.debug_nrecv
+
             # Send the sync request
             packet = osm.mrm.broadcastHeader('YQ', osm.me.ipp, hops, flags)
             packet.append(osm.me.sesid)
@@ -2165,7 +2171,6 @@ class SyncManager(object):
 
                 self.updateStats(s, 0, +1)
 
-
         # Mark off that we've received a reply.
         try:
             s = self.info[src_ipp]
@@ -2173,6 +2178,8 @@ class SyncManager(object):
             s = self.info[src_ipp] = self.SyncInfo(src_ipp)
 
         self.uncontacted.discard(src_ipp)
+
+        #self.debug_nrecv += 1
 
         self.updateStats(s, +1, +1)
         self.showProgress()
@@ -2417,7 +2424,7 @@ class OnlineStateManager(object):
         return n
 
 
-    def nodeExited(self, n, reason=""):
+    def nodeExited(self, n, reason):
         # Node n dropped off the network
 
         dcall_discard(n, 'expire_dcall')
@@ -2521,7 +2528,7 @@ class OnlineStateManager(object):
             # Nick has changed
 
             # Remove old node, if I'm in there
-            self.nkm.removeNode(me)
+            self.nkm.removeNode(me, "Removing Myself")
 
             # Set new info
             me.nick = nick

@@ -571,15 +571,14 @@ class IRCServer(LineOnlyReceiver):
                 chunks, irc_to_dc(prefix), text, flags)
             osm.bsm.sendBridgeChange(chunks)
 	
-	#Format> :Global PRIVMSG $irc3.dhirc.com :TESTING....
+        #Format> :Global PRIVMSG $irc3.dhirc.com :TESTING....
         #Handle global messages delivered to the bridge.
-	if target == "$" + cfg.my_host:
+	elif target == "$" + cfg.my_host:
             flags |= dtella_core.NOTICE_BIT
             chunks = []
             osm.bsm.addChatChunk(
                 chunks, irc_to_dc(prefix), text, flags)
             osm.bsm.sendBridgeChange(chunks)
-            
 
         else:
             try:
@@ -638,7 +637,7 @@ class IRCServer(LineOnlyReceiver):
             try:
                 inick = self.checkIncomingNick(n)
             except NickError:
-                osm.nkm.removeNode(n)
+                osm.nkm.removeNode(n, "Bad Nick")
                 n.setNoUser()
             else:
                 # Ok, get ready to send to IRC
@@ -938,7 +937,7 @@ class IRCServerData(object):
                 osm.bsm.sendBridgeChange(chunks)
 
                 # Forget this nick
-                osm.nkm.removeNode(n)
+                osm.nkm.removeNode(n, "Kicked")
                 n.setNoUser()
 
         try:
@@ -986,7 +985,8 @@ class IRCServerData(object):
                 osm.bsm.sendBridgeChange(chunks)
 
                 # Forget this nick
-                osm.nkm.removeNode(n)
+                del n.inick
+                osm.nkm.removeNode(n, "Killed")
                 n.setNoUser()
 
         # Forget this nick
@@ -1920,7 +1920,8 @@ class ReverseDNSManager(object):
 
             self.limiter += 1
             self.advanceQueue()
-        
+
+        print "Querying %s" % Ad().setRawIP(ip).getTextIP()
         self.main.dnsh.ipToHostname(Ad().setRawIP(ip), cb)
 
 
@@ -1963,7 +1964,8 @@ class ReverseDNSManager(object):
             osm.bsm.sendBridgeChange(chunks)
 
             # Remove from Dtella nick list
-            osm.nkm.removeNode(n)
+            del n.inick
+            osm.nkm.removeNode(n, "ChanBanned")
             n.setNoUser()
             return
 

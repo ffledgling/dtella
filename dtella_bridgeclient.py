@@ -319,7 +319,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
             osm.bcm.updateBridgeTime(pktnum)
 
             # Exit the node
-            osm.nodeExited(src_n)
+            osm.nodeExited(src_n, "Bridge Exit")
 
         self.handleBroadcast(ad, data, check_cb)
         
