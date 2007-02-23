@@ -622,7 +622,7 @@ class BridgeNodeData(object):
         # Report all the nicks that we deleted
         dead_nicks.sort()
         for n in dead_nicks:
-            osm.nkm.removeNode(n)
+            osm.nkm.removeNode(n, "Dead")
 
         # Remove any bans which aren't mentioned in this update
         for b in self.bans.values():
@@ -940,7 +940,7 @@ class BridgeNodeData(object):
 
             elif n.mode != 0xFF:
                 # Remove existing nick
-                osm.nkm.removeNode(n)
+                osm.nkm.removeNode(n, "Going Offline")
 
             n.mode = mode
 
@@ -1034,7 +1034,7 @@ class BridgeNodeData(object):
 
             if not outdated:
                 # Drop this node from the nick list (if it's there)
-                osm.nkm.removeNode(n)
+                osm.nkm.removeNode(n, "Kicked")
                 n.setNoUser()
 
                 # The next valid broadcast should have pktnum+1
@@ -1070,7 +1070,7 @@ class BridgeNodeData(object):
         osm = self.main.osm
         
         for n in self.nicks.itervalues():
-            osm.nkm.removeNode(n)
+            osm.nkm.removeNode(n, "Bridge Exited")
 
         self.nicks.clear()
         self.shutdown()
