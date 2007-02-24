@@ -9,6 +9,9 @@ In order to run dtella you will need the following:
 * TwistedPython		(http://twistedmatrix.com/)
 * PyCrypto		(http://www.voidspace.org.uk/python/modules.shtml#pycrypto)
 
+The bridge server will require the following additional module:
+* dnspython		(http://www.dnspython.org/)
+
 
 --
 BUILDING
