@@ -2010,7 +2010,7 @@ class SyncManager(object):
 
         self.proxy_success = 0
         self.proxy_failed = 0
-        self.proxyStats_dcall = reactor.callLater(10.0, self.checkProxyStats)
+        self.proxyStats_dcall = None
 
         self.main.showLoginStatus("Network Sync In Progress...", counter='inc')
 
@@ -2070,9 +2070,26 @@ class SyncManager(object):
                 0, cb, bar, self.stats_done, self.stats_total)
 
 
-    def checkProxyStats(self):
-        self.proxyStats_dcall = None
-        print "good=%d, bad=%d" % (self.proxy_success, self.proxy_failed)
+    def checkProxyStats(self, finished):
+
+        def cb():
+            self.proxyStats_dcall = None
+            print "good=%d, bad=%d" % (self.proxy_success, self.proxy_failed)
+            
+            total = self.proxy_success + self.proxy_failed
+            if (total >= 10 and self.proxy_failed * 2 > total):
+                print "NAT fail"
+            else:
+                print "NAT ok"
+
+        if finished:
+            dcall_discard(self, 'proxyStats_dcall')
+            cb()
+
+        elif self.proxyStats_dcall is None:
+            total = self.proxy_success + self.proxy_failed
+            if total >= 10:
+                self.proxyStats_dcall = reactor.callLater(10.0, cb)
 
 
     def advanceQueue(self):
@@ -2086,8 +2103,7 @@ class SyncManager(object):
                 # Ran out of nodes; see if we're done yet.
                 if self.waitcount == 0:
                     dcall_discard(self, 'showProgress_dcall')
-                    dcall_discard(self, 'proxyStats_dcall')
-                    self.checkProxyStats()
+                    self.checkProxyStats(finished=True)
                     self.main.osm.syncComplete()
                 return
 
@@ -2173,6 +2189,7 @@ class SyncManager(object):
         if s.proxy_request:
             s.proxy_request = False
             self.proxy_success += 1
+            self.checkProxyStats(finished=False)
 
         self.uncontacted.discard(src_ipp)
 
@@ -2194,6 +2211,7 @@ class SyncManager(object):
             if s.proxy_request:
                 s.proxy_request = False
                 self.proxy_failed += 1
+                self.checkProxyStats(finished=False)
 
             s.fail_limit -= 1
             if s.fail_limit > 0:
@@ -2226,6 +2244,7 @@ class SyncManager(object):
         # Cancel all timeouts
 
         dcall_discard(self, 'showProgress_dcall')
+        dcall_discard(self, 'proxyStats_dcall')
 
         for s in self.info.values():
             dcall_discard(s, 'timeout_dcall')
