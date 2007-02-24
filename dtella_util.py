@@ -111,6 +111,9 @@ class RandSet(object):
     def __nonzero__(self):
         return bool(self.map)
 
+    def __len__(self):
+        return len(self.map)
+
     def add(self, o):
         # Add o to the set
         if o not in self.map:

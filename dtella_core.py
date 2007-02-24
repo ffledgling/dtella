@@ -1989,6 +1989,7 @@ class SyncManager(object):
             self.in_total = False
             self.in_done = False
 
+
     def __init__(self, main):
         self.main = main
         self.uncontacted = RandSet()
@@ -2000,21 +2001,17 @@ class SyncManager(object):
             s.in_total = True
             self.uncontacted.add(n.ipp)
 
-        self.syncRequest_dcall = None
-        self.scheduleSyncRequest()
-
         # Keep stats for how far along we are
         self.stats_done = 0
-        self.stats_total = len(self.main.osm.nodes)
+        self.stats_total = len(self.uncontacted)
         self.stats_lastbar = -1
-
-        self.n_sent = 0
-        self.n_recv = 0
 
         self.main.showLoginStatus("Network Sync In Progress...", counter='inc')
 
         self.showProgress_dcall = None
         self.showProgress()
+
+        self.advanceQueue()
 
 
     def updateStats(self, s, done, total):
@@ -2067,19 +2064,18 @@ class SyncManager(object):
                 0, cb, bar, self.stats_done, self.stats_total)
 
 
-    def scheduleSyncRequest(self):
-        if self.syncRequest_dcall:
-            return
+    def advanceQueue(self):
 
-        def cb():
-            self.syncRequest_dcall = None
-            
+        while self.waitcount < 5:
+
             try:
                 # Grab an arbitrary (semi-pseudorandom) uncontacted node.
                 ipp = self.uncontacted.pop()
             except KeyError:
                 # Ran out of nodes; see if we're done yet.
-                self.doneCheck()
+                if self.waitcount == 0:
+                    dcall_discard(self, 'showProgress_dcall')
+                    self.main.osm.syncComplete()
                 return
 
             s = self.info[ipp]
@@ -2090,9 +2086,6 @@ class SyncManager(object):
             hops = 2
             flags = (s.fail_limit < 2) and TIMEDOUT_BIT
 
-            #self.debug_nsent += 1
-            #print self.debug_nsent, self.debug_nrecv
-
             # Send the sync request
             packet = osm.mrm.broadcastHeader('YQ', osm.me.ipp, hops, flags)
             packet.append(osm.me.sesid)
@@ -2101,20 +2094,6 @@ class SyncManager(object):
             ph.sendPacket(''.join(packet), ad.getAddrTuple())
 
             self.scheduleSyncTimeout(s)
-
-            # TODO: To make syncing faster on large networks, this interval
-            #       should be controlled by some sort of rate
-            #       detecting/limiting algorithm.
-            self.syncRequest_dcall = reactor.callLater(0.1, cb)
-
-        self.syncRequest_dcall = reactor.callLater(0.1, cb)
-
-
-    def doneCheck(self):
-        if not self.uncontacted and self.waitcount == 0:
-            dcall_discard(self, 'syncRequest_dcall')
-            dcall_discard(self, 'showProgress_dcall')
-            self.main.osm.syncComplete()
 
 
     def giveUpNode(self, ipp):
@@ -2167,9 +2146,9 @@ class SyncManager(object):
                 s = self.info[ipp] = self.SyncInfo(ipp)
 
                 self.uncontacted.add(ipp)
-                self.scheduleSyncRequest()
-
                 self.updateStats(s, 0, +1)
+
+                self.advanceQueue()
 
         # Mark off that we've received a reply.
         try:
@@ -2178,8 +2157,6 @@ class SyncManager(object):
             s = self.info[src_ipp] = self.SyncInfo(src_ipp)
 
         self.uncontacted.discard(src_ipp)
-
-        #self.debug_nrecv += 1
 
         self.updateStats(s, +1, +1)
         self.showProgress()
@@ -2197,31 +2174,30 @@ class SyncManager(object):
 
             s.fail_limit -= 1
             if s.fail_limit > 0:
-                # Try again
+                # Try again later
                 self.uncontacted.add(s.ipp)
-                self.scheduleSyncRequest()
             else:
                 self.updateStats(s, 0, -1)
                 self.showProgress()
 
-                # Don't try anymore
-                self.doneCheck()
+            self.advanceQueue()
 
         self.waitcount += 1
-        s.timeout_dcall = reactor.callLater(3.5, cb, s)
+        s.timeout_dcall = reactor.callLater(2.0, cb, s)
 
 
     def cancelSyncTimeout(self, s):
-        if s.timeout_dcall:
-            dcall_discard(s, 'timeout_dcall')
-            self.waitcount -= 1
-            self.doneCheck()
+        if not s.timeout_dcall:
+            return
+        
+        dcall_discard(s, 'timeout_dcall')
+        self.waitcount -= 1
+        self.advanceQueue()
 
 
     def shutdown(self):
         # Cancel all timeouts
 
-        dcall_discard(self, 'syncRequest_dcall')
         dcall_discard(self, 'showProgress_dcall')
 
         for s in self.info.values():
