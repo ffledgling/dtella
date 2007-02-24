@@ -1989,6 +1989,8 @@ class SyncManager(object):
             self.in_total = False
             self.in_done = False
 
+            self.proxy_request = False
+
 
     def __init__(self, main):
         self.main = main
@@ -2005,6 +2007,10 @@ class SyncManager(object):
         self.stats_done = 0
         self.stats_total = len(self.uncontacted)
         self.stats_lastbar = -1
+
+        self.proxy_success = 0
+        self.proxy_failed = 0
+        self.proxyStats_dcall = reactor.callLater(10.0, self.checkProxyStats)
 
         self.main.showLoginStatus("Network Sync In Progress...", counter='inc')
 
@@ -2064,6 +2070,11 @@ class SyncManager(object):
                 0, cb, bar, self.stats_done, self.stats_total)
 
 
+    def checkProxyStats(self):
+        self.proxyStats_dcall = None
+        print "good=%d, bad=%d" % (self.proxy_success, self.proxy_failed)
+
+
     def advanceQueue(self):
 
         while self.waitcount < 5:
@@ -2075,6 +2086,8 @@ class SyncManager(object):
                 # Ran out of nodes; see if we're done yet.
                 if self.waitcount == 0:
                     dcall_discard(self, 'showProgress_dcall')
+                    dcall_discard(self, 'proxyStats_dcall')
+                    self.checkProxyStats()
                     self.main.osm.syncComplete()
                 return
 
@@ -2125,13 +2138,13 @@ class SyncManager(object):
                 # Haven't seen this one before, set a timeout because
                 # we should be hearing a reply.
                 s = self.info[ipp] = self.SyncInfo(ipp)
-                self.scheduleSyncTimeout(s)
+                self.scheduleSyncTimeout(s, proxy=True)
             else:
                 if ipp in self.uncontacted:
                     # Seen this node, had planned to ping it later.
                     # Pretend like we just pinged it now.
                     self.uncontacted.discard(ipp)
-                    self.scheduleSyncTimeout(s)
+                    self.scheduleSyncTimeout(s, proxy=True)
 
             self.updateStats(s, 0, +1)
 
@@ -2156,21 +2169,31 @@ class SyncManager(object):
         except KeyError:
             s = self.info[src_ipp] = self.SyncInfo(src_ipp)
 
+        # Keep track of NAT stats
+        if s.proxy_request:
+            s.proxy_request = False
+            self.proxy_success += 1
+
         self.uncontacted.discard(src_ipp)
 
         self.updateStats(s, +1, +1)
         self.showProgress()
 
         self.cancelSyncTimeout(s)
+        self.advanceQueue()
 
 
-    def scheduleSyncTimeout(self, s):
+    def scheduleSyncTimeout(self, s, proxy=False):
         if s.timeout_dcall:
             return
 
         def cb(s):
             s.timeout_dcall = None
             self.waitcount -= 1
+
+            if s.proxy_request:
+                s.proxy_request = False
+                self.proxy_failed += 1
 
             s.fail_limit -= 1
             if s.fail_limit > 0:
@@ -2181,6 +2204,10 @@ class SyncManager(object):
                 self.showProgress()
 
             self.advanceQueue()
+
+        # Remember if this was requested first by another node
+        if s.fail_limit == 2 and proxy:
+            s.proxy_request = True
 
         self.waitcount += 1
         s.timeout_dcall = reactor.callLater(2.0, cb, s)
@@ -4077,7 +4104,7 @@ class DtellaMain_Base(object):
         try:
             my_ipp = self.selectMyIP()
         except ValueError:
-            self.main.showLoginStatus("Can't determine my own IP?!")
+            self.showLoginStatus("Can't determine my own IP?!")
             return
 
         # Look up my location string
