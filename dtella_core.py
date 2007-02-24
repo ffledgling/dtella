@@ -2079,8 +2079,6 @@ class SyncManager(object):
             total = self.proxy_success + self.proxy_failed
             if (total >= 10 and self.proxy_failed * 2 > total):
                 print "NAT fail"
-            else:
-                print "NAT ok"
 
         if finished:
             dcall_discard(self, 'proxyStats_dcall')
@@ -2188,7 +2186,10 @@ class SyncManager(object):
         # Keep track of NAT stats
         if s.proxy_request:
             s.proxy_request = False
-            self.proxy_success += 1
+            if s.fail_limit == 2:
+                self.proxy_success += 1
+            elif s.fail_limit == 1:
+                self.proxy_failed += 1
             self.checkProxyStats(finished=False)
 
         self.uncontacted.discard(src_ipp)
@@ -2207,11 +2208,6 @@ class SyncManager(object):
         def cb(s):
             s.timeout_dcall = None
             self.waitcount -= 1
-
-            if s.proxy_request:
-                s.proxy_request = False
-                self.proxy_failed += 1
-                self.checkProxyStats(finished=False)
 
             s.fail_limit -= 1
             if s.fail_limit > 0:
@@ -4076,26 +4072,7 @@ class DtellaMain_Base(object):
                 self.shutdown(reconnect='max')
 
             elif reason == 'dead_port':
-                self.showLoginStatus(
-                    "*** UDP PORT FORWARD REQUIRED ***")
-
-                text = (
-                    "In order for Dtella to communicate properly, it "
-                    "needs to receive UDP traffic from the Internet.  "
-                    "Dtella is currently listening on UDP port %d, but "
-                    "the packets appear to be getting blocked, most "
-                    "likely by a firewall or a router.  If this is the "
-                    "case, then you will have to configure your firewall "
-                    "or router to allow UDP traffic through on this "
-                    "port.  You may tell Dtella to use a different port "
-                    "from now on by typing !UDP followed by a number."
-                    % self.state.udp_port
-                    )
-                
-                for line in word_wrap(text):
-                    self.showLoginStatus(line)
-
-                self.shutdown(reconnect='max')
+                self.needPortForward()
 
             else:
                 self.showLoginStatus(
@@ -4108,6 +4085,28 @@ class DtellaMain_Base(object):
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
+
+
+    def needPortForward(self):
+        self.showLoginStatus(
+            "*** UDP PORT FORWARD REQUIRED ***")
+
+        text = (
+            "In order for Dtella to communicate properly, it needs to "
+            "receive UDP traffic from the Internet.  Dtella is currently "
+            "listening on UDP port %d, but the packets appear to be "
+            "getting blocked, most likely by a firewall or a router.  "
+            "If this is the case, then you will have to configure your "
+            "firewall or router to allow UDP traffic through on this "
+            "port.  You may tell Dtella to use a different port from "
+            "now on by typing !UDP followed by a number."
+            % self.state.udp_port
+            )
+        
+        for line in word_wrap(text):
+            self.showLoginStatus(line)
+
+        self.shutdown(reconnect='max')
 
 
     def startNodeSync(self, node_ipps):
