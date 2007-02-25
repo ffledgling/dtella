@@ -653,7 +653,7 @@ class PeerHandler(DatagramProtocol):
             # just so they can try for a second opinion.
             IR_LEN = IC_LEN
         
-        elif osm:
+        elif osm and osm.syncd:
             # Add in some online nodes
             node_ipps = [n.ipp for n in osm.nodes if n.expire_dcall]
 
@@ -664,6 +664,10 @@ class PeerHandler(DatagramProtocol):
                 node_ipps = random.sample(node_ipps, IR_LEN)
             except ValueError:
                 pass
+
+        elif osm:
+            # Not syncd yet, don't add any online nodes
+            pass
 
         elif (self.main.reconnect_dcall and self.main.accept_IQ_trigger
               and my_ad.auth_s()):
@@ -1595,6 +1599,13 @@ class InitialContactManager(DatagramProtocol):
 
     def checkStatus(self, finished=False):
 
+        # Stop if
+        # - We receive 5 good replies, which make up >= 10% of the total
+        # - We receive 50 total replies
+        # - There is a 5-second gap of no new replies
+
+        # After stopping, successful if good makes up >= 10% of the total
+
         total = sum(self.counters.values())
         ngood = self.counters['good']
 
@@ -1602,12 +1613,12 @@ class InitialContactManager(DatagramProtocol):
             finished = True
 
         if finished:
-            if ngood >= total * 0.05:
+            if ngood >= total * 0.10:
                 self.initCompleted(good=True)
             else:
                 self.initCompleted(good=False)
 
-        elif ngood >= 5 and ngood >= total * 0.05:
+        elif ngood >= 5 and ngood >= total * 0.10:
             self.initCompleted(good=True)
 
 
