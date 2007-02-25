@@ -1404,8 +1404,8 @@ class InitialContactManager(DatagramProtocol):
         self.initrequest_dcall = None
         self.finish_dcall = None
 
-        self.stats_good = 0         # How many neighbor lists given
-        self.stats_fail = {'foreign_ip':0, 'banned_ip':0, 'dead_port':0}
+        self.counters = {
+            'good':0, 'foreign_ip':0, 'banned_ip':0, 'dead_port':0}
 
         self.scheduleInitRequest()
 
@@ -1440,7 +1440,7 @@ class InitialContactManager(DatagramProtocol):
             try:
                 p = heapq.heappop(self.heap)
             except IndexError:
-                self.doneCheck()
+                self.checkStatus()
                 return
 
             p.inheap = False
@@ -1468,14 +1468,6 @@ class InitialContactManager(DatagramProtocol):
         self.initrequest_dcall = reactor.callLater(0, cb)
 
 
-    def doneCheck(self):
-        # If there's nothing left to ping, and nobody waiting for replies,
-        # then make do with what we have.
-        if not (self.heap or self.waitreply):
-            self.shutdown()
-            self.done_callback()
-
-
     def schedulePeerContactTimeout(self, p):
 
         assert (p not in self.waitreply)
@@ -1489,7 +1481,7 @@ class InitialContactManager(DatagramProtocol):
             if p.alt_reply:
                 self.recordResultType('dead_port')
             
-            self.doneCheck()
+            self.checkStatus()
 
         p.timeout_dcall = reactor.callLater(5.0, cb, p)
 
@@ -1551,7 +1543,7 @@ class InitialContactManager(DatagramProtocol):
                     self.recordResultType('banned_ip')
 
                 self.cancelPeerContactTimeout(p)
-                self.doneCheck()
+                self.checkStatus()
             return
 
         # Add my own IP to the list
@@ -1580,64 +1572,69 @@ class InitialContactManager(DatagramProtocol):
             self.recordResultType('good')
 
         # Check if there's nothing left to do
-        self.doneCheck()
+        self.checkStatus()
 
 
     def recordResultType(self, kind):
 
         self.main.logPacket("Recording result: '%s'" % kind)
+        self.counters[kind] += 1
 
-        # After we get a meaningful packet, stop after 5 seconds.
-
-        if kind == 'good':
-            self.stats_good += 1
-
-            if self.stats_good == 1:
-                # On the first good reply, stop after 5 seconds
-                self.scheduleFinish(5)
-            elif self.stats_good == 5:
-                # After 5 good replies, stop now
-                self.scheduleFinish(0)
-
-        else:
-            self.stats_fail[kind] += 1
-            self.scheduleFinish(10)
-
-
-    def getFailReason(self):
-
-        # In a tie, prefer 'banned_ip' over 'foreign_ip', etc.
-        rank = []
-        i = 3
-        for name in ('banned_ip', 'foreign_ip', 'dead_port'):
-            rank.append( (self.stats_fail[name], i, name) )
-            i -= 1
-
-        # Sort in descending order
-        rank.sort(reverse=True)
-
-        if rank[0][0] == 0:
-            # Nobody replied
-            return ''
-        else:
-            # Return the name of the failure which occurred most
-            return rank[0][2]
-
-
-    def scheduleFinish(self, when):
-        # Set up a timer for early termination
+        # Finish init after 5 seconds of inactivity
 
         if self.finish_dcall:
-            if when < dcall_timeleft(self.finish_dcall):
-                self.finish_dcall.reset(when)
+            self.finish_dcall.reset(5.0)
             return
 
         def cb():
             self.finish_dcall = None
-            self.shutdown()
-            self.done_callback()
+            self.checkStatus(finished=True)
 
-        self.finish_dcall = reactor.callLater(when, cb)
+        self.finish_dcall = reactor.callLater(5.0, cb)
+
+
+    def checkStatus(self, finished=False):
+
+        total = sum(self.counters.values())
+        ngood = self.counters['good']
+
+        if not (self.heap or self.waitreply) or total >= 50:
+            finished = True
+
+        if finished:
+            if ngood >= total * 0.05:
+                initCompleted(good=True)
+            else:
+                initCompleted(good=False)
+
+        elif ngood >= 5 and ngood >= total * 0.05:
+            self.initCompleted(good=True)
+
+
+    def initCompleted(self, good):
+        self.shutdown()
+
+        if good:
+            self.done_callback('good', self.node_ipps)
+
+        else:
+            # In a tie, prefer 'banned_ip' over 'foreign_ip', etc.
+            rank = []
+            i = 3
+            for name in ('banned_ip', 'foreign_ip', 'dead_port'):
+                rank.append( (self.counters[name], i, name) )
+                i -= 1
+
+            # Sort in descending order
+            rank.sort(reverse=True)
+
+            if rank[0][0] == 0:
+                # Nobody replied
+                self.done_callback('', None)
+
+            else:
+                # Return the name of the failure which occurred most
+                self.done_callback(rank[0][2], None)
 
 
     def datagramReceived(self, data, addr):
@@ -4032,27 +4029,23 @@ class DtellaMain_Base(object):
 
         dcall_discard(self, 'reconnect_dcall')
 
-        def cb():
-            icm = self.icm
+        def cb(result, node_ipps):
             self.icm = None
-            
-            if icm.node_ipps:
-                self.startNodeSync(icm.node_ipps)
-                return
 
-            reason = icm.getFailReason()
+            if result == 'good':
+                self.startNodeSync(node_ipps)
 
-            if reason == 'banned_ip':
+            elif result == 'banned_ip':
                 self.showLoginStatus(
                     "Your IP seems to be banned from this network.")
                 self.shutdown(reconnect='max')
 
-            elif reason == 'foreign_ip':
+            elif result == 'foreign_ip':
                 self.showLoginStatus(
                     "Your IP address is not authorized to use this network.")
                 self.shutdown(reconnect='max')
 
-            elif reason == 'dead_port':
+            elif result == 'dead_port':
                 self.needPortForward()
 
             else:
