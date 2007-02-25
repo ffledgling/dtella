@@ -36,7 +36,7 @@ from twisted.names import client, dns
 
 class DNSHandler(object):
 
-    def __init__(self, main, dns_servers):
+    def __init__(self, main):
         self.main = main
 
         self.override_vc = cmpify_version(dtella_local.version)
@@ -54,7 +54,7 @@ class DNSHandler(object):
         self.minshare = 1
         self.version = None
 
-        dns_servers = dns_servers[:]
+        dns_servers = dtella_local.dns_servers[:]
         random.shuffle(dns_servers)
 
         self.resolver = client.Resolver(
@@ -90,7 +90,7 @@ class DNSHandler(object):
             cb()
             return
 
-        def err_cb(text):
+        def err_cb(failure):
             if cb:
                 self.main.showLoginStatus(
                     "DNS query failed!  Trying to proceed without it...")
@@ -283,6 +283,17 @@ class DNSHandler(object):
         return True
 
 
+class ReverseLookupHandler(object):
+
+    def __init__(self):
+        dns_servers = dtella_local.rdns_servers[:]
+        random.shuffle(dns_servers)
+
+        self.resolver = client.Resolver(
+            servers=[(ip, dns.PORT) for ip in dns_servers],
+            timeout=(1,2,3))
+
+
     def ipToHostname(self, ad, cb):
         # Try to determine the hostname of the provided address.
         # When done, call the cb function.  If it fails, the
@@ -300,7 +311,7 @@ class DNSHandler(object):
                 hostname = None
             cb(hostname)
 
-        def err_cb(text):
+        def err_cb(failure):
             cb(None)
 
         try:
@@ -312,3 +323,6 @@ class DNSHandler(object):
         d.addCallback(success)
         d.addErrback(err_cb)
 
+
+# Simplified lookup interface
+ipToHostname = ReverseLookupHandler().ipToHostname

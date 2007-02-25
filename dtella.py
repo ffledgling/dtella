@@ -78,8 +78,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.state = dtella_state.StateManager(self, STATE_FILE)
 
         # DNS Handler
-        self.dnsh = dtella_dnslookup.DNSHandler(
-            self, dtella_local.dns_servers)
+        self.dnsh = dtella_dnslookup.DNSHandler(self)
 
 
     def reconnectDesired(self):
@@ -239,7 +238,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
                 self.osm.updateMyInfo()
 
         # Start lookup
-        self.dnsh.ipToHostname(ad, cb)
+        dtella_dnslookup.ipToHostname(ad, cb)
 
 
     def logPacket(self, text):

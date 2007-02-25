@@ -1922,7 +1922,7 @@ class ReverseDNSManager(object):
             self.advanceQueue()
 
         print "Querying %s" % Ad().setRawIP(ip).getTextIP()
-        self.main.dnsh.ipToHostname(Ad().setRawIP(ip), cb)
+        dtella_dnslookup.ipToHostname(Ad().setRawIP(ip), cb)
 
 
     def signOn(self, ipp, hostname):
@@ -2117,9 +2117,6 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
         # DNS Update Manager
         self.dum = DNSUpdateManager(self)
-
-        # DNS Handler, for performing the actual lookups
-        self.dnsh = dtella_dnslookup.DNSHandler(self, cfg.rdns_servers)
 
         # Bind UDP Port
         try:

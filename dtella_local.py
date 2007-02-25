@@ -29,8 +29,12 @@ hub_name = "Dtella@Purdue"
 # Set a reasonable upper limit on the DNS minshare (=100GB)
 minshare_cap = 100 * (1024**3)
 
+# Public DNS servers, for getting config
 dns_servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222']
 dnshost = 'purdue.config.dtella.org'
+
+# Local DNS servers, for efficient reverse lookups
+rdns_servers = ['128.210.11.5','128.210.11.57','128.10.2.5','128.46.154.76']
 
 def validateIP(ip):
     # ip is a tuple of 4 integers (a, b, c, d)
