@@ -2013,6 +2013,9 @@ class SyncManager(object):
         self.showProgress_dcall = None
         self.showProgress()
 
+        # Start smaller to prevent an initial flood
+        self.request_limit = 2
+
         self.advanceQueue()
 
 
@@ -2068,8 +2071,12 @@ class SyncManager(object):
 
     def advanceQueue(self):
 
-        while self.waitcount < 5:
+        # Raise request limit the first time it fills up
+        if self.request_limit < 5 and self.waitcount >= 5:
+            self.request_limit = 5
 
+        while self.waitcount < self.request_limit:
+            
             try:
                 # Grab an arbitrary (semi-pseudorandom) uncontacted node.
                 ipp = self.uncontacted.pop()
