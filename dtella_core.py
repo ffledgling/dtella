@@ -1603,9 +1603,9 @@ class InitialContactManager(DatagramProtocol):
 
         if finished:
             if ngood >= total * 0.05:
-                initCompleted(good=True)
+                self.initCompleted(good=True)
             else:
-                initCompleted(good=False)
+                self.initCompleted(good=False)
 
         elif ngood >= 5 and ngood >= total * 0.05:
             self.initCompleted(good=True)
