@@ -2072,22 +2072,11 @@ class SyncManager(object):
 
     def checkProxyStats(self, finished):
 
-        def cb():
-            self.proxyStats_dcall = None
-            print "good=%d, bad=%d" % (self.proxy_success, self.proxy_failed)
-            
-            total = self.proxy_success + self.proxy_failed
-            if (total >= 10 and self.proxy_failed * 2 > total):
-                print "NAT fail"
-
-        if finished:
-            dcall_discard(self, 'proxyStats_dcall')
-            cb()
-
-        elif self.proxyStats_dcall is None:
-            total = self.proxy_success + self.proxy_failed
-            if total >= 10:
-                self.proxyStats_dcall = reactor.callLater(10.0, cb)
+        print "good=%d, bad=%d" % (self.proxy_success, self.proxy_failed)
+        
+        total = self.proxy_success + self.proxy_failed
+        if (total >= 10 and self.proxy_failed * 2 > total):
+            print "NAT fail"
 
 
     def advanceQueue(self):
