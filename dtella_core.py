@@ -2010,7 +2010,6 @@ class SyncManager(object):
 
         self.proxy_success = 0
         self.proxy_failed = 0
-        self.proxyStats_dcall = None
 
         self.main.showLoginStatus("Network Sync In Progress...", counter='inc')
 
