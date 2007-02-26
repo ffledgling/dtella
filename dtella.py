@@ -176,11 +176,6 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
         # Get config from DNS
         def dns_cb():
-            if self.dnsh.belowMinimumVersion():
-                return
-
-            self.dnsh.reportNewVersion()
-
             try:
                 when, ipps = self.state.dns_ipcache
             except ValueError:
@@ -221,7 +216,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         self.location[my_ip] = None
 
         def cb(hostname):
-            
+
             # Use dtella_local to transform this hostname into a
             # human-readable location
             loc = dtella_local.hostnameToLocation(hostname)
@@ -387,7 +382,10 @@ def run():
 
             dch = dtMain.dch
             if dch:
-                dch.bot.say("Something bad happened:\n" + text)
+                dch.bot.say(
+                    "Something bad happened.  If you have the latest version "
+                    "of Dtella, then you might want to email this to "
+                    "bugs@dtella.org so we'll know about it:\n" + text)
             else:
                 sys.stderr.write(text)
                 sys.stderr.flush()

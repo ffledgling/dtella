@@ -26,6 +26,8 @@ from dtella_util import (Ad, cmpify_version, word_wrap, parse_bytes,
 from twisted.python.runtime import seconds
 from twisted.internet import reactor
 
+import twisted.python.log
+
 import binascii
 import struct
 import time
@@ -87,34 +89,43 @@ class DNSHandler(object):
 
         # If we've done an update recently, then skip the query
         if (not stale) and cb:
-            cb()
+            self.doCallback()
             return
 
-        def err_cb(failure):
-            if cb:
-                self.main.showLoginStatus(
-                    "DNS query failed!  Trying to proceed without it...")
+        def success_cb(result):
+            if not result[0]:
+                raise ValueError("Empty DNS Reply")
 
-            self.doneGettingConfig()
+            try:
+                self.handleTXT(result)
+                self.cfg_lastUpdate = seconds()
+                self.cfg_busy = False
+                self.schedulePeriodicUpdates()
+                self.doCallback()
+            except:
+                twisted.python.log.err()
+
+        def err_cb(failure):
+            try:
+                if cb:
+                    self.main.showLoginStatus(
+                        "DNS query failed!  Trying to proceed without it...")
+                self.cfg_busy = False
+                self.schedulePeriodicUpdates()
+                self.doCallback()
+            except:
+                twisted.python.log.err()
 
         # Do Query
         self.cfg_busy = True
-        try:
-            d = self.resolver.query(
-                dns.Query(dtella_local.dnshost, type=dns.TXT))
-        except:
-            err_cb(None)
-            return
+        d = self.resolver.query(
+            dns.Query(dtella_local.dnshost, type=dns.TXT))
 
-        d.addCallback(self.handleTXT)
+        d.addCallback(success_cb)
         d.addErrback(err_cb)
 
 
     def handleTXT(self, reply):
-
-        if not reply[0]:
-            # Empty response; hop to the error callback
-            raise ValueError("Empty DNS Reply")
 
         state = self.main.state
 
@@ -171,25 +182,17 @@ class DNSHandler(object):
 
                 state.dns_ipcache = (when, ipps)
 
-        self.cfg_lastUpdate = seconds()
-        self.doneGettingConfig()
 
+    def doCallback(self):
 
-    def doneGettingConfig(self):
+        if self.belowMinimumVersion():
+            return
 
-        self.cfg_busy = False
-
-        self.schedulePeriodicUpdates()
+        self.reportNewVersion()
 
         if self.cfg_cb:
             self.cfg_cb()
             self.cfg_cb = None
-
-        else:
-            if self.belowMinimumVersion():
-                return
-
-            self.reportNewVersion()
 
 
     def schedulePeriodicUpdates(self):
@@ -302,25 +305,28 @@ class ReverseLookupHandler(object):
         revip = '.'.join('%d' % o for o in reversed(ad.ip))
         host = "%s.in-addr.arpa" % revip
 
-        def success(reply):
+        def success_cb(result):
             try:
-                hostname = reply[0][0].payload.name.name
+                hostname = result[0][0].payload.name.name
                 if not hostname:
                     raise ValueError
             except:
                 hostname = None
-            cb(hostname)
+
+            try:
+                cb(hostname)
+            except:
+                twisted.python.log.err()
 
         def err_cb(failure):
-            cb(None)
+            try:
+                cb(None)
+            except:
+                twisted.python.log.err()
 
-        try:
-            d = self.resolver.query(dns.Query(host, type=dns.PTR))
-        except:
-            err_cb(None)
-            return
+        d = self.resolver.query(dns.Query(host, type=dns.PTR))
 
-        d.addCallback(success)
+        d.addCallback(success_cb)
         d.addErrback(err_cb)
 
 
