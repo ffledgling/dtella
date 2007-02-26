@@ -1,7 +1,10 @@
 Dtella Changelog
 
-1.0.2 (2007-02-25):
-- 
+1.0.2 (2007-02-26):
+- Faster network sync algorithm.
+- Improved detection of broken port forwards.
+- Fixed a few random bugs.
+- Theoretically better error handling during DNS requests.
 
 1.0.1 (2007-02-18):
 - Fixed the "node_ipps" bug.
