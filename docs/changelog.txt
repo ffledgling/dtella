@@ -1,5 +1,9 @@
 Dtella Changelog
 
+1.0.3 (2007-02-27):
+- Made the topic formatting more URL-friendly. (i.e. no quotes)
+- Added a workaround for the DNSQueryTimeoutError bug in Twisted.
+
 1.0.2 (2007-02-26):
 - Faster network sync algorithm.
 - Improved detection of broken port forwards.
