@@ -18,7 +18,7 @@ copy ..\dtella_core.py           %DTDIR%
 copy ..\dtella_crypto.py         %DTDIR%
 copy ..\dtella_dc.py             %DTDIR%
 copy ..\dtella_dnslookup.py      %DTDIR%
-copy ..\dtella_fixtwistedtime.py %DTDIR%
+copy ..\dtella_fixtwisted.py     %DTDIR%
 copy ..\dtella_local.py          %DTDIR%
 copy ..\dtella_state.py          %DTDIR%
 copy ..\dtella_util.py           %DTDIR%
