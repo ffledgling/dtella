@@ -3942,7 +3942,7 @@ class TopicManager(object):
 
         # If a change was reported, tell the user that it changed.
         if changed and nick:
-            dch.pushStatus("%s changed the topic to \"%s\"" % (nick, topic))
+            dch.pushStatus("%s changed the topic to: %s" % (nick, topic))
 
         # If a change wasn't reported, but it's new to us, and it's not
         # empty, then just say what the topic is.
@@ -3980,7 +3980,7 @@ class TopicManager(object):
         if not self.topic:
             return "There is currently no topic set."
 
-        text = "The topic is \"%s\"" % self.topic
+        text = "The topic is: %s" % self.topic
 
         if self.topic_node and self.topic_node.nick:
             whoset = self.topic_node.nick

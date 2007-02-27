@@ -1231,8 +1231,13 @@ class IRCServerData(object):
         try:
             u = self.users[nick]
         except KeyError:
-             # virtual
+            # shouldn't really happen
             return 6
+
+        if u not in self.chanusers:
+            # virtual
+            return 6
+        
         try:
             # qaohv
             return u.chanmodes.index(True)
