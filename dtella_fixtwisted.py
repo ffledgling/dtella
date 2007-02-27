@@ -59,3 +59,20 @@ else:
     noop()
 
 
+# bugfix: splice some error trapping into the writeMessage function
+
+import twisted.names
+if twisted.names.__version__ == '0.4.0':
+
+    import twisted.names.dns
+    import socket
+
+    f = twisted.names.dns.DNSDatagramProtocol.writeMessage
+
+    def writeMessage(*args):
+        try:
+            f(*args)
+        except socket.error:
+            pass
+
+    twisted.names.dns.DNSDatagramProtocol.writeMessage = writeMessage
