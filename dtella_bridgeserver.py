@@ -513,6 +513,10 @@ class IRCServer(LineOnlyReceiver):
         if who == cfg.dc_to_irc_bot:
             self.pushWhoisReply(
                 311, src, who, B_USER, cfg.my_host, '*', B_REALNAME)
+            self.pushWhoisReply(
+                312, src, who, cfg.my_host, cfg.my_name)
+            self.pushWhoisReply(
+                319, src, who, cfg.irc_chan)
 
         else:
             osm = self.main.osm
@@ -531,13 +535,19 @@ class IRCServer(LineOnlyReceiver):
             self.pushWhoisReply(
                 311, src, who, n_user(n.ipp), n.hostmask, '*',
                 "Dtella %s" % n.dttag[3:])
+            self.pushWhoisReply(
+                312, src, who, cfg.my_host, cfg.my_name)
+            self.pushWhoisReply(
+                319, src, who, cfg.irc_chan)
+
+            if dtella_local.use_locations:
+                self.pushWhoisReply(
+                    320, src, who, "Location: %s"
+                    % dtella_local.hostnameToLocation(n.hostname))
 
         self.pushWhoisReply(
-            312, src, who, cfg.my_host, cfg.my_name)
-        self.pushWhoisReply(
-            319, src, who, cfg.irc_chan)
-        self.pushWhoisReply(
             318, src, who, "End of /WHOIS list.")
+            
 
 
     def pushWhoisReply(self, code, target, who, *strings):
