@@ -1613,7 +1613,7 @@ class InitialContactManager(DatagramProtocol):
             finished = True
 
         if finished:
-            if ngood >= total * 0.10:
+            if total > 0 and ngood >= total * 0.10:
                 self.initCompleted(good=True)
             else:
                 self.initCompleted(good=False)
