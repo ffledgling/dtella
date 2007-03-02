@@ -75,7 +75,8 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             self.ph = dtella_bridgeclient.BridgeClientProtocol(self)
 
         # State Manager
-        self.state = dtella_state.StateManager(self, STATE_FILE)
+        self.state = dtella_state.StateManager(
+            self, STATE_FILE, dtella_state.client_loadsavers)
 
         # DNS Handler
         self.dnsh = dtella_dnslookup.DNSHandler(self)

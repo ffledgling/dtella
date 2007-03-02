@@ -2118,7 +2118,8 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         dtella_core.DtellaMain_Base.__init__(self)
 
         # State Manager
-        self.state = dtella_state.StateManager(self, 'dtella_bridge.state')
+        self.state = dtella_state.StateManager(
+            self, 'dtella_bridge.state', dtella_state.bridge_loadsavers)
         self.state.persistent = True
         self.state.udp_port = cfg.udp_port
         for addr in cfg.ip_cache:
