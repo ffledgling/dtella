@@ -2196,7 +2196,6 @@ class SyncManager(object):
         self.showProgress()
 
         self.cancelSyncTimeout(s)
-        self.advanceQueue()
 
 
     def scheduleSyncTimeout(self, s, proxy=False):
