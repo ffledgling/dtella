@@ -255,8 +255,6 @@ class Persistent(LoadSaver):
         except StateError:
             state.persistent = False
 
-        print state.persistent
-
 
     def save(self, state, d):
         self.packValue(d, 'B', bool(state.persistent))
@@ -272,8 +270,6 @@ class LocalSearch(LoadSaver):
             state.localsearch = bool(self.unpackValue(d, 'B'))
         except StateError:
             state.localsearch = True
-
-        print state.localsearch
 
 
     def save(self, state, d):
@@ -304,8 +300,6 @@ class UDPPort(LoadSaver):
                 except socket.error:
                     pass
 
-        print state.udp_port
-
 
     def save(self, state, d):
         self.packValue(d, 'H', state.udp_port)
@@ -329,7 +323,6 @@ class IPCache(LoadSaver):
 
         for i in range(0, len(ipcache), 10):
             ipp, when = struct.unpack('!6sI', ipcache[i:i+10])
-            print Ad().setRawIPPort(ipp).getTextIPPort()
             state.refreshPeer(Ad().setRawIPPort(ipp), now-when)
 
 
@@ -350,8 +343,6 @@ class Suffix(LoadSaver):
             state.suffix = self.getKey(d)[:8]
         except StateError:
             state.suffix = ""
-
-        print state.suffix
 
 
     def save(self, state, d):
@@ -396,8 +387,6 @@ class DNSPkHashes(LoadSaver):
             state.dns_pkhashes = set(self.unpackStrs(d))
         except StateError:
             state.dns_pkhashes = set()
-
-        print state.dns_pkhashes
 
 
     def save(self, state, d):
