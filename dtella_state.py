@@ -393,12 +393,12 @@ class DNSPkHashes(LoadSaver):
         self.packStrs(d, state.dns_pkhashes)
 
 
-client_loadsavers = (Persistent(),
+client_loadsavers = [Persistent(),
                      LocalSearch(),
                      UDPPort(),
                      IPCache(),
                      Suffix(),
                      DNSIPCache(),
-                     DNSPkHashes())
+                     DNSPkHashes()]
 
-bridge_loadsavers = (IPCache(),)
+bridge_loadsavers = [IPCache()]
