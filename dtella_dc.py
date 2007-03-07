@@ -1330,7 +1330,7 @@ class DtellaBot(object):
         if len(args) == 1:
             try:
                 ad = Ad().setTextIPPort(args[0])
-                if ad.auth_s():
+                if ad.auth('sx', self.main):
                     self.main.state.refreshPeer(ad, 0)
                     out("Added to peer cache: %s" % ad.getTextIPPort())
 

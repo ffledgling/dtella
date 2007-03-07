@@ -177,10 +177,7 @@ class DNSHandler(object):
                 if (len(data)-4) % 6 != 0:
                     continue
 
-                when, = struct.unpack("!I", data[:4])
-                ipps = [data[i:i+6] for i in range(4, len(data), 6)]
-
-                state.dns_ipcache = (when, ipps)
+                state.setDNSIPCache(data)
 
 
     def doCallback(self):

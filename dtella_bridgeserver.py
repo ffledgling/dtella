@@ -2069,6 +2069,11 @@ class DNSUpdateManager(object):
 
         if osm:
             ipps.add(osm.me.ipp)
+        else:
+            try:
+                ipps.add(self.main.selectMyIP())
+            except ValueError:
+                pass
 
         if (osm and osm.syncd):
 
@@ -2120,10 +2125,16 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         # State Manager
         self.state = dtella_state.StateManager(
             self, 'dtella_bridge.state', dtella_state.bridge_loadsavers)
+        self.state.initLoad()
+        
         self.state.persistent = True
         self.state.udp_port = cfg.udp_port
+        
         for addr in cfg.ip_cache:
-            self.state.refreshPeer(Ad().setTextIPPort(addr), 0)
+            ad = Ad().setTextIPPort(addr)
+            if not ad.auth('s', self):
+                self.state.exempt_ips.add(ad.ip)
+            self.state.refreshPeer(ad, 0)
 
         # Peer Handler
         self.ph = BridgeServerProtocol(self)

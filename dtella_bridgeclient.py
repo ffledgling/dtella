@@ -140,7 +140,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
             osm.bcm.refreshBridgeNodeStatus(
                 n, pktnum, rsa_obj, hashes, do_request=False)
 
-        self.handleBroadcast(ad, data, check_cb)
+        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
 
 
     def handlePacket_bY(self, ad, data):
@@ -153,7 +153,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
         (kind, src_ipp, pktnum, expire, sesid, uptime, flags, rest
          ) = self.decodePacket('!2s6sQH4sIB+', data)
 
-        self.checkSource(src_ipp, ad)
+        self.checkSource(src_ipp, ad, exempt_ip=True)
 
         persist = bool(flags & dtella_core.PERSIST_BIT)
 
@@ -246,7 +246,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
 
             osm.bcm.handleDataBlock(src_ipp, blockdata)
 
-        self.handleBroadcast(ad, data, check_cb)
+        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
 
 
     def handlePacket_BC(self, ad, data):
@@ -284,7 +284,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
             except ChunkError, e:
                 self.main.logPacket("BC chunk error: %s" % str(e))
 
-        self.handleBroadcast(ad, data, check_cb)
+        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
 
 
     def handlePacket_BX(self, ad, data):
@@ -321,7 +321,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
             # Exit the node
             osm.nodeExited(src_n, "Bridge Exit")
 
-        self.handleBroadcast(ad, data, check_cb)
+        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
         
 
     def handlePacket_bC(self, ad, data):
@@ -338,7 +338,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
         if not (osm and osm.syncd):
             raise BadTimingError("Not ready for bC")
 
-        self.checkSource(src_ipp, ad)
+        self.checkSource(src_ipp, ad, exempt_ip=True)
 
         # If the signed message is too old, discard it.
         if osm.bcm.signatureExpired(pktnum):
@@ -368,7 +368,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
         (kind, src_ipp, rest
          ) = self.decodePacket('!2s6s+', data)
 
-        self.checkSource(src_ipp, ad)
+        self.checkSource(src_ipp, ad, exempt_ip=True)
 
         (blockdata, rest
          ) = self.decodeString2(rest)

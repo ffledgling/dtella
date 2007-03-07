@@ -275,7 +275,7 @@ class PeerHandler(DatagramProtocol):
         # Special handler for search results directly from DC
         if rawdata[:4] == '$SR ':
             dch = self.main.getOnlineDCH()
-            if dch and ad.auth_sb(self.main):
+            if dch and ad.auth('sb', self.main):
                 dch.pushSearchResult(rawdata)
             return
 
@@ -301,7 +301,7 @@ class PeerHandler(DatagramProtocol):
             # Make sure the sender's IP is permitted, but delay the check if
             # it's an initialize packet.
             if kind not in ('IQ', 'EC', 'IR', 'IC_alt'):
-                if not ad.auth_sb(self.main):
+                if not ad.auth('sbx', self.main):
                     raise BadPacketError("Invalid source IP")
 
             try:
@@ -374,27 +374,33 @@ class PeerHandler(DatagramProtocol):
     def decodeNodeList(self, data):
         nbs, rest = self.decodeString1(data, 6)
         nbs = self.decodeChunkList('!6s', nbs)
-        nbs = [ipp for ipp, in nbs if Ad().setRawIPPort(ipp).auth_s()]
+        nbs = [ipp for ipp, in nbs
+               if Ad().setRawIPPort(ipp).auth('sx', self.main)]
         return nbs, rest
 
 
     def decodeNodeTimeList(self, data):
         nbs, rest = self.decodeString1(data, 6+4)
         nbs = [(ipp, age) for (ipp, age) in self.decodeChunkList('!6sI', nbs)
-               if Ad().setRawIPPort(ipp).auth_s()]
+               if Ad().setRawIPPort(ipp).auth('sx', self.main)]
         return nbs, rest
 
 
-    def checkSource(self, src_ipp, ad):
+    def checkSource(self, src_ipp, ad, exempt_ip=False):
         # Sometimes the source port number gets changed by NAT, but this
         # ensures that the source IP address matches the reported one.
 
         src_ad = Ad().setRawIPPort(src_ipp)
 
-        if not src_ad.auth_s():
+        if exempt_ip:
+            kinds = 'sx'
+        else:
+            kinds = 's'
+
+        if not src_ad.auth(kinds, self.main):
             raise BadPacketError("Invalid Source IP")
 
-        if not src_ad.auth_b(self.main):
+        if not src_ad.auth('b', self.main):
             raise BadPacketError("Source IP banned")
 
         if src_ad.ip != ad.ip:
@@ -408,7 +414,7 @@ class PeerHandler(DatagramProtocol):
         return src_ad
 
 
-    def handleBroadcast(self, ad, data, check_cb):
+    def handleBroadcast(self, ad, data, check_cb, exempt_ip=False):
 
         (kind, nb_ipp, hop, flags, src_ipp, rest
          ) = self.decodePacket('!2s6sBB6s+', data)
@@ -418,11 +424,15 @@ class PeerHandler(DatagramProtocol):
             raise BadTimingError("Not ready to route '%s' packet" % kind)
 
         # Make sure nb_ipp agrees with the sender's IP
-        self.checkSource(nb_ipp, ad)
+        self.checkSource(nb_ipp, ad, exempt_ip=True)
 
         # Make sure the src_ipp is valid
         src_ad = Ad().setRawIPPort(src_ipp)
-        if not src_ad.auth_sb(self.main):
+        if exempt_ip:
+            kinds = 'sbx'
+        else:
+            kinds = 'sb'
+        if not src_ad.auth(kinds, self.main):
             raise BadPacketError("Invalid forwarded source IP")
 
         # Make sure this came from one of my ping neighbors.
@@ -619,7 +629,7 @@ class PeerHandler(DatagramProtocol):
         src_ad = Ad()
         src_ad.port = port
         
-        if ad.isRFC1918() and my_ad.auth_s():
+        if ad.isRFC1918() and my_ad.auth('sx', self.main):
             # If the request came from a private IP address, but was sent
             # toward a public IP address, then assume the sender node also
             # has the same public IP address.
@@ -627,9 +637,9 @@ class PeerHandler(DatagramProtocol):
         else:
             src_ad.ip = ad.ip
 
-        if not src_ad.auth_s():
+        if not src_ad.auth('sx', self.main):
             ip_code = CODE_IP_FOREIGN
-        elif not src_ad.auth_b(self.main):
+        elif not src_ad.auth('b', self.main):
             ip_code = CODE_IP_BANNED
         else:
             ip_code = CODE_IP_OK
@@ -670,7 +680,7 @@ class PeerHandler(DatagramProtocol):
             pass
 
         elif (self.main.reconnect_dcall and self.main.accept_IQ_trigger
-              and my_ad.auth_s()):
+              and my_ad.auth('sx', self.main)):
             # If we've recently failed to connect, then go online
             # as the sole node on the network.  Then report our node ipp
             # so this other node can try to join us.
@@ -778,10 +788,10 @@ class PeerHandler(DatagramProtocol):
 
         src_ad = Ad().setRawIPPort(src_ipp)
         if ad.isRFC1918():
-            if not src_ad.auth_s():
+            if not src_ad.auth('sx', self.main):
                 raise BadPacketError("Invalid reported source IP")
         else:
-            self.checkSource(src_ipp, ad)
+            self.checkSource(src_ipp, ad, exempt_ip=True)
 
         pc, rest = self.decodeNodeTimeList(rest)
 
@@ -804,10 +814,10 @@ class PeerHandler(DatagramProtocol):
 
         src_ad = Ad().setRawIPPort(src_ipp)
         if ad.isRFC1918():
-            if not src_ad.auth_s():
+            if not src_ad.auth('sx', self.main):
                 raise BadPacketError("Invalid reported source IP")
         else:
-            self.checkSource(src_ipp, ad)
+            self.checkSource(src_ipp, ad, exempt_ip=True)
 
         # Node list, Peer Cache
         nd, rest = self.decodeNodeTimeList(rest)
@@ -1001,7 +1011,7 @@ class PeerHandler(DatagramProtocol):
         (kind, nb_ipp, dead_ipp, pktnum, sesid
          ) = self.decodePacket('!2s6s6sI4s', data)
 
-        self.checkSource(nb_ipp, ad)
+        self.checkSource(nb_ipp, ad, exempt_ip=True)
 
         try:
             n = osm.lookup_ipp[dead_ipp]
@@ -1142,7 +1152,7 @@ class PeerHandler(DatagramProtocol):
         (kind, src_ipp, mode, flags, ack_key
          ) = self.decodePacket('!2s6sBB8s', data)
 
-        self.checkSource(src_ipp, ad)
+        self.checkSource(src_ipp, ad, exempt_ip=True)
 
         reject = bool(flags & ACK_REJECT_BIT)
 
@@ -1235,7 +1245,7 @@ class PeerHandler(DatagramProtocol):
         (kind, src_ipp, flags, rest
          ) = self.decodePacket('!2s6sB+', data)
 
-        self.checkSource(src_ipp, ad)
+        self.checkSource(src_ipp, ad, exempt_ip=True)
 
         uwant =     bool(flags & IWANT_BIT)
         u_got_ack = bool(flags & GOTACK_BIT)
@@ -1280,10 +1290,10 @@ class PeerHandler(DatagramProtocol):
         if not (osm and osm.syncd):
             raise BadTimingError("Not ready to handle a sync request")
 
-        self.checkSource(nb_ipp, ad)
+        self.checkSource(nb_ipp, ad, exempt_ip=True)
 
         src_ad = Ad().setRawIPPort(src_ipp)
-        if not src_ad.auth_sb(self.main):
+        if not src_ad.auth('sbx', self.main):
             raise BadPacketError("Invalid source IP")
 
         timedout = bool(flags & TIMEDOUT_BIT)
@@ -4215,7 +4225,7 @@ class DtellaMain_Base(object):
         # fromip = the IP who sent us this guess
         # myip = the IP that seems to belong to us
 
-        if not (from_ad.auth_s() and my_ad.auth_s()):
+        if not (from_ad.auth('sx', self) and my_ad.auth('sx', self)):
             return
 
         fromip = from_ad.getRawIP()

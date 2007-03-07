@@ -27,8 +27,12 @@ irc_to_dc_prefix = '~'
 # Maximum IRC nick length
 max_irc_nick_len = 30
 
-# Dtella stuff
+# My UDP Port
 udp_port = 41236
+
+# If the bridge will be located offsite, then my own IP must appear
+# in this list for it to be exempted.
+# Otherwise, optionally add the IP:Ports of some other known nodes.
 ip_cache = ['1.2.3.4:41234']
 
 private_key = ()  # Tuple of long integers

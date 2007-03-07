@@ -334,31 +334,26 @@ class Ad(object):
         return not self == other
 
 
-    def auth_s(self):
-        # Authorize IP based on static filter
-
+    def auth(self, kinds, main):
         if not self.ip:
             return False
 
-        return dtella_local.validateIP(self.ip)
+        if 'b' in kinds:
+            # Bans
+            if main.osm and main.osm.banm.isBanned(self.getRawIPPort()):
+                return False
 
+        if 'x' in kinds:
+            # Bridge/Cache Exempt IPs
+            if self.ip in main.state.exempt_ips:
+                return True
 
-    def auth_b(self, main):
-        # Authorize IP based on bans list
+        if 's' in kinds:
+            # Static evaluation
+            if not dtella_local.validateIP(self.ip):
+                return False
 
-        if not self.ip:
-            return False
-
-        if main.osm:
-            return not main.osm.banm.isBanned(self.getRawIPPort())
-        else:
-            return True
-
-
-    def auth_sb(self, main):
-        # Authorize IP based on static+bans
-
-        return (self.auth_s() and self.auth_b(main))
+        return True
 
 
     def isRFC1918(self):

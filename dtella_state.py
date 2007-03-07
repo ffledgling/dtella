@@ -51,11 +51,13 @@ class StateManager(object):
 
         self.main = main
         self.peers = {}   # {ipp -> time}
+        self.exempt_ips = set()
 
         self.loadsavers = set(loadsavers)
 
-        self.loadState()
 
+    def initLoad(self):
+        self.loadState()
         self.saveState_dcall = None
         self.saveState()
 
@@ -150,7 +152,7 @@ class StateManager(object):
     def refreshPeer(self, ad, age):
         # Call this to update the age of a cached peer
 
-        if not ad.auth_s():
+        if not ad.auth('sx', self.main):
             return
 
         ipp = ad.getRawIPPort()
@@ -183,6 +185,26 @@ class StateManager(object):
             for ipp in self.peers.keys():
                 if ipp not in keep:
                     del self.peers[ipp]
+
+
+    def setDNSIPCache(self, data):
+
+        assert len(data) % 6 == 4
+
+        when, = struct.unpack("!I", data[:4])
+        ipps = [data[i:i+6] for i in range(4, len(data), 6)]
+        
+        self.dns_ipcache = when, ipps
+
+        # If DNS contains a foreign IP, add it to the exemption
+        # list, so that it can function as a bridge or cache node.
+
+        self.exempt_ips.clear()
+
+        for ipp in ipps:
+            ad = Ad().setRawIPPort(ipp)
+            if not ad.auth('s', self.main):
+                state.exempt_ips.add(ad.ip)
 
 
 ##############################################################################
@@ -362,12 +384,9 @@ class DNSIPCache(LoadSaver):
             if len(dns_ipcache) % 6 != 4:
                 raise StateError
         except StateError:
-            state.dns_ipcache = (0, [])
+            state.setDNSIPCache('\0\0\0\0')
         else:
-            when, = struct.unpack('!I', dns_ipcache[:4])
-            ipps = [dns_ipcache[i:i+6]
-                    for i in range(4, len(dns_ipcache), 6)]
-            state.dns_ipcache = (when, ipps)
+            state.setDNSIPCache(dns_ipcache)
 
 
     def save(self, state, d):
