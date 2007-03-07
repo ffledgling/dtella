@@ -204,7 +204,7 @@ class StateManager(object):
         for ipp in ipps:
             ad = Ad().setRawIPPort(ipp)
             if not ad.auth('s', self.main):
-                state.exempt_ips.add(ad.ip)
+                self.exempt_ips.add(ad.ip)
 
 
 ##############################################################################
