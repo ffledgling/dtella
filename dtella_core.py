@@ -1396,9 +1396,7 @@ class InitialContactManager(DatagramProtocol):
         # Listen on an arbitrary UDP port
         try:
             reactor.listenUDP(0, self)
-        except socket.error:
-            # If for whatever reason it fails, just try to get by without
-            # the alternate port.
+        except twisted.internet.error.BindError:
             self.main.showLoginStatus("Failed to bind alt UDP port!")
             cb()
             return
