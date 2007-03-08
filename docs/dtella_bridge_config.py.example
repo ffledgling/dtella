@@ -30,9 +30,11 @@ max_irc_nick_len = 30
 # My UDP Port
 udp_port = 41236
 
-# If the bridge will be located offsite, then my own IP must appear
-# in this list for it to be exempted.
-# Otherwise, optionally add the IP:Ports of some other known nodes.
+# Optionally provide an initial hint for my own IP.  If this is an offsite
+# IP, it will be exempted from IP filtering for bridge/cache purposes.
+myip_hint = ''
+
+# Optionally add the IP:Ports of some other known nodes.
 ip_cache = ['1.2.3.4:41234']
 
 private_key = ()  # Tuple of long integers

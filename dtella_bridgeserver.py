@@ -2129,11 +2129,15 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         
         self.state.persistent = True
         self.state.udp_port = cfg.udp_port
+
+        if cfg.myip_hint:
+            ad = Ad().setAddrTuple((cfg.myip_hint, cfg.udp_port))
+            if not ad.auth('s', self):
+                self.state.exempt_ips.add(ad.ip)
+            self.addMyIPReport(ad, ad)
         
         for addr in cfg.ip_cache:
             ad = Ad().setTextIPPort(addr)
-            if not ad.auth('s', self):
-                self.state.exempt_ips.add(ad.ip)
             self.state.refreshPeer(ad, 0)
 
         # Peer Handler
