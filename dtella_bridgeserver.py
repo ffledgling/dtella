@@ -1055,7 +1055,8 @@ class IRCServerData(object):
                 self.topic_locked = val
             elif c == 'm':
                 self.moderated = val
-                osm.bsm.addModeratedChunk(chunks, val)
+                if osm and osm.syncd:
+                    osm.bsm.addModeratedChunk(chunks, val)
             elif c == 'k':
                 # Skip over channel key
                 i += 1
@@ -1086,6 +1087,8 @@ class IRCServerData(object):
                     u = self.users[nick]
                 except KeyError:
                     try:
+                        if not (osm and osm.syncd):
+                            raise NickError("Not online yet")
                         osm.nkm.lookupNick(dc_from_irc(nick))
                     except (NickError, KeyError):
                         continue
