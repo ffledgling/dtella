@@ -383,7 +383,7 @@ class Ad(object):
         ip, port = addr
         self.setTextIP(ip)
        
-        if not 0 < port < 65536:
+        if not 0 <= port < 65536:
             raise ValueError
         self.port = port
         
@@ -395,7 +395,7 @@ class Ad(object):
 
         port = int(port)
 
-        if not 0 < port < 65536:
+        if not 0 <= port < 65536:
             raise ValueError
 
         self.setTextIP(ip)

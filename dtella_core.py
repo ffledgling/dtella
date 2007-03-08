@@ -266,6 +266,9 @@ class PeerHandler(DatagramProtocol):
 
         ad = Ad().setAddrTuple(addr)
 
+        if not ad.port:
+            return
+
         # This will remap a router's internal IP to its external IP,
         # if the remapping is known.
         if self.remap_ip and ad.ip == self.remap_ip[0]:

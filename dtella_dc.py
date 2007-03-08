@@ -1330,7 +1330,13 @@ class DtellaBot(object):
         if len(args) == 1:
             try:
                 ad = Ad().setTextIPPort(args[0])
-                if ad.auth('sx', self.main):
+            except ValueError:
+                pass
+            else:
+                if not ad.port:
+                    out("Port number must be nonzero.")
+                    
+                elif ad.auth('sx', self.main):
                     self.main.state.refreshPeer(ad, 0)
                     out("Added to peer cache: %s" % ad.getTextIPPort())
 
@@ -1340,9 +1346,6 @@ class DtellaBot(object):
                     out("The address '%s' is not permitted on this network."
                         % ad.getTextIPPort())
                 return
-
-            except ValueError:
-                pass
 
         self.syntaxHelp(out, 'ADDPEER', prefix)
 

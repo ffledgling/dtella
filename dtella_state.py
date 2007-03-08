@@ -152,6 +152,9 @@ class StateManager(object):
     def refreshPeer(self, ad, age):
         # Call this to update the age of a cached peer
 
+        if not ad.port:
+            return
+
         if not ad.auth('sx', self.main):
             return
 
