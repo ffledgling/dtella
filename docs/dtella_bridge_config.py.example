@@ -34,7 +34,7 @@ udp_port = 41236
 # IP, it will be exempted from IP filtering for bridge/cache purposes.
 myip_hint = ''
 
-# Optionally add the IP:Ports of some other known nodes.
+# IP:Ports to seed our local cache with. (can be [])
 ip_cache = ['1.2.3.4:41234']
 
 private_key = ()  # Tuple of long integers

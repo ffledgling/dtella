@@ -143,6 +143,12 @@ class StateManager(object):
         cb()
 
 
+    def addExemptIP(self, ad):
+        # If this is an offsite IP, add it to the exempt list.
+        if not ad.auth('s', self.main):
+            self.exempt_ips.add(ad.ip)
+
+
     def getYoungestPeers(self, n):
         # Return a list of (time, ipp) pairs for the N youngest peers
         peers = zip(self.peers.values(), self.peers.keys())
@@ -206,8 +212,7 @@ class StateManager(object):
 
         for ipp in ipps:
             ad = Ad().setRawIPPort(ipp)
-            if not ad.auth('s', self.main):
-                self.exempt_ips.add(ad.ip)
+            self.addExemptIP(ad)
 
 
 ##############################################################################

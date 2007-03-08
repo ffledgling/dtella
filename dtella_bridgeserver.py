@@ -2070,14 +2070,28 @@ class DNSUpdateManager(object):
         GOAL = 16
         ipps = set()
 
+        # Initially add all the exempt IPs, without a port
+        for ip in self.main.state.exempt_ips:
+            ad = Ad()
+            ad.ip = ip
+            ad.port = 0
+            ipps.add(ad.getRawIPPort())
+
+        # Helper function to add an IPP, overriding any portless entries.
+        def add_ipp(ipp):
+            ipps.discard(ipp[:4] + '\0\0')
+            ipps.add(ipp)
+
+        # Add my own IP
         if osm:
-            ipps.add(osm.me.ipp)
+            add_ipp(osm.me.ipp)
         else:
             try:
-                ipps.add(self.main.selectMyIP())
+                add_ipp(self.main.selectMyIP())
             except ValueError:
                 pass
 
+        # Add the IPPs of online nodes
         if (osm and osm.syncd):
 
             now = time.time()
@@ -2091,14 +2105,15 @@ class DNSUpdateManager(object):
             nodes = osm.nodes[:]
             nodes.sort(key=n_uptime)
 
-            for n in nodes[:GOAL-1]:
-                ipps.add(n.ipp)
+            for n in nodes:
+                add_ipp(n.ipp)
+                if len(ipps) >= GOAL:
+                    break
 
-        more = (GOAL - len(ipps)) * 2
-
-        if more:
-            for when,ipp in self.main.state.getYoungestPeers(more):
-                ipps.add(ipp)
+        # Add the IPPs of offline nodes (if necessary)
+        if len(ipps) < GOAL:
+            for when,ipp in self.main.state.getYoungestPeers(GOAL):
+                add_ipp(ipp)
 
                 if len(ipps) >= GOAL:
                     break
@@ -2133,14 +2148,18 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         self.state.persistent = True
         self.state.udp_port = cfg.udp_port
 
+        # Add an inital value for my own IP, adding it to the exempt list
+        # if it's offsite.
         if cfg.myip_hint:
             ad = Ad().setAddrTuple((cfg.myip_hint, cfg.udp_port))
-            if not ad.auth('s', self):
-                self.state.exempt_ips.add(ad.ip)
+            self.state.addExemptIP(ad)
             self.addMyIPReport(ad, ad)
-        
-        for addr in cfg.ip_cache:
-            ad = Ad().setTextIPPort(addr)
+
+        # Add pre-defined entries to my local cache, and add them to
+        # the exempt list of they're offsite.
+        for text_ipp in cfg.ip_cache:
+            ad = Ad().setTextIPPort(text_ipp)
+            self.state.addExemptIP(ad)
             self.state.refreshPeer(ad, 0)
 
         # Peer Handler
