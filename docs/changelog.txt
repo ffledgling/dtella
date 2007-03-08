@@ -1,5 +1,12 @@
 Dtella Changelog
 
+1.0.4 (2007-03-08):
+- Added the ability to whitelist an IP for running an offcampus bridge or
+cache node (search and file transfer requests are still filtered.)
+- bugfix: 'No Online Nodes' case wasn't working right
+- bugfix: Sometimes 'Sync Complete' would fire twice in a row.
+- Made the state handling code more modular.
+
 1.0.3 (2007-02-27):
 - Made the topic formatting more URL-friendly. (i.e. no quotes)
 - Added a workaround for the DNSQueryTimeoutError bug in Twisted.
