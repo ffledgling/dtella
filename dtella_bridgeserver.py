@@ -387,7 +387,7 @@ class IRCServer(LineOnlyReceiver):
             try:
                 ip, subnet = ipmask.split('/', 1)
             except ValueError:
-                ip, subnet = ip, "32"
+                ip, subnet = ipmask, "32"
 
             print "ip,subnet=", (ip,subnet)
 
@@ -583,7 +583,7 @@ class IRCServer(LineOnlyReceiver):
 	
         #Format> :Global PRIVMSG $irc3.dhirc.com :TESTING....
         #Handle global messages delivered to the bridge.
-	elif target == "$" + cfg.my_host:
+        elif target == "$" + cfg.my_host:
             flags |= dtella_core.NOTICE_BIT
             chunks = []
             osm.bsm.addChatChunk(
