@@ -44,6 +44,8 @@ import dtella_crypto
 import dtella_local
 import dtella_hostmask
 
+import dtella_log
+
 import dtella_dnslookup
 
 from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
@@ -51,6 +53,10 @@ from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 
 
 import dtella_bridge_config as cfg
+
+#Logging for Dtella Client
+LOG_MANAGER = dtella_log.LogControl("dtella.bridge.log")
+LOG = LOG_MANAGER.logger
 
 
 irc_nick_chars = (
@@ -208,7 +214,7 @@ def irc_strip(text):
 
 class IRCServer(LineOnlyReceiver):
     showirc = False
-
+    
     def __init__(self, main):
         self.data = IRCServerData(self)
         self.main = main
@@ -230,7 +236,7 @@ class IRCServer(LineOnlyReceiver):
         line = line.replace('\r', '').replace('\n', '')
         
         if self.showirc:
-            print "<:", line
+            LOG.log(5, "<:" + line)
             
         LineOnlyReceiver.sendLine(self, line)
 
@@ -241,7 +247,7 @@ class IRCServer(LineOnlyReceiver):
             return
 
         if self.showirc:
-            print ">:", line
+            LOG.log(5, ">:" + line)
 
         if line[0] == ':':
             try:
@@ -268,7 +274,7 @@ class IRCServer(LineOnlyReceiver):
 
 
     def handleCmd_PING(self, prefix, args):
-        print "PING? PONG!"
+        LOG.info("PING? PONG!")
         if len(args) == 1:
             self.sendLine("PONG %s :%s" % (cfg.my_host, args[0]))
         elif len(args) == 2:
@@ -389,7 +395,7 @@ class IRCServer(LineOnlyReceiver):
             except ValueError:
                 ip, subnet = ipmask, "32"
 
-            print "ip,subnet=", (ip,subnet)
+            LOG.debug( "ip,subnet=", (ip,subnet))
 
             try:
                 ip, = struct.unpack('!i', Ad().setTextIP(ip).getRawIP())
@@ -1939,7 +1945,7 @@ class ReverseDNSManager(object):
             self.limiter += 1
             self.advanceQueue()
 
-        print "Querying %s" % Ad().setRawIP(ip).getTextIP()
+        LOG.debug( "Querying %s" % Ad().setRawIP(ip).getTextIP())
         dtella_dnslookup.ipToHostname(Ad().setRawIP(ip), cb)
 
 
@@ -2011,7 +2017,7 @@ class DNSUpdateManager(object):
     # Deferred object.  We currently have a module which writes to a text
     # file, and another which performs a Dynamic DNS update.  Other modules
     # could potentially be written for free DNS hosting services.
-
+    
     def __init__(self, main):
         self.main = main
         self.update_dcall = None
@@ -2041,7 +2047,7 @@ class DNSUpdateManager(object):
     def updateSuccess(self, result):
         self.busy = False
 
-        print "DNS Update Successful:", result
+        LOG.debug("DNS Update Successful:" + result)
         
         self.scheduleUpdate(cfg.dnsup_interval)
 
@@ -2049,7 +2055,7 @@ class DNSUpdateManager(object):
     def updateFailed(self, why):
         self.busy = False
 
-        print "DNS Update Failed:", why
+        LOG.warning("DNS Update Failed:"+ why)
         
         self.scheduleUpdate(cfg.dnsup_interval)
 
@@ -2175,7 +2181,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         try:
             reactor.listenUDP(cfg.udp_port, self.ph)
         except twisted.internet.error.BindError:
-            print "Failed to bind UDP port!"
+            LOG.error("Failed to bind UDP port!")
             raise SystemExit
 
         # IRC Server
@@ -2185,7 +2191,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
 
     def cleanupOnExit(self):
-        print "Reactor is shutting down.  Doing cleanup."
+        LOG.info("Reactor is shutting down.  Doing cleanup.")
 
         self.shutdown(reconnect='no')
         self.state.saveState()

@@ -34,11 +34,16 @@ import dtella_dc
 import dtella_dnslookup
 import dtella_local
 
+import dtella_log
+
 from dtella_util import dcall_discard, Ad, word_wrap
 
 tcp_port = 7314
 STATE_FILE = "dtella.state"
 
+#Logging for Dtella Client
+LOG_MANAGER = dtella_log.LogControl("dtella.client.log")
+LOG = LOG_MANAGER.logger
 
 class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
@@ -88,7 +93,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
 
     def cleanupOnExit(self):
-        print "Reactor is shutting down.  Doing cleanup."
+        LOG.info("Reactor is shutting down.  Doing cleanup.")
         if self.dch:
             self.dch.state = 'shutdown'
         self.shutdown(reconnect='no')
@@ -273,6 +278,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
             # Remember this for new DC clients
             self.login_text = text
         
+        LOG.debug(text)
         dch = self.dch
         if dch:
             dch.pushStatus(text)
@@ -316,6 +322,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
         if text:
             # We must already be connecting/online.
             # Show the last status message.
+            LOG.debug(text)
             dch.pushStatus(text)
 
             # Send a message if there's a newer version
@@ -374,6 +381,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 def run():
 
     dtMain = DtellaMain_Client()
+    
 
     def logObserver(eventDict):
         if eventDict["isError"]:
@@ -389,32 +397,33 @@ def run():
                     "of Dtella, then you might want to email this to "
                     "bugs@dtella.org so we'll know about it:\n" + text)
             else:
+                LOG.critical(text)
                 sys.stderr.write(text)
                 sys.stderr.flush()
 
     twisted.python.log.startLoggingWithObserver(logObserver, setStdout=False)
 
     dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
-
-    print "Dtella %s" % dtella_local.version
+    
+    LOG.info("Dtella %s" % dtella_local.version)
 
     def cb(first):
         try:
             reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
         except twisted.internet.error.CannotListenError:
             if first:
-                print "TCP bind failed.  Killing old process..."
+                LOG.warning("TCP bind failed.  Killing old process...")
                 if terminate():
-                    print "Ok.  Sleeping..."
+                    LOG.info("Ok.  Sleeping...")
                     reactor.callLater(2.0, cb, False)
                 else:
-                    print "Kill failed.  Giving up."
+                    LOG.error("Kill failed.  Giving up.")
                     reactor.stop()
             else:
-                print "Bind failed again.  Giving up."
+                LOG.error("Bind failed again.  Giving up.")
                 reactor.stop()
         else:
-            print "Listening on 127.0.0.1:%d" % tcp_port
+            LOG.info("Listening on 127.0.0.1:%d" % tcp_port)
             dtMain.startConnecting()
 
     cb(True)
@@ -423,7 +432,7 @@ def run():
 
 def terminate():
     # Terminate another Dtella process on the local machine
-
+    
     try:
         print "Sending Packet of Death..."
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
