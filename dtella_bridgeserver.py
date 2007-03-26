@@ -2,8 +2,9 @@
 
 """
 Dtella - Bridge Server Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks, Jacob Feisley
+Copyright (C) 2007  Dtella Labs (http://www.dtella.org/)
+Copyright (C) 2007  Paul Marks (http://www.pmarks.net/)
+Copyright (C) 2007  Jacob Feisley  (http://www.feisley.com/)
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -57,7 +58,7 @@ import dtella_bridge_config as cfg
 #Logging for Dtella Client
 LOG_MANAGER = dtella_log.LogControl("dtella.bridge.log")
 LOG = LOG_MANAGER.logger
-
+LOG.debug("Bridge Logging Manager Initialized")
 
 irc_nick_chars = (
     "-0123456789"

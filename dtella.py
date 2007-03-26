@@ -2,8 +2,9 @@
 
 """
 Dtella - Node Startup Module
-Copyright (C) 2007  Paul Marks
-http://www.dtella.org/
+Copyright (C) 2007  Dtella Labs (http://www.dtella.org/)
+Copyright (C) 2007  Paul Marks (http://www.pmarks.net/)
+Copyright (C) 2007  Jacob Feisley (http://www.feisley.com/)
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -44,6 +45,7 @@ STATE_FILE = "dtella.state"
 #Logging for Dtella Client
 LOG_MANAGER = dtella_log.LogControl("dtella.client.log")
 LOG = LOG_MANAGER.logger
+LOG.debug("Client Logging Manager Initialized")
 
 class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
@@ -434,7 +436,7 @@ def terminate():
     # Terminate another Dtella process on the local machine
     
     try:
-        print "Sending Packet of Death..."
+        LOG.info("Sending Packet of Death...")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(('127.0.0.1', tcp_port))
         sock.sendall("$KillDtella|")
@@ -450,8 +452,8 @@ if __name__=='__main__':
     if len(sys.argv) == 2 and sys.argv[1] == "--terminate":
         if terminate():
             # Give the other process time to exit first
-            print "Sleeping..."
+            LOG.info("Sleeping...")
             time.sleep(2.0)
-        print "Done."
+        LOG.info("Done.")
     else:
         run()
