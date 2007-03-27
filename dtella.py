@@ -393,14 +393,14 @@ def run():
 
             dch = dtMain.dch
             if dch:
+                LOG.critical(text)
                 dch.bot.say(
                     "Something bad happened.  If you have the latest version "
                     "of Dtella, then you might want to email this to "
                     "bugs@dtella.org so we'll know about it:\n" + text)
             else:
                 LOG.critical(text)
-                sys.stderr.write(text)
-                sys.stderr.flush()
+
 
     twisted.python.log.startLoggingWithObserver(logObserver, setStdout=False)
 

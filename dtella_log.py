@@ -28,7 +28,7 @@ class LogControl(object):
         self.logger = None
         
         #Add custom levels
-        logging.addLevelName(5, "Packets")
+        logging.addLevelName(5, "PACKETS")
         #create logger
         self.logger = logging.getLogger()
         self.logger.setLevel(5)
