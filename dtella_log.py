@@ -48,7 +48,16 @@ class LogControl():
         self.logger.addHandler(self.ch)
         self.logger.addHandler(self.fh)
 
-        
+#Defined Logging Levels
+#
+# CRITICAL  	50
+# ERROR         40
+# WARNING 	30
+# INFO 	        20
+# DEBUG         10
+# PACKETS       5
+# NOTSET 	0
+#
 
 
 
