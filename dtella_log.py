@@ -20,11 +20,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from dtella_util import get_user_path
 import logging
-
+import logging.handlers
 
 class LogControl(object):
 
-    def __init__(self, filename):
+    def __init__(self, filename, max_size, max_archives):
         self.logger = None
         
         #Add custom levels
@@ -35,8 +35,8 @@ class LogControl(object):
         #create console handler and set level to error
         self.ch = logging.StreamHandler()
         self.ch.setLevel(logging.DEBUG)
-        #create file handler and set level to debug
-        self.fh = logging.FileHandler(filename)
+        #create file handler and set level to debug (rotates logs)
+        self.fh = logging.handlers.RotatingFileHandler(filename, 'a', max_size, max_archives)
         self.fh.setLevel(5)
         
         #create formatter
@@ -60,6 +60,6 @@ class LogControl(object):
 # NOTSET 	0
 #
 
-def makeLogger(filename):
-    return LogControl(get_user_path(filename)).logger
+def makeLogger(filename, max_size, max_archives):
+    return LogControl(get_user_path(filename), max_size, max_archives).logger
 

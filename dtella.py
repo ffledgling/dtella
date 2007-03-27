@@ -43,7 +43,7 @@ tcp_port = 7314
 STATE_FILE = "dtella.state"
 
 #Logging for Dtella Client
-LOG = dtella_log.makeLogger("dtella.client.log")
+LOG = dtella_log.makeLogger("dtella.client.log", 1048576, 1)
 LOG.debug("Client Logging Manager Initialized")
 
 class DtellaMain_Client(dtella_core.DtellaMain_Base):

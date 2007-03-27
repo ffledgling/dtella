@@ -56,7 +56,7 @@ from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 import dtella_bridge_config as cfg
 
 #Logging for Dtella Client
-LOG = dtella_log.makeLogger("dtella.bridge.log")
+LOG = dtella_log.makeLogger("dtella.bridge.log", 4194304, 4)
 LOG.debug("Bridge Logging Manager Initialized")
 
 irc_nick_chars = (
