@@ -25,29 +25,16 @@ import time
 import socket
 import heapq
 from twisted.internet import reactor
-import os
-import os.path
 import twisted.python.log
 
-from dtella_util import Ad, dcall_discard
+from dtella_util import Ad, dcall_discard, get_user_path
 
 
 class StateManager(object):
 
     def __init__(self, main, filename, loadsavers):
 
-        path = os.path.expanduser("~/.dtella")
-        if path[:1] == '~':
-            # Can't get a user directory, just save to cwd.
-            self.filename = filename
-        else:
-            try:
-                if not os.path.exists(path):
-                    os.mkdir(path)
-            except OSError:
-                twisted.python.log.err()
-
-            self.filename = "%s/%s" % (path, filename)
+        self.filename = get_user_path(filename)
 
         self.main = main
         self.peers = {}   # {ipp -> time}

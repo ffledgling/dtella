@@ -26,6 +26,8 @@ import sys
 import fpformat
 import re
 import array
+import os
+import os.path
 
 from twisted.python.runtime import seconds
 
@@ -172,6 +174,21 @@ def get_os():
 
 def get_version_string():
     return "Dt:%s/%s" % (dtella_local.version, get_os())
+
+
+def get_user_path(filename):
+    path = os.path.expanduser("~/.dtella")
+    if path[:1] == '~':
+        # Can't get a user directory, just save to cwd.
+        return filename
+    else:
+        try:
+            if not os.path.exists(path):
+                os.mkdir(path)
+        except OSError:
+            twisted.python.log.err()
+
+        return "%s/%s" % (path, filename)
 
 
 def remove_dc_escapes(text):

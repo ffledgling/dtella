@@ -18,6 +18,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
+from dtella_util import get_user_path
 import logging
 
 
@@ -59,9 +60,6 @@ class LogControl(object):
 # NOTSET 	0
 #
 
-
-
-
-
-
+def makeLogger(filename):
+    return LogControl(get_user_path(filename)).logger
 

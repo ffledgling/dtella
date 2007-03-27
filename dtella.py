@@ -37,14 +37,13 @@ import dtella_local
 
 import dtella_log
 
-from dtella_util import dcall_discard, Ad, word_wrap
+from dtella_util import dcall_discard, Ad, word_wrap, get_user_path
 
 tcp_port = 7314
 STATE_FILE = "dtella.state"
 
 #Logging for Dtella Client
-LOG_MANAGER = dtella_log.LogControl("dtella.client.log")
-LOG = LOG_MANAGER.logger
+LOG = dtella_log.makeLogger("dtella.client.log")
 LOG.debug("Client Logging Manager Initialized")
 
 class DtellaMain_Client(dtella_core.DtellaMain_Base):
