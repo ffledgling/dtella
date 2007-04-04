@@ -236,7 +236,7 @@ class IRCServer(LineOnlyReceiver):
         line = line.replace('\r', '').replace('\n', '')
         
         if self.showirc:
-            LOG.log(5, "<:" + line)
+            LOG.log(5, "<: %s" % line)
             
         LineOnlyReceiver.sendLine(self, line)
 
@@ -247,7 +247,7 @@ class IRCServer(LineOnlyReceiver):
             return
 
         if self.showirc:
-            LOG.log(5, ">:" + line)
+            LOG.log(5, ">: %s" % line)
 
         if line[0] == ':':
             try:
@@ -395,8 +395,6 @@ class IRCServer(LineOnlyReceiver):
             except ValueError:
                 ip, subnet = ipmask, "32"
 
-            LOG.debug( "ip,subnet=", (ip,subnet))
-
             try:
                 ip, = struct.unpack('!i', Ad().setTextIP(ip).getRawIP())
             except (ValueError, struct.error):
@@ -410,8 +408,6 @@ class IRCServer(LineOnlyReceiver):
             except ValueError:
                 print "Subnet not a number"
                 return
-
-            print "subnet=", subnet
 
             if subnet == 0:
                 mask = 0
@@ -2047,7 +2043,7 @@ class DNSUpdateManager(object):
     def updateSuccess(self, result):
         self.busy = False
 
-        LOG.debug("DNS Update Successful:" + result)
+        LOG.debug("DNS Update Successful: %s" % result)
         
         self.scheduleUpdate(cfg.dnsup_interval)
 
@@ -2055,7 +2051,7 @@ class DNSUpdateManager(object):
     def updateFailed(self, why):
         self.busy = False
 
-        LOG.warning("DNS Update Failed:"+ why)
+        LOG.warning("DNS Update Failed: %s" % why)
         
         self.scheduleUpdate(cfg.dnsup_interval)
 
