@@ -418,7 +418,7 @@ class IRCServer(LineOnlyReceiver):
                 return
 
             LOG.info( "kind=" + kind )
-            LOG.info( "ip,mask=%s, $s" % (ip, mask) )
+            LOG.info( "ip,mask=%s, %s" % (ip, mask) )
 
             if addrem == '+':
                 self.data.addNetBan(ip, mask)
