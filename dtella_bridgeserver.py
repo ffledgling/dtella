@@ -418,7 +418,7 @@ class IRCServer(LineOnlyReceiver):
                 return
 
             LOG.info( "kind=" + kind )
-            LOG.info( "ip,mask="+ ip + mask )
+            LOG.info( "ip,mask=%s, $s" % (ip, mask) )
 
             if addrem == '+':
                 self.data.addNetBan(ip, mask)
@@ -1072,7 +1072,7 @@ class IRCServerData(object):
                     self.chanbans[banmask] = wild_to_regex(banmask)
                 else:
                     self.chanbans.pop(banmask, None)
-                LOG.debug( "bans=" + self.chanbans.keys() )
+                LOG.debug( "bans= %s" % self.chanbans.keys() )
             else:
                 try:
                     # Check if this is a user mode
@@ -1442,7 +1442,7 @@ class BridgeServerManager(object):
         
         t = time.time()
         sig, = self.rsa_obj.sign(data_hash, None)
-        LOG.debug( "Sign Time=", + (time.time() - t) )
+        LOG.debug( "Sign Time= %s" % (time.time() - t) )
 
         packet.append(long_to_bytes(sig))
 
