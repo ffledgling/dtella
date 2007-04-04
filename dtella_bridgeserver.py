@@ -398,15 +398,15 @@ class IRCServer(LineOnlyReceiver):
             try:
                 ip, = struct.unpack('!i', Ad().setTextIP(ip).getRawIP())
             except (ValueError, struct.error):
-                print "Invalid IP format"
+                LOG.error( "Invalid IP format" )
                 return
 
-            print "ip=", ip
+            LOG.debug( "ip=" + ip )
 
             try:
                 subnet = int(subnet)
             except ValueError:
-                print "Subnet not a number"
+                LOG.error( "Subnet not a number")
                 return
 
             if subnet == 0:
@@ -414,11 +414,11 @@ class IRCServer(LineOnlyReceiver):
             elif 1 <= subnet <= 32:
                 mask = ~0 << (32-subnet)
             else:
-                print "Subnet out of range"
+                LOG.error( "Subnet out of range" )
                 return
 
-            print "kind=", kind
-            print "ip,mask=", (ip, mask)
+            LOG.info( "kind=" + kind )
+            LOG.info( "ip,mask="+ ip + mask )
 
             if addrem == '+':
                 self.data.addNetBan(ip, mask)
@@ -439,7 +439,7 @@ class IRCServer(LineOnlyReceiver):
                 self.data.qlines[nickmask] = (wild_to_regex(nickmask),
                                               reason)
                 
-                print "Adding Qline: %s" % nickmask
+                LOG.info( "Adding Qline: %s" % nickmask )
 
             elif addrem == '-':
                 self.data.qlines.pop(nickmask, None)
@@ -484,7 +484,7 @@ class IRCServer(LineOnlyReceiver):
         if prefix != cfg.irc_server:
             return
 
-        print "SYNCD!!!!"
+        LOG.info( "SYNCD!!!!" )
 
         self.showirc = True
 
@@ -640,7 +640,7 @@ class IRCServer(LineOnlyReceiver):
         osm = self.main.osm
         assert (self.readytosend and osm and osm.syncd)
 
-        print "Sending Dtella state to IRC..."
+        LOG.info( "Sending Dtella state to IRC..." )
 
         nicks = osm.nkm.nickmap.values()
         nicks.sort(key=lambda n: n.nick)
@@ -719,7 +719,7 @@ class IRCServer(LineOnlyReceiver):
             self.ping_dcall = None
 
             if self.ping_waiting:
-                print "Ping timeout!"
+                LOG.error( "Ping timeout!" )
                 self.transport.loseConnection()
             else:
                 self.sendLine("PING :%s" % cfg.my_host)
@@ -762,10 +762,10 @@ class IRCServer(LineOnlyReceiver):
                 if q.match(inick):
                     raise NickError("Nick is Q-lined: %s" % reason)
 
-            print "Nick is okay"
+            LOG.debug( "Nick is okay" )
 
         except NickError, e:
-            print "Nick is not okay"
+            LOG.debug( "Nick is not okay" )
             # Bad nick.  KICK!
             osm = self.main.osm
             chunks = []
@@ -890,11 +890,11 @@ class IRCServerData(object):
         try:
             u = self.users.pop(oldnick)
         except KeyError:
-            print "Nick doesn't exist"
+            LOG.debug( "Nick doesn't exist" )
             return
 
         if newnick in self.users:
-            print "New nick already exists!"
+            LOG.debug( "New nick already exists!" )
             return
 
         u.nick = newnick
@@ -955,7 +955,7 @@ class IRCServerData(object):
         try:
             u = self.users[n00b]
         except KeyError:
-            print "Nick doesn't exist"
+            LOG.debug( "Nick doesn't exist" )
             return
 
         self.chanusers.remove(u)
@@ -1018,7 +1018,7 @@ class IRCServerData(object):
             return
 
         if u in self.chanusers:
-            print "already in channel!"
+            LOG.warning( "already in channel!" )
             return
 
         self.chanusers.add(u)
@@ -1072,7 +1072,7 @@ class IRCServerData(object):
                     self.chanbans[banmask] = wild_to_regex(banmask)
                 else:
                     self.chanbans.pop(banmask, None)
-                print "bans=", self.chanbans.keys()
+                LOG.debug( "bans=" + self.chanbans.keys() )
             else:
                 try:
                     # Check if this is a user mode
@@ -1146,12 +1146,12 @@ class IRCServerData(object):
     def addNetBan(self, ip, mask):
         
         if (ip, mask) in self.bans:
-            print "Duplicate ban"
+            LOG.warning( "Duplicate ban" )
             return
 
         self.bans.add((ip, mask))
 
-        print "* Ban Added"
+        LOG.info( "* Ban Added" )
 
         osm = self.ircs.main.osm
 
@@ -1169,10 +1169,10 @@ class IRCServerData(object):
         try:
             self.bans.remove((ip, mask))
         except KeyError:
-            print "Ban not found"
+            LOG.warning( "Ban not found" )
             return
 
-        print "* Ban Removed"
+        LOG.info( "* Ban Removed" )
 
         osm = self.ircs.main.osm
 
@@ -1399,10 +1399,10 @@ class BridgeServerManager(object):
 
         if self.bridge_pktnum >> 24 == t:
             self.bridge_pktnum += 1
-            print "nextPktNum: Incrementing"
+            LOG.debug( "nextPktNum: Incrementing" )
         else:
             self.bridge_pktnum = (t << 24L)
-            print "nextPktNum: New Time"
+            LOG.debug( "nextPktNum: New Time" )
 
         return struct.pack("!Q", self.bridge_pktnum)
 
@@ -1442,7 +1442,7 @@ class BridgeServerManager(object):
         
         t = time.time()
         sig, = self.rsa_obj.sign(data_hash, None)
-        print "Sign Time=", (time.time() - t)
+        LOG.debug( "Sign Time=", + (time.time() - t) )
 
         packet.append(long_to_bytes(sig))
 
@@ -1754,7 +1754,7 @@ class BridgeServerManager(object):
         try:
             b = self.cached_blocks[bhash]
         except KeyError:
-            print "Requested block not found"
+            LOG.warning( "Requested block not found" )
             return
 
         b.scheduleExpire(self.cached_blocks, bhash)
@@ -2215,7 +2215,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
 
     def showLoginStatus(self, text, counter=None):
-        print text
+        LOG.info( text )
 
 
     def queryLocation(self, my_ipp):
