@@ -28,7 +28,7 @@ class LogControl(object):
         self.logger = None
         
         #Add custom levels
-        logging.addLevelName(5, "PACKETS")
+        logging.addLevelName(5, "PACKET")
         #create logger
         self.logger = logging.getLogger()
         self.logger.setLevel(5)
@@ -49,6 +49,10 @@ class LogControl(object):
         self.logger.addHandler(self.ch)
         self.logger.addHandler(self.fh)
 
+
+    def packet(self, msg):
+        self.log(5, msg)
+
 #Defined Logging Levels
 #
 # CRITICAL  	50
@@ -56,7 +60,7 @@ class LogControl(object):
 # WARNING 	30
 # INFO 	        20
 # DEBUG         10
-# PACKETS       5
+# PACKET        5
 # NOTSET 	0
 #
 

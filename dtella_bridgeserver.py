@@ -401,7 +401,7 @@ class IRCServer(LineOnlyReceiver):
                 LOG.error( "Invalid IP format" )
                 return
 
-            LOG.debug( "ip=" + ip )
+            LOG.debug( "ip= %s" % ip )
 
             try:
                 subnet = int(subnet)
@@ -760,9 +760,9 @@ class IRCServer(LineOnlyReceiver):
 
             for q, reason in self.data.qlines.itervalues():
                 if q.match(inick):
-                    raise NickError("Nick is Q-lined: %s" % reason)
+                    raise NickError("Nick '%s' is Q-lined: %s" % (n.nick, reason))
 
-            LOG.debug( "Nick is okay" )
+            LOG.debug( "Nick '%s' is okay" % n.nick )
 
         except NickError, e:
             LOG.debug( "Nick is not okay" )
@@ -2273,5 +2273,3 @@ if __name__ == '__main__':
     ifactory = IRCFactory(dtMain)
     reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
     reactor.run()
-
-
