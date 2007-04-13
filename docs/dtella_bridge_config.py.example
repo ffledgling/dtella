@@ -55,6 +55,14 @@ dnsup_update_func = dtella_dnsup_textfile.TextFileUpdater(
     fname="test-dns.txt"
     ).update
 
+# -- Use yi.org --
+##import dtella_dnsup_yi
+##dnsup_update_func = dtella_dnsup_yi.YiUpdater(
+##    username="username",
+##    password="password",
+##    host_id=12345,
+##    ).update
+
 # -- Use Dynamic DNS --
 ##import dtella_dnsup_dynamic
 ##dnsup_update_func = dtella_dnsup_dynamic.DynamicDNSUpdater(

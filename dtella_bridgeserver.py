@@ -2069,7 +2069,7 @@ class DNSUpdateManager(object):
         pkhash = b64(md5.new(pubkey).digest())
 
         # Collect IPPs for the ipcache string
-        GOAL = 16
+        GOAL = 10
         ipps = set()
 
         # Initially add all the exempt IPs, without a port
