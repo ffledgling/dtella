@@ -2157,14 +2157,13 @@ class SyncManager(object):
                 # we should be hearing a reply.
                 s = self.info[ipp] = self.SyncInfo(ipp)
                 self.scheduleSyncTimeout(s, proxy=True)
+                self.updateStats(s, 0, +1)
             else:
                 if ipp in self.uncontacted:
                     # Seen this node, had planned to ping it later.
                     # Pretend like we just pinged it now.
                     self.uncontacted.discard(ipp)
                     self.scheduleSyncTimeout(s, proxy=True)
-
-            self.updateStats(s, 0, +1)
 
         # Loop through all the nodes which weren't contacted by this
         # host, but that the host is neighbors with.
