@@ -1,7 +1,8 @@
 """
 Dtella - DNS Updater Plugin (Dynamic DNS)
 Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Jacob Feisley, Paul Marks
+Copyright (C) 2007  Jacob Feisley (http://www.feisley.com/)
+Copyright (C) 2007  Paul Marks (http://www.pmarks.net/)
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
