@@ -21,6 +21,7 @@ copy ..\dtella_dnslookup.py      %DTDIR%
 copy ..\dtella_fixtwisted.py     %DTDIR%
 copy ..\dtella_local.py          %DTDIR%
 copy ..\dtella_state.py          %DTDIR%
+copy ..\dtella_log.py            %DTDIR%
 copy ..\dtella_util.py           %DTDIR%
 copy ..\docs\readme.txt          %DTDIR%
 copy ..\docs\changelog.txt       %DTDIR%
