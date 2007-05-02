@@ -23,7 +23,7 @@
 !define PRODUCT_VERSION "SVN"
 !define PRODUCT_PUBLISHER "Dtella Labs"
 !define PRODUCT_WEB_SITE "http://www.dtella.org/"
-!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\dtella.exe"
+!define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}\dtella.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
 
