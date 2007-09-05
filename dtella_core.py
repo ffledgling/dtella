@@ -258,6 +258,9 @@ class PeerHandler(DatagramProtocol):
             self.transport.write(data, addr)
         except socket.error:
             return False
+        except RuntimeError:
+            # Workaround the Twisted infinite recursion bug
+            return False
 
         return True
 
@@ -1477,6 +1480,9 @@ class InitialContactManager(DatagramProtocol):
                 # Send from the alternate port
                 self.transport.write(packet, ad.getAddrTuple())
             except (AttributeError, socket.error):
+                pass
+            except RuntimeError:
+                # Workaround for the Twisted infinte recursion bug
                 pass
             else:
                 self.schedulePeerContactTimeout(p)
