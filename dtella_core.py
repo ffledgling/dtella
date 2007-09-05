@@ -518,6 +518,11 @@ class PeerHandler(DatagramProtocol):
         (kind, src_ipp, ack_key, src_nhash, dst_nhash, rest
          ) = self.decodePacket('!2s6s8s4s4s+', data)
 
+        # If we're not on the network, ignore it.
+        osm = self.main.osm
+        if not osm:
+            raise BadTimingError("Not ready to handle private message")
+
         ack_flags = 0
 
         try:
@@ -528,8 +533,6 @@ class PeerHandler(DatagramProtocol):
             dch = self.main.getOnlineDCH()
             if not dch:
                 raise Reject
-
-            osm = self.main.osm
 
             try:
                 n = osm.lookup_ipp[src_ipp]
