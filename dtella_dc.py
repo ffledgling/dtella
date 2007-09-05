@@ -27,7 +27,7 @@ import twisted.python.log
 from dtella_util import (Ad, validateNick, word_wrap, split_info,
                          split_tag, remove_dc_escapes, dcall_discard,
                          format_bytes, dcall_timeleft, get_version_string,
-                         lock2key)
+                         lock2key, CHECK)
 import dtella_core
 import dtella_local
 import struct
@@ -395,7 +395,7 @@ class DCHandler(BaseDCProtocol):
 
     def removeLoginBlocker(self, blocker):
 
-        assert self.state == 'login_2'
+        CHECK(self.state == 'login_2')
 
         try:
             self.loginblockers.remove(blocker)
@@ -435,7 +435,7 @@ class DCHandler(BaseDCProtocol):
 
     def attachMeToDtella(self):
 
-        assert (self.main.dch is None)
+        CHECK(self.main.dch is None)
 
         if self.state == 'queued':
             self.queued_dcall.cancel()
@@ -819,7 +819,7 @@ class DCHandler(BaseDCProtocol):
 
     def broadcastChatMessage(self, flags, text):
 
-        assert self.isOnline()
+        CHECK(self.isOnline())
 
         osm = self.main.osm
 
@@ -854,7 +854,7 @@ class DCHandler(BaseDCProtocol):
         # 2. User types !REJOIN
         # 3. DC client reconnects (creates a new DCHandler)
 
-        assert self.state == 'ready'
+        CHECK(self.state == 'ready')
 
         if self.main.osm:
             self.main.osm.nkm.quitEverybody()
@@ -1562,7 +1562,7 @@ class DtellaBot(object):
 
     def showStats(self, out, title, compute, format, peers_only):
 
-        assert self.dch.isOnline()
+        CHECK(self.dch.isOnline())
 
         # Count users and bytes
         ucount = {}

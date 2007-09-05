@@ -37,7 +37,7 @@ import dtella_local
 
 import dtella_log
 
-from dtella_util import dcall_discard, Ad, word_wrap, get_user_path
+from dtella_util import dcall_discard, Ad, word_wrap, get_user_path, CHECK
 
 tcp_port = 7314
 STATE_FILE = "dtella.state"
@@ -311,7 +311,7 @@ class DtellaMain_Client(dtella_core.DtellaMain_Base):
 
     def addDCHandler(self, dch):
 
-        assert (not self.dch)
+        CHECK(not self.dch)
         
         self.dch = dch
 

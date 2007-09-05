@@ -49,7 +49,7 @@ import dtella_log
 
 import dtella_dnslookup
 
-from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick
+from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick, CHECK
 from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 
 
@@ -638,7 +638,7 @@ class IRCServer(LineOnlyReceiver):
     def sendState(self):
         
         osm = self.main.osm
-        assert (self.readytosend and osm and osm.syncd)
+        CHECK(self.readytosend and osm and osm.syncd)
 
         LOG.info( "Sending Dtella state to IRC..." )
 
@@ -732,7 +732,7 @@ class IRCServer(LineOnlyReceiver):
     def updateTopic(self, n, topic):
 
         osm = self.main.osm
-        assert (self.syncd and osm and osm.syncd)
+        CHECK(self.syncd and osm and osm.syncd)
 
         # Check if the topic is locked
         if self.data.topic_locked:
@@ -807,7 +807,7 @@ class IRCServer(LineOnlyReceiver):
 
     def event_ChatMessage(self, n, nick, text, flags):
 
-        assert not hasattr(n, 'dns_pending')
+        CHECK(not hasattr(n, 'dns_pending'))
 
         if flags & dtella_core.NOTICE_BIT:
             self.pushNotice(n.inick, text)
@@ -1503,7 +1503,7 @@ class BridgeServerManager(object):
 
             osm = self.main.osm
 
-            assert (osm and osm.syncd)
+            CHECK(osm and osm.syncd)
 
             # Decide when to retransmit next
             when = 60 * 5
@@ -1537,7 +1537,7 @@ class BridgeServerManager(object):
         # All the state info common between BS and Br packets
 
         osm = self.main.osm
-        assert (osm and osm.syncd)
+        CHECK(osm and osm.syncd)
 
         # Get the IRC Server, if it's ready
         ircs = self.main.ircs
@@ -1610,7 +1610,7 @@ class BridgeServerManager(object):
     def sendBridgeChange(self, chunks):
         osm = self.main.osm
 
-        assert (osm and osm.syncd)
+        CHECK(osm and osm.syncd)
 
         packet = osm.mrm.broadcastHeader('BC', osm.me.ipp)
         packet.append(self.nextPktNum())
@@ -1629,7 +1629,7 @@ class BridgeServerManager(object):
         osm = self.main.osm
         ph = self.main.ph
 
-        assert (osm and osm.syncd)
+        CHECK(osm and osm.syncd)
 
         chunks = ''.join(chunks)
 
@@ -2245,12 +2245,12 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
 
     def addIRCServer(self, ircs):
-        assert (not self.ircs)
+        CHECK(not self.ircs)
         self.ircs = ircs
 
 
     def removeIRCServer(self, ircs):
-        assert ircs and (self.ircs is ircs)
+        CHECK(ircs and (self.ircs is ircs))
 
         self.ircs = None
 

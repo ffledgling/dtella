@@ -27,7 +27,7 @@ import heapq
 from twisted.internet import reactor
 import twisted.python.log
 
-from dtella_util import Ad, dcall_discard, get_user_path
+from dtella_util import Ad, dcall_discard, get_user_path, CHECK
 
 
 class StateManager(object):
@@ -185,7 +185,7 @@ class StateManager(object):
 
     def setDNSIPCache(self, data):
 
-        assert len(data) % 6 == 4
+        CHECK(len(data) % 6 == 4)
 
         when, = struct.unpack("!I", data[:4])
         ipps = [data[i:i+6] for i in range(4, len(data), 6)]

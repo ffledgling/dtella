@@ -334,6 +334,11 @@ def word_wrap(line, max_len=80):
     return lines
 
 
+def CHECK(truth):
+    if not truth:
+        raise AssertionError("CHECK failed")
+
+
 ###########################################################################
 
 

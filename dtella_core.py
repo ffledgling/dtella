@@ -38,7 +38,7 @@ import dtella_local
 import dtella_crypto
 from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
                          validateNick, word_wrap, parse_incoming_info,
-                         get_version_string, parse_dtella_tag)
+                         get_version_string, parse_dtella_tag, CHECK)
 
 
 # Miscellaneous Exceptions
@@ -1494,7 +1494,7 @@ class InitialContactManager(DatagramProtocol):
 
     def schedulePeerContactTimeout(self, p):
 
-        assert (p not in self.waitreply)
+        CHECK(p not in self.waitreply)
 
         self.waitreply.add(p)
         
@@ -2880,7 +2880,7 @@ class PingManager(object):
 
     def pingWithRetransmit(self, n, tries, later, ack_key=None):
 
-        assert n.is_ping_nb
+        CHECK(n.is_ping_nb)
 
         dcall_discard(n, 'sendPing_dcall')
         n.ping_reqs.clear()
@@ -2962,7 +2962,7 @@ class PingManager(object):
     def cancelInactiveLink(self, n):
         # Demote n back to a normal node
 
-        assert n.is_ping_nb
+        CHECK(n.is_ping_nb)
 
         dcall_discard(n, 'sendPing_dcall')
         dcall_discard(n, 'nodeFail_dcall')
@@ -2979,7 +2979,7 @@ class PingManager(object):
     def instaKillNeighbor(self, n):
         # Unconditionally drop neighbor connection (used for bans)
 
-        assert n.is_ping_nb
+        CHECK(n.is_ping_nb)
 
         iwant = (n in self.outbound)
 
@@ -3424,7 +3424,7 @@ class MessageRoutingManager(object):
 
         ack_key = self.generateKey(data)
 
-        assert (ack_key not in self.msgs)
+        CHECK(ack_key not in self.msgs)
 
         m = self.msgs[ack_key] = self.Message(data, tries)
         self.pokeMessage(ack_key, nb_ipp)
@@ -3637,7 +3637,7 @@ class SyncRequestRoutingManager(object):
         ad = Ad().setRawIPPort(src_ipp)
         osm = self.main.osm
 
-        assert (osm and osm.syncd)
+        CHECK(osm and osm.syncd)
 
         # Build Packet
         packet = ['YR']
@@ -4061,7 +4061,7 @@ class DtellaMain_Base(object):
     def startInitialContact(self):
         # If all the conditions are right, start connection procedure
 
-        assert not (self.icm or self.osm)
+        CHECK(not (self.icm or self.osm))
 
         dcall_discard(self, 'reconnect_dcall')
 
@@ -4122,7 +4122,7 @@ class DtellaMain_Base(object):
     def startNodeSync(self, node_ipps):
         # Determine my IP address and enable the osm
 
-        assert not (self.icm or self.osm)
+        CHECK(not (self.icm or self.osm))
             
         # Reset the reconnect interval
         self.reconnect_interval = RECONNECT_RANGE[0]
