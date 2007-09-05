@@ -521,8 +521,9 @@ class BridgeNodeData(object):
         # After we receive a sync reply from the bridge, individually
         # request the full data for each block hash.
 
+        dcall_discard(self, 'requestBlocks_dcall')
+
         if not self.req_blocks:
-            dcall_discard(self, 'requestBlocks_dcall')
             return
 
         def cb(timeout):
