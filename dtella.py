@@ -406,7 +406,7 @@ def run():
 
     dfactory = dtella_dc.DCFactory(dtMain, tcp_port)
     
-    LOG.info("Dtella %s" % dtella_local.version)
+    LOG.info("%s %s" % (dtella_local.hub_name, dtella_local.version))
 
     def cb(first):
         try:
