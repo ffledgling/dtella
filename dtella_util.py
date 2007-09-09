@@ -235,7 +235,7 @@ def parse_dtella_tag(info):
 
 def parse_incoming_info(info):
     # Pull the location and share size out of an info string
-    # Returns dcinfo, version, location, shared
+    # Returns dcinfo, location, shared
 
     info = info.replace('\r','').replace('\n','')
 
