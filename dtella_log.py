@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
+import sys
 
 from dtella_util import get_user_path
 import logging
@@ -33,7 +34,7 @@ class LogControl(object):
         self.logger = logging.getLogger()
         self.logger.setLevel(5)
         #create console handler and set level to error
-        self.ch = logging.StreamHandler()
+        self.ch = logging.StreamHandler(strm = sys.stdout)
         self.ch.setLevel(logging.DEBUG)
         #create file handler and set level to debug (rotates logs)
         self.fh = logging.handlers.RotatingFileHandler(filename, 'a', max_size, max_archives)

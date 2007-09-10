@@ -9,7 +9,8 @@ else:
 setup(
     options={
         "py2exe":{
-            "optimize":2
+            "optimize":2,
+            "dll_excludes": ["libeay32.dll"]
         },
         
         "py2app":{
