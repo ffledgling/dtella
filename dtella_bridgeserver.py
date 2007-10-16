@@ -219,7 +219,7 @@ class IRCServer(LineOnlyReceiver):
         self.data = IRCServerData(self)
         self.main = main
         self.syncd = False
-        self.readytosend = False
+        self.server_name = None
         self.shutdown_deferred = None
 
         self.ping_dcall = None
@@ -447,14 +447,20 @@ class IRCServer(LineOnlyReceiver):
 
     def handleCmd_SERVER(self, prefix, args):
 
-        # If we receive this, our password was accepted, so broadcast
-        # the Dtella state information if it's available and we haven't
-        # sent it already.
-
-        if self.readytosend:
+        if prefix:
+            # Not from our connected server
             return
 
-        self.readytosend = True
+        if self.server_name:
+            # Could be a dupe?  Ignore it.
+            return
+
+        # We got a reply from the our connected IRC server, so our password
+        # was just accepted.  Send the Dtella state information into IRC.
+
+        # Save server name
+        CHECK(args[0])
+        self.server_name = args[0]
 
         osm = self.main.osm
 
@@ -481,7 +487,7 @@ class IRCServer(LineOnlyReceiver):
 
     def handleCmd_EOS(self, prefix, args):
 
-        if prefix != cfg.irc_server:
+        if prefix != self.server_name:
             return
 
         LOG.info( "SYNCD!!!!" )
@@ -638,7 +644,7 @@ class IRCServer(LineOnlyReceiver):
     def sendState(self):
         
         osm = self.main.osm
-        CHECK(self.readytosend and osm and osm.syncd)
+        CHECK(self.server_name and osm and osm.syncd)
 
         LOG.info( "Sending Dtella state to IRC..." )
 
@@ -1419,7 +1425,7 @@ class BridgeServerManager(object):
         ircs = self.main.ircs
 
         # If the IRC server is ready to receive our state, then send it.
-        if ircs and ircs.readytosend:
+        if ircs and ircs.server_name:
             ircs.sendState()
 
         # Broadcast the bridge state into Dtella.
@@ -1788,7 +1794,7 @@ class BridgeServerManager(object):
         ack_flags = 0
 
         try:
-            if not (osm and osm.syncd and ircs and ircs.readytosend):
+            if not (osm and osm.syncd and ircs and ircs.server_name):
                 raise Reject("Not ready for bridge PM")
 
             try:
@@ -1963,7 +1969,7 @@ class ReverseDNSManager(object):
         except AttributeError:
             return
 
-        if not (ircs and ircs.readytosend):
+        if not (ircs and ircs.server_name):
             return
 
         if hostname is None:
@@ -2238,7 +2244,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
         if not (self.osm and self.osm.syncd):
             return None
 
-        if self.ircs and self.ircs.readytosend:
+        if self.ircs and self.ircs.server_name:
             return self.ircs
 
         return None
