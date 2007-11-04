@@ -20,32 +20,57 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-# These settings are specific to the Purdue network.
+# These settings are specific to the Purdue network.  They should be
+# customized for each new network you create.
 
+# Dtella version number.
 version = "SVN"
 
-# Every unique network should have its own key.
+# This is an arbitrary string which is used for encrypting packets.
+# It essentially defines the uniqueness of a Dtella network, so every
+# network should have its own unique key.
 network_key = 'PurdueDtella-11'
 
+# This is the name of the "hub" which is seen by the user's DC client.
+# "Dtella@____" is the de-facto standard, but nobody's stopping you
+# from picking something else.
 hub_name = "Dtella@Purdue"
 
-# Set a reasonable upper limit on the DNS minshare (=100GB)
-minshare_cap = 100 * (1024**3)
+# This enforces a maximum cap for the 'minshare' value which appears in DNS.
+# It should be set to some sane value to prevent the person managing DNS from
+# setting the minshare to 99999TiB, and effectively disabling the network.
+minshare_cap = 100 * (1024**3)   # (=100GiB)
 
-# Public DNS servers, for getting config
+# Public DNS servers, which will be used to query config.
 dns_servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222']
+
+# DNS address where the config TXT record resides.
+# This usually contains a small encrypted IP cache, version information,
+# minimum share, and a hash of the IRC bridge's public key.
 dnshost = 'purdue.config.dtella.org'
 
-# Local DNS servers, for efficient reverse lookups
+# DNS servers which will be used for doing IP->Hostname reverse lookups.
+# These should be set to your school's local DNS servers.  If for some reason
+# your network isn't localized, you could set rnds_servers = dns_servers.
 rdns_servers = ['128.210.11.5','128.210.11.57','128.10.2.5','128.46.154.76']
 
+# This function should examine an IP address, and return True if it's
+# permitted on the network, False otherwise.  Since this is called for every
+# packet, it should be as fast as possible.
+# (You may want to consult a CS major who's familiar with Python.)
 def validateIP(ip):
     # ip is a tuple of 4 integers (a, b, c, d)
-    # Return True if the IP belongs to this site
     return ip[0] == 128 and ip[1] in (10,46,210,211)
 
-
+# Enable this if you can devise a meaningful mapping from a user's hostname
+# to their location.  Locations are displayed in the "Connection / Speed"
+# column of the DC client.
 use_locations = True
+
+# if use_locations is True, then hostnameToLocation will be called to perform
+# the location translation.  If you set use_locations = False, then
+# hostnameToLocation will never be called, and you may delete the rest of
+# the lines in this file.
 
 import re
 suffix_re = re.compile(r".*\.([^.]+)\.purdue\.edu")
