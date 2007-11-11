@@ -2013,10 +2013,7 @@ class ReverseDNSManager(object):
 
 class DNSUpdateManager(object):
 
-    # This code doesn't really have to reside in the bridge, but it's the
-    # most convenient place to put it.
-
-    # It calls the 'dnsup_update_func' function in dtella_bridge_config,
+    # Calls the 'dnsup_update_func' function in dtella_bridge_config,
     # which accepts a dictionary of key=value pairs, and returns a twisted
     # Deferred object.  We currently have a module which writes to a text
     # file, and another which performs a Dynamic DNS update.  Other modules
@@ -2070,11 +2067,16 @@ class DNSUpdateManager(object):
         def b64(arg):
             return binascii.b2a_base64(arg).rstrip()
         
+        # Dictionary of key=value pairs to return.
+        # Start out with the static entries provided in the config.
+        entries = cfg.dnsup_fixed_entries.copy()
+
         osm = self.main.osm
 
         # Generate public key hash
-        pubkey = long_to_bytes(RSA.construct(cfg.private_key).n)
-        pkhash = b64(md5.new(pubkey).digest())
+        if cfg.private_key:
+            pubkey = long_to_bytes(RSA.construct(cfg.private_key).n)
+            entries['pkhash'] = b64(md5.new(pubkey).digest())
 
         # Collect IPPs for the ipcache string
         GOAL = 10
@@ -2134,9 +2136,6 @@ class DNSUpdateManager(object):
         ipcache = '\xFF\xFF\xFF\xFF' + ''.join(ipcache)
         ipcache = b64(self.main.pk_enc.encrypt(ipcache))
 
-        entries = cfg.dnsup_fixed_entries.copy()
-
-        entries['pkhash'] = pkhash
         entries['ipcache'] = ipcache
 
         return entries
