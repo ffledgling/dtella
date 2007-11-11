@@ -2278,6 +2278,10 @@ if __name__ == '__main__':
     
     dtMain = DtellaMain_Bridge()
 
-    ifactory = IRCFactory(dtMain)
-    reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
+    if cfg.irc_server:
+        ifactory = IRCFactory(dtMain)
+        reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
+    else:
+        LOG.info("IRC is not enabled.")
+
     reactor.run()

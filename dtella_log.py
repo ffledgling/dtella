@@ -39,12 +39,15 @@ class LogControl(object):
         self.ch = logging.StreamHandler(strm = sys.stdout)
         self.ch.setLevel(logging.DEBUG)
         #create file handler and set level to debug (rotates logs)
-        self.fh = logging.handlers.RotatingFileHandler(filename, 'a', max_size, max_archives)
+        self.fh = logging.handlers.RotatingFileHandler(
+            filename, 'a', max_size, max_archives)
         self.fh.setLevel(5)
         
         #create formatter
-        self.consoleFormat = logging.Formatter("%(levelname).1s - %(message)s")
-        self.logfileFormat = logging.Formatter("%(asctime)s - %(levelname).1s - %(message)s")
+        self.consoleFormat = logging.Formatter(
+            "%(levelname).1s - %(message)s")
+        self.logfileFormat = logging.Formatter(
+            "%(asctime)s - %(levelname).1s - %(message)s")
         #add formatter to ch and fh
         self.ch.setFormatter(self.consoleFormat)
         self.fh.setFormatter(self.logfileFormat)
