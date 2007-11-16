@@ -27,7 +27,7 @@ import dtella_core
 
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineOnlyReceiver
-from twisted.internet import reactor, defer
+from twisted.internet import reactor, defer, ssl
 from twisted.python.runtime import seconds
 import twisted.internet.error
 
@@ -2279,7 +2279,11 @@ if __name__ == '__main__':
 
     if cfg.irc_server:
         ifactory = IRCFactory(dtMain)
-        reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
+        if cfg.irc_ssl:
+            sslContext = ssl.ClientContextFactory()
+            reactor.connectSSL(cfg.irc_server, cfg.irc_port, ifactory, sslContext)
+        else:
+            reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
     else:
         LOG.info("IRC is not enabled.")
 

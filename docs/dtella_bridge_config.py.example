@@ -4,8 +4,11 @@
 
 # Connection info for peering with an UnrealIRCd server.
 # Leave irc_server blank to run in DNS-only mode.
+# If your server supports SSL you can set the port to 
+# the ssl port and set irc_ssl to True.
 irc_server = ""
 irc_port = 6667
+irc_ssl = False
 irc_password = ""
 
 my_host = "bridge1.dtella.zomg"  # Hostname of this IRC server
