@@ -154,10 +154,13 @@ def dc_from_irc(inick):
     # Decode an IRC-encoded DC nick, for use in Dtella.
 
     # Verify prefix
-    if len(inick) <= 1 or inick[0] != cfg.dc_to_irc_prefix:
+    if not inick.startswith(cfg.dc_to_irc_prefix):
         raise NickError("Bad prefix")
 
-    dnick = inick[1:]
+    dnick = inick[len(cfg.dc_to_irc_prefix):]
+
+    if not dnick:
+        raise NickError("Nothing after prefix")
 
     n_escapes = 0
     for c in dnick:
@@ -191,10 +194,13 @@ def irc_to_dc(inick):
 
 def irc_from_dc(dnick):
     # Decode a Dtella-encoded IRC nick, for use in IRC.
-    if len(dnick) <= 1 or dnick[0] != cfg.irc_to_dc_prefix:
+    if not dnick.startswith(cfg.irc_to_dc_prefix):
         raise NickError("Bad prefix")
 
-    inick = dnick[1:].replace('!','|')
+    inick = dnick[len(cfg.irc_to_dc_prefix):].replace('!','|')
+
+    if not inick:
+        raise NickError("Nothing after prefix")
 
     for c in inick:
         if c not in irc_nick_chars:
@@ -294,7 +300,7 @@ class IRCServer(LineOnlyReceiver):
         oldnick = prefix
         newnick = args[0]
         
-        if newnick[:1] == cfg.irc_to_dc_prefix:
+        if newnick.startswith(cfg.irc_to_dc_prefix):
             self.sendLine(
                 ":%s KILL %s :%s (nick reserved for Dtella)"
                 % (cfg.my_host, newnick, cfg.my_host))
