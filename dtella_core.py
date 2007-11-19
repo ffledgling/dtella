@@ -722,7 +722,7 @@ class PeerHandler(DatagramProtocol):
                     # (not very likely), then assume 1 hour
                     age = 60*60
 
-            ir_nodes.append(struct.pack('!6sI', ipp, age))
+            ir_nodes.append(struct.pack('!6sI', ipp, int(age)))
 
         # Convert node_ipps into a set, for O(1) lookups
         node_ipps = set(node_ipps)
@@ -733,7 +733,7 @@ class PeerHandler(DatagramProtocol):
             # Add packet data to the outlist
             age = max(int(now - when), 0)
 
-            pc_entry = struct.pack('!6sI', ipp, age)
+            pc_entry = struct.pack('!6sI', ipp, int(age))
 
             if (len(node_ipps) + len(ir_peercache) < IR_LEN and
                     ipp not in node_ipps):

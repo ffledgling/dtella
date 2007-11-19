@@ -62,7 +62,7 @@ dnsup_fixed_entries = {
 
 # How often to push a DNS update, in seconds.
 # (Note: The first update is always pushed after 30 seconds.)
-dnsup_interval = 60*15
+dnsup_interval = 60*60
 
 # Set dnsup_update_func, a function which pushes DNS updates.
 

@@ -1561,7 +1561,7 @@ class BridgeServerManager(object):
 
         # Session ID, uptime flags
         packet.append(osm.me.sesid)
-        packet.append(struct.pack("!I", seconds() - osm.me.uptime))
+        packet.append(struct.pack("!I", int(seconds() - osm.me.uptime)))
         packet.append(struct.pack("!B", dtella_core.PERSIST_BIT))
 
         chunks = []
