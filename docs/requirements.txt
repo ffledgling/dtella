@@ -12,6 +12,10 @@ In order to run dtella you will need the following:
 The bridge server will require the following additional module:
 * dnspython		(http://www.dnspython.org/)
 
+If you wish to use SSL links in the bridge also grab:
+* pyOpenSSL		(http://pyopenssl.sourceforge.net/)
+* OpenSSL		(http://www.openssl.org/)
+
 
 --
 BUILDING
