@@ -90,3 +90,14 @@ dnsup_update_func = dtella_dnsup_textfile.TextFileUpdater(
 ##    dns_ip = '1.2.3.4'
 ##    ).update
 
+# -- Use Google Spreadsheets --
+# To use this method, sign into a Gmail or Apps account, create an empty
+# spreadsheet, and publish it.  The sheet key is the random string of
+# characters in the page URL.  (Be careful to never delete the sheet!)
+##import dtella_dnsup_gdata
+##dnsup_update_func = dtella_dnsup_gdata.GDataUpdater(
+##    email = "foo@gmail.com",
+##    password = "...",
+##    sheet_key = "pJPozIo..."
+##    ).update
+
