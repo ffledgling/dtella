@@ -1,7 +1,8 @@
 """
 Dtella - Logging Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org/)
-Copyright (C) 2007  Jacob Feisley (http://www.feisley.com/)
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org/)
+Copyright (C) 2008  Jacob Feisley (http://www.feisley.com/)
+Copyright (C) 2008  Paul Marks (http://www.pmarks.net/)
 
 $Id$
 
@@ -20,56 +21,45 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 import sys
-
-from dtella_util import get_user_path
 import logging
 import logging.handlers
 
-class LogControl(object):
+from dtella_util import get_user_path, CHECK
 
-    def __init__(self, filename, max_size, max_archives):
-        self.logger = None
-        
-        #Add custom levels
-        logging.addLevelName(5, "PACKET")
-        #create logger
-        self.logger = logging.getLogger()
-        self.logger.setLevel(5)
-        #create console handler and set level to error
-        self.ch = logging.StreamHandler(strm = sys.stdout)
-        self.ch.setLevel(logging.DEBUG)
-        #create file handler and set level to debug (rotates logs)
-        self.fh = logging.handlers.RotatingFileHandler(
-            filename, 'a', max_size, max_archives)
-        self.fh.setLevel(5)
-        
-        #create formatter
-        self.consoleFormat = logging.Formatter(
-            "%(levelname).1s - %(message)s")
-        self.logfileFormat = logging.Formatter(
-            "%(asctime)s - %(levelname).1s - %(message)s")
-        #add formatter to ch and fh
-        self.ch.setFormatter(self.consoleFormat)
-        self.fh.setFormatter(self.logfileFormat)
-        #add ch and fh to logger
-        self.logger.addHandler(self.ch)
-        self.logger.addHandler(self.fh)
-
-
-    def packet(self, msg):
-        self.log(5, msg)
-
-#Defined Logging Levels
+# Defined Logging Levels
 #
-# CRITICAL  	50
-# ERROR         40
-# WARNING 	30
-# INFO 	        20
-# DEBUG         10
-# PACKET        5
-# NOTSET 	0
-#
+# CRITICAL  50
+# ERROR     40
+# WARNING   30
+# INFO      20
+# DEBUG     10
+# PACKET    5
+# NOTSET    0
 
-def makeLogger(filename, max_size, max_archives):
-    return LogControl(get_user_path(filename), max_size, max_archives).logger
+LOG = None
+
+def initLogger(filename, max_size, max_archives):
+    global LOG
+    CHECK(LOG is None)
+
+    # Add custom levels
+    logging.addLevelName(5, "PACKET")
+
+    # Create LOG
+    LOG = logging.getLogger()
+    LOG.setLevel(5)
+
+    # Create console handler and set level to error
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    ch.setFormatter(logging.Formatter("%(levelname).1s - %(message)s"))
+    LOG.addHandler(ch)
+
+    # Create file handler and set level to debug (rotates logs)
+    fh = logging.handlers.RotatingFileHandler(
+        get_user_path(filename), 'a', max_size, max_archives)
+    fh.setLevel(5)
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s - %(levelname).1s - %(message)s"))
+    LOG.addHandler(fh)
 

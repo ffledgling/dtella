@@ -2,9 +2,9 @@
 
 """
 Dtella - Node Startup Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org/)
-Copyright (C) 2007  Paul Marks (http://www.pmarks.net/)
-Copyright (C) 2007  Jacob Feisley (http://www.feisley.com/)
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org/)
+Copyright (C) 2008  Paul Marks (http://www.pmarks.net/)
+Copyright (C) 2008  Jacob Feisley (http://www.feisley.com/)
 
 $Id$
 
@@ -23,6 +23,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
+#Logging for Dtella Client
+import dtella_log
+dtella_log.initLogger("dtella.client.log", 1<<20, 1)
+from dtella_log import LOG
+LOG.debug("Client Logging Manager Initialized")
+
 import dtella_core
 import twisted.internet.error
 import twisted.python.log
@@ -37,16 +43,12 @@ import dtella_dc
 import dtella_dnslookup
 import dtella_local
 
-import dtella_log
 
 from dtella_util import dcall_discard, Ad, word_wrap, get_user_path, CHECK
 
 tcp_port = 7314
 STATE_FILE = "dtella.state"
 
-#Logging for Dtella Client
-LOG = dtella_log.makeLogger("dtella.client.log", 1048576, 1)
-LOG.debug("Client Logging Manager Initialized")
 
 class DtellaMain_Client(dtella_core.DtellaMain_Base):
 

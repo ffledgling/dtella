@@ -23,6 +23,12 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
+# Logging for Dtella Bridge
+import dtella_log
+dtella_log.initLogger("dtella.bridge.log", 4<<20, 4)
+from dtella_log import LOG
+LOG.debug("Bridge Logging Manager Initialized")
+
 import dtella_core
 
 from twisted.internet.protocol import ReconnectingClientFactory
@@ -54,12 +60,7 @@ import dtella_dnslookup
 from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick, CHECK
 from dtella_core import Reject, BadPacketError, BadTimingError, NickError
 
-
 import dtella_bridge_config as cfg
-
-#Logging for Dtella Client
-LOG = dtella_log.makeLogger("dtella.bridge.log", 4194304, 4)
-LOG.debug("Bridge Logging Manager Initialized")
 
 irc_nick_chars = (
     "-0123456789"
@@ -2228,7 +2229,7 @@ class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
 
 
     def showLoginStatus(self, text, counter=None):
-        LOG.info( text )
+        LOG.info(text)
 
 
     def queryLocation(self, my_ipp):
