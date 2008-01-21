@@ -37,6 +37,7 @@ import sys
 import socket
 import time
 import random
+import getopt
 
 import dtella_state
 import dtella_dc
@@ -430,7 +431,7 @@ def run():
             LOG.info("Listening on 127.0.0.1:%d" % tcp_port)
             dtMain.startConnecting()
 
-    cb(True)
+    reactor.callWhenRunning(cb, True)
     reactor.run()
 
 
@@ -438,7 +439,7 @@ def terminate():
     # Terminate another Dtella process on the local machine
     
     try:
-        LOG.info("Sending Packet of Death...")
+        LOG.info("Sending Packet of Death on port %d..." % tcp_port)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect(('127.0.0.1', tcp_port))
         sock.sendall("$KillDtella|")
@@ -450,12 +451,32 @@ def terminate():
 
 
 if __name__=='__main__':
+    # Parse command-line arguments
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], '', ['terminate', 'port='])
+    except getopt.GetoptError:
+        LOG.error("Usage: %s [--port=#] [--terminate]" % sys.argv[0])
+        sys.exit(0)
 
-    if len(sys.argv) == 2 and sys.argv[1] == "--terminate":
+    opts = dict(opts)
+
+    # User-specified TCP port
+    if '--port' in opts:
+        try:
+            tcp_port = int(opts['--port'])
+            if not (1 <= tcp_port < 65536):
+                raise ValueError
+        except ValueError:
+            LOG.error("Port must be between 1-65535")
+            sys.exit(0)
+
+    # Try to terminate an existing process
+    if '--terminate' in opts:
         if terminate():
             # Give the other process time to exit first
             LOG.info("Sleeping...")
             time.sleep(2.0)
         LOG.info("Done.")
-    else:
-        run()
+        sys.exit(0)
+
+    run()
