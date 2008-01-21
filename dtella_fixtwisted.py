@@ -61,20 +61,35 @@ else:
     noop()
 
 
-# bugfix: splice some error trapping into the writeMessage function
-
 import twisted.names
 if twisted.names.__version__ == '0.4.0':
 
     import twisted.names.dns
     import socket
 
-    f = twisted.names.dns.DNSDatagramProtocol.writeMessage
+    # bugfix: splice some error trapping into the writeMessage function
+    # http://twistedmatrix.com/trac/ticket/2492
 
+    f1 = twisted.names.dns.DNSDatagramProtocol.writeMessage
     def writeMessage(*args):
         try:
-            f(*args)
+            f1(*args)
         except socket.error:
             pass
-
     twisted.names.dns.DNSDatagramProtocol.writeMessage = writeMessage
+
+    # Another workaround:
+    # http://twistedmatrix.com/trac/ticket/2581
+
+    from twisted.internet.error import CannotListenError
+
+    f2 = twisted.names.dns.DNSDatagramProtocol.startListening
+    def startListening(*args):
+        for i in range(10):
+            try:
+                return f2(*args)
+            except CannotListenError:
+                pass
+        raise AssertionError("DNS isn't happy :-(")
+    twisted.names.dns.DNSDatagramProtocol.startListening = startListening
+

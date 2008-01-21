@@ -1,5 +1,12 @@
 Dtella Changelog
 
+1.0.x (TBD):
+- Enabled the logging of messages and errors to a file.
+- Added a --port command-line option for specifying a custom TCP port.
+- Fixed a bug in the progress bar, where it was possible for the sync to
+complete before reaching 100%.
+- Fixed a bug which could cause a node to request extra bridge blocks.
+
 1.0.4 (2007-03-08):
 - Added the ability to whitelist an IP for running an offcampus bridge or
 cache node (search and file transfer requests are still filtered.)
