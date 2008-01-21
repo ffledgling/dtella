@@ -3,7 +3,7 @@ Dtella - Config Updater Plugin (Google Spreadsheets)
 Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
 Copyright (C) 2008  Paul Marks
 
-$Id: dtella_dnsup_textfile.py 456 2007-10-18 02:43:03Z feisley $
+$Id$
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -19,7 +19,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
-
 
 from twisted.internet import threads
 import atom.service
