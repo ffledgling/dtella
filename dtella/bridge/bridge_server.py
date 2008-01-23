@@ -1,10 +1,8 @@
-#!/usr/bin/env python
-
 """
 Dtella - Bridge Server Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org/)
-Copyright (C) 2007  Paul Marks (http://www.pmarks.net/)
-Copyright (C) 2007  Jacob Feisley  (http://www.feisley.com/)
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org/)
+Copyright (C) 2008  Paul Marks (http://www.pmarks.net/)
+Copyright (C) 2008  Jacob Feisley  (http://www.feisley.com/)
 
 $Id$
 
@@ -23,44 +21,35 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-# Logging for Dtella Bridge
-import dtella_log
-dtella_log.initLogger("dtella.bridge.log", 4<<20, 4)
-from dtella_log import LOG
-LOG.debug("Bridge Logging Manager Initialized")
-
-import dtella_core
-
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet import reactor, defer
 from twisted.python.runtime import seconds
 import twisted.internet.error
 
-from Crypto.Util.number import long_to_bytes, bytes_to_long
+from Crypto.Util.number import long_to_bytes
 from Crypto.PublicKey import RSA
 
 import time
 import struct
 import md5
-import random
 import re
 import binascii
 from collections import deque
 
-import dtella_state
-import dtella_crypto
-import dtella_local
-import dtella_hostmask
+import dtella.common.core as core
+import dtella.common.state
+import dtella.local_config as local
+import dtella.bridge.hostmask
+from dtella.common.reverse_dns import ipToHostname
+from dtella.common.log import LOG
 
-import dtella_log
+from dtella.common.util import (Ad, dcall_discard, dcall_timeleft,
+                                validateNick, CHECK)
+from dtella.common.core import (Reject, BadPacketError, BadTimingError,
+                                NickError)
 
-import dtella_dnslookup
-
-from dtella_util import Ad, dcall_discard, dcall_timeleft, validateNick, CHECK
-from dtella_core import Reject, BadPacketError, BadTimingError, NickError
-
-import dtella_bridge_config as cfg
+import dtella.bridge_config as cfg
 
 irc_nick_chars = (
     "-0123456789"
@@ -557,10 +546,10 @@ class IRCServer(LineOnlyReceiver):
             self.pushWhoisReply(
                 319, src, who, cfg.irc_chan)
 
-            if dtella_local.use_locations:
+            if local.use_locations:
                 self.pushWhoisReply(
                     320, src, who, "Location: %s"
-                    % dtella_local.hostnameToLocation(n.hostname))
+                    % local.hostnameToLocation(n.hostname))
 
         self.pushWhoisReply(
             318, src, who, "End of /WHOIS list.")
@@ -588,7 +577,7 @@ class IRCServer(LineOnlyReceiver):
         
         if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
             text = text[8:-1]
-            flags |= dtella_core.SLASHME_BIT
+            flags |= core.SLASHME_BIT
 
         text = irc_strip(text)
 
@@ -601,7 +590,7 @@ class IRCServer(LineOnlyReceiver):
         #Format> :Global PRIVMSG $irc3.dhirc.com :TESTING....
         #Handle global messages delivered to the bridge.
         elif target == "$" + cfg.my_host:
-            flags |= dtella_core.NOTICE_BIT
+            flags |= core.NOTICE_BIT
             chunks = []
             osm.bsm.addChatChunk(
                 chunks, irc_to_dc(prefix), text, flags)
@@ -629,7 +618,7 @@ class IRCServer(LineOnlyReceiver):
 
         target = args[0]
         text = irc_strip(args[1])
-        flags = dtella_core.NOTICE_BIT
+        flags = core.NOTICE_BIT
 
         if target == cfg.irc_chan:
             chunks = []
@@ -824,9 +813,9 @@ class IRCServer(LineOnlyReceiver):
 
         CHECK(not hasattr(n, 'dns_pending'))
 
-        if flags & dtella_core.NOTICE_BIT:
+        if flags & core.NOTICE_BIT:
             self.pushNotice(n.inick, text)
-        elif flags & dtella_core.SLASHME_BIT:
+        elif flags & core.SLASHME_BIT:
             self.pushPrivMsg(n.inick, text, action=True)
         else:
             self.pushPrivMsg(n.inick, text)
@@ -1303,7 +1292,7 @@ class IRCFactory(ReconnectingClientFactory):
 ##############################################################################
 
 
-class BridgeServerProtocol(dtella_core.PeerHandler):
+class BridgeServerProtocol(core.PeerHandler):
 
     def handlePacket_bP(self, ad, data):
         # Private message to IRC nick
@@ -1392,7 +1381,9 @@ class BridgeServerManager(object):
 
 
     def __init__(self, main):
+
         self.main = main
+
         self.rsa_obj = RSA.construct(cfg.private_key)
 
         # 64-bit value, stored as [8-bit pad] [32-bit time] [24-bit counter]
@@ -1569,7 +1560,7 @@ class BridgeServerManager(object):
         # Session ID, uptime flags
         packet.append(osm.me.sesid)
         packet.append(struct.pack("!I", int(seconds() - osm.me.uptime)))
-        packet.append(struct.pack("!B", dtella_core.PERSIST_BIT))
+        packet.append(struct.pack("!B", core.PERSIST_BIT))
 
         chunks = []
 
@@ -1686,7 +1677,7 @@ class BridgeServerManager(object):
         
         n.status_pktnum = (n.status_pktnum + 3) % 0x100000000
 
-        flags = (rejoin and dtella_core.REJOIN_BIT)
+        flags = (rejoin and core.REJOIN_BIT)
 
         chunks.append('K')
         chunks.append(n.ipp)
@@ -1738,7 +1729,7 @@ class BridgeServerManager(object):
 
     def addTopicChunk(self, chunks, nick, topic, changed):
 
-        flags = (changed and dtella_core.CHANGE_BIT)
+        flags = (changed and core.CHANGE_BIT)
 
         chunks.append('T')
         chunks.append(struct.pack('!BB', flags, len(nick)))
@@ -1760,7 +1751,7 @@ class BridgeServerManager(object):
 
 
     def addModeratedChunk(self, chunks, enable):
-        flags = (enable and dtella_core.MODERATED_BIT)
+        flags = (enable and core.MODERATED_BIT)
         chunks.append('F')
         chunks.append(struct.pack('!B', flags))
 
@@ -1834,9 +1825,9 @@ class BridgeServerManager(object):
                 ircs.pushPrivMsg(n.inick, text, dst_nick)
 
         except Reject:
-            ack_flags |= dtella_core.ACK_REJECT_BIT
+            ack_flags |= core.ACK_REJECT_BIT
 
-        self.main.ph.sendAckPacket(src_ipp, dtella_core.ACK_PRIVATE,
+        self.main.ph.sendAckPacket(src_ipp, core.ACK_PRIVATE,
                                    ack_flags, ack_key)
 
 
@@ -1871,10 +1862,10 @@ class BridgeServerManager(object):
                     raise Reject("Topic locked")
 
         except Reject:
-            ack_flags |= dtella_core.ACK_REJECT_BIT
+            ack_flags |= core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(
-            src_ipp, dtella_core.ACK_PRIVATE, ack_flags, ack_key)
+            src_ipp, core.ACK_PRIVATE, ack_flags, ack_key)
 
 
     def shutdown(self):
@@ -1957,7 +1948,7 @@ class ReverseDNSManager(object):
             self.advanceQueue()
 
         LOG.debug( "Querying %s" % Ad().setRawIP(ip).getTextIP())
-        dtella_dnslookup.ipToHostname(Ad().setRawIP(ip), cb)
+        ipToHostname(Ad().setRawIP(ip)).addCallback(cb)
 
 
     def signOn(self, ipp, hostname):
@@ -1983,9 +1974,9 @@ class ReverseDNSManager(object):
 
         if hostname is None:
             hostname = Ad().setRawIPPort(ipp).getTextIP()
-            hostmask = dtella_hostmask.mask_ipv4(hostname)
+            hostmask = dtella.bridge.hostmask.mask_ipv4(hostname)
         else:
-            hostmask = dtella_hostmask.mask_hostname(hostname)
+            hostmask = dtella.bridge.hostmask.mask_hostname(hostname)
 
         n.hostname = hostname
         n.hostmask = hostmask
@@ -2013,286 +2004,3 @@ class ReverseDNSManager(object):
 
         # Send queued chat messages
         osm.cms.flushQueue(n)
-
-
-##############################################################################
-
-
-class DNSUpdateManager(object):
-
-    # Calls the 'dnsup_update_func' function in dtella_bridge_config,
-    # which accepts a dictionary of key=value pairs, and returns a twisted
-    # Deferred object.  We currently have a module which writes to a text
-    # file, and another which performs a Dynamic DNS update.  Other modules
-    # could potentially be written for free DNS hosting services.
-    
-    def __init__(self, main):
-        self.main = main
-        self.update_dcall = None
-        self.busy = False
-
-        self.scheduleUpdate(30.0)
-
-
-    def scheduleUpdate(self, when):
-
-        if self.update_dcall or self.busy:
-            return
-
-        def cb():
-            self.update_dcall = None
-            entries = self.getEntries()
-
-            self.busy = True
-            
-            d = cfg.dnsup_update_func(entries)
-            d.addCallback(self.updateSuccess)
-            d.addErrback(self.updateFailed)
-
-        self.update_dcall = reactor.callLater(when, cb)
-
-
-    def updateSuccess(self, result):
-        self.busy = False
-
-        LOG.debug("DNS Update Successful: %s" % result)
-        
-        self.scheduleUpdate(cfg.dnsup_interval)
-
-
-    def updateFailed(self, why):
-        self.busy = False
-
-        LOG.warning("DNS Update Failed: %s" % why)
-        
-        self.scheduleUpdate(cfg.dnsup_interval)
-
-
-    def getEntries(self):
-        # Build and return a dict of entries which should be sent to DNS
-
-        def b64(arg):
-            return binascii.b2a_base64(arg).rstrip()
-        
-        # Dictionary of key=value pairs to return.
-        # Start out with the static entries provided in the config.
-        entries = cfg.dnsup_fixed_entries.copy()
-
-        osm = self.main.osm
-
-        # Generate public key hash
-        if cfg.private_key:
-            pubkey = long_to_bytes(RSA.construct(cfg.private_key).n)
-            entries['pkhash'] = b64(md5.new(pubkey).digest())
-
-        # Collect IPPs for the ipcache string
-        GOAL = 10
-        ipps = set()
-
-        # Initially add all the exempt IPs, without a port
-        for ip in self.main.state.exempt_ips:
-            ad = Ad()
-            ad.ip = ip
-            ad.port = 0
-            ipps.add(ad.getRawIPPort())
-
-        # Helper function to add an IPP, overriding any portless entries.
-        def add_ipp(ipp):
-            ipps.discard(ipp[:4] + '\0\0')
-            ipps.add(ipp)
-
-        # Add my own IP
-        if osm:
-            add_ipp(osm.me.ipp)
-        else:
-            try:
-                add_ipp(self.main.selectMyIP())
-            except ValueError:
-                pass
-
-        # Add the IPPs of online nodes
-        if (osm and osm.syncd):
-
-            now = time.time()
-
-            def n_uptime(n):
-                uptime = max(0, now - n.uptime)
-                if n.persist:
-                    uptime *= 1.5
-                return -uptime
-            
-            nodes = osm.nodes[:]
-            nodes.sort(key=n_uptime)
-
-            for n in nodes:
-                add_ipp(n.ipp)
-                if len(ipps) >= GOAL:
-                    break
-
-        # Add the IPPs of offline nodes (if necessary)
-        if len(ipps) < GOAL:
-            for when,ipp in self.main.state.getYoungestPeers(GOAL):
-                add_ipp(ipp)
-
-                if len(ipps) >= GOAL:
-                    break
-
-        ipcache = list(ipps)
-        random.shuffle(ipcache)
-
-        ipcache = '\xFF\xFF\xFF\xFF' + ''.join(ipcache)
-        ipcache = b64(self.main.pk_enc.encrypt(ipcache))
-
-        entries['ipcache'] = ipcache
-
-        return entries
-
-
-##############################################################################
-
-
-class DtellaMain_Bridge(dtella_core.DtellaMain_Base):
-
-    def __init__(self):
-        dtella_core.DtellaMain_Base.__init__(self)
-
-        # State Manager
-        self.state = dtella_state.StateManager(
-            self, 'dtella_bridge.state', dtella_state.bridge_loadsavers)
-        self.state.initLoad()
-        
-        self.state.persistent = True
-        self.state.udp_port = cfg.udp_port
-
-        # Add an inital value for my own IP, adding it to the exempt list
-        # if it's offsite.
-        if cfg.myip_hint:
-            ad = Ad().setAddrTuple((cfg.myip_hint, cfg.udp_port))
-            self.state.addExemptIP(ad)
-            self.addMyIPReport(ad, ad)
-
-        # Add pre-defined entries to my local cache, and add them to
-        # the exempt list of they're offsite.
-        for text_ipp in cfg.ip_cache:
-            ad = Ad().setTextIPPort(text_ipp)
-            self.state.addExemptIP(ad)
-            self.state.refreshPeer(ad, 0)
-
-        # Peer Handler
-        self.ph = BridgeServerProtocol(self)
-
-        # Reverse DNS Manager
-        self.rdns = ReverseDNSManager(self)
-
-        # DNS Update Manager
-        self.dum = DNSUpdateManager(self)
-
-        # Bind UDP Port
-        try:
-            reactor.listenUDP(cfg.udp_port, self.ph)
-        except twisted.internet.error.BindError:
-            LOG.error("Failed to bind UDP port!")
-            raise SystemExit
-
-        # IRC Server
-        self.ircs = None
-
-        self.startConnecting()
-
-
-    def cleanupOnExit(self):
-        LOG.info("Reactor is shutting down.  Doing cleanup.")
-
-        self.shutdown(reconnect='no')
-        self.state.saveState()
-
-        # Cleanly close the IRC connection before terminating
-        if self.ircs:
-            return self.ircs.shutdown()
-
-
-    def startConnecting(self):
-        self.startInitialContact()
-
-
-    def reconnectDesired(self):
-        return True
-
-
-    def getBridgeManager(self):
-        return {'bsm': BridgeServerManager(self)}
-
-
-    def logPacket(self, text):
-        #print "pkt: %s" % text
-        pass
-
-
-    def showLoginStatus(self, text, counter=None):
-        LOG.info(text)
-
-
-    def queryLocation(self, my_ipp):
-        pass
-
-
-    def shutdown_NotifyObservers(self):
-        # TODO: maybe print a message to IRC saying Dtella sync was lost
-        pass
-
-
-    def getOnlineDCH(self):
-        # BridgeServer has no DC Handler
-        return None
-
-
-    def getStateObserver(self):
-        # Return the IRC Server, iff it's fully online
-
-        if not (self.osm and self.osm.syncd):
-            return None
-
-        if self.ircs and self.ircs.server_name:
-            return self.ircs
-
-        return None
-
-
-    def addIRCServer(self, ircs):
-        CHECK(not self.ircs)
-        self.ircs = ircs
-
-
-    def removeIRCServer(self, ircs):
-        CHECK(ircs and (self.ircs is ircs))
-
-        self.ircs = None
-
-        # If the IRC server had been syncd, then broadcast a mostly-empty
-        # status update to Dtella, to show that all the nicks are gone.
-        osm = self.osm
-        if (osm and osm.syncd and ircs.syncd):
-            osm.bsm.sendState()
-
-        # Cancel all the nick-specific state
-        if osm:
-            for n in self.osm.nodes:
-                n.nickRemoved(self)
-
-
-if __name__ == '__main__':
-    
-    dtMain = DtellaMain_Bridge()
-
-    if cfg.irc_server:
-        ifactory = IRCFactory(dtMain)
-        if cfg.irc_ssl:
-            from twisted.internet import ssl
-            sslContext = ssl.ClientContextFactory()
-            reactor.connectSSL(cfg.irc_server, cfg.irc_port, ifactory, sslContext)
-        else:
-            reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
-    else:
-        LOG.info("IRC is not enabled.")
-
-    reactor.run()

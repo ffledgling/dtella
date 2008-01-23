@@ -1,7 +1,7 @@
 """
 Dtella - Core P2P Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -20,8 +20,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-import dtella_fixtwisted
-
 import struct
 import md5
 import heapq
@@ -32,15 +30,16 @@ import weakref
 import socket
 from binascii import hexlify
 
-from twisted.internet.protocol import Protocol, DatagramProtocol
+from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
 from twisted.python.runtime import seconds
 
-import dtella_local
-import dtella_crypto
-from dtella_util import (RandSet, Ad, dcall_discard, dcall_timeleft, randbytes,
-                         validateNick, word_wrap, parse_incoming_info,
-                         get_version_string, parse_dtella_tag, CHECK)
+import dtella.local_config as local
+import dtella.common.crypto
+from dtella.common.util import (RandSet, Ad, dcall_discard, dcall_timeleft,
+                                randbytes, validateNick, word_wrap,
+                                parse_incoming_info, get_version_string,
+                                parse_dtella_tag, CHECK)
 
 
 # Miscellaneous Exceptions
@@ -4041,7 +4040,7 @@ class DtellaMain_Base(object):
         self.accept_IQ_trigger = False
 
         # Pakcet Encoder
-        self.pk_enc = dtella_crypto.PacketEncoder(dtella_local.network_key)
+        self.pk_enc = dtella.common.crypto.PacketEncoder(local.network_key)
 
         # Register a function that runs before shutting down
         reactor.addSystemEventTrigger('before', 'shutdown',
@@ -4138,7 +4137,7 @@ class DtellaMain_Base(object):
             return
 
         # Look up my location string
-        if dtella_local.use_locations:
+        if local.use_locations:
             self.queryLocation(my_ipp)
 
         # Get Bridge Client/Server Manager, or nothing.

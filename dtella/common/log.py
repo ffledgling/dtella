@@ -24,7 +24,7 @@ import sys
 import logging
 import logging.handlers
 
-from dtella_util import get_user_path, CHECK
+from dtella.common.util import get_user_path, CHECK
 
 # Defined Logging Levels
 #

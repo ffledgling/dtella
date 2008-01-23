@@ -1,7 +1,7 @@
 """
 Dtella - State File Management Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -29,7 +29,7 @@ import heapq
 from twisted.internet import reactor
 import twisted.python.log
 
-from dtella_util import Ad, dcall_discard, get_user_path, CHECK
+from dtella.common.util import Ad, dcall_discard, get_user_path, CHECK
 
 
 class StateManager(object):

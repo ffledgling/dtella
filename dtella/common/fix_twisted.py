@@ -1,7 +1,7 @@
 """
 Dtella - Twisted Unb0rkification Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -61,9 +61,7 @@ else:
     noop()
 
 
-import twisted.names
-if twisted.names.__version__ == '0.4.0':
-
+def fixTwistedNames():
     import twisted.names.dns
     import socket
 
@@ -92,4 +90,15 @@ if twisted.names.__version__ == '0.4.0':
                 pass
         raise AssertionError("DNS isn't happy :-(")
     twisted.names.dns.DNSDatagramProtocol.startListening = startListening
+
+
+# Don't care right now if twisted names can't be imported, because it might
+# not be required.
+try:
+    import twisted.names
+except ImportError:
+    pass
+else:
+    if twisted.names.__version__ == '0.4.0':
+        fixTwistedNames()
 

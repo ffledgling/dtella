@@ -1,7 +1,7 @@
 """
 Dtella - Packet Encryption Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 

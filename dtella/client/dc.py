@@ -1,7 +1,7 @@
 """
 Dtella - DirectConnect Interface Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -26,12 +26,12 @@ from twisted.internet import reactor
 from twisted.python.runtime import seconds
 import twisted.python.log
 
-from dtella_util import (Ad, validateNick, word_wrap, split_info,
-                         split_tag, remove_dc_escapes, dcall_discard,
-                         format_bytes, dcall_timeleft, get_version_string,
-                         lock2key, CHECK)
-import dtella_core
-import dtella_local
+from dtella.common.util import (Ad, validateNick, word_wrap, split_info,
+                                split_tag, remove_dc_escapes, dcall_discard,
+                                format_bytes, dcall_timeleft,
+                                get_version_string, lock2key, CHECK)
+import dtella.common.core as core
+import dtella.local_config as local
 import struct
 import re
 import binascii
@@ -486,7 +486,7 @@ class DCHandler(BaseDCProtocol):
         else:
             info[0] = "%s<%s>" % (desc, ver_string)
 
-        if dtella_local.use_locations:
+        if local.use_locations:
             # Try to get my location name.
             try:
                 ad = Ad().setRawIPPort(self.main.osm.me.ipp)
@@ -734,7 +734,7 @@ class DCHandler(BaseDCProtocol):
             # Check for /me
             if len(line) > 4 and line[:4].lower() in ('/me ','+me ','!me '):
                 line = line[4:]
-                flags |= dtella_core.SLASHME_BIT
+                flags |= core.SLASHME_BIT
 
             # Check rate limiting
             if self.chat_counter > 0:
@@ -768,9 +768,9 @@ class DCHandler(BaseDCProtocol):
 
     def pushTopic(self, topic=None):
         if topic:
-            self.sendLine("$HubName %s - %s" % (dtella_local.hub_name, topic))
+            self.sendLine("$HubName %s - %s" % (local.hub_name, topic))
         else:
-            self.sendLine("$HubName %s" % dtella_local.hub_name)
+            self.sendLine("$HubName %s" % local.hub_name)
 
 
     def pushHello(self, nick):
@@ -841,7 +841,7 @@ class DCHandler(BaseDCProtocol):
         osm.mrm.newMessage(''.join(packet), tries=4)
 
         # Echo back to the DC client
-        if flags & dtella_core.SLASHME_BIT:
+        if flags & core.SLASHME_BIT:
             nick = "*"
             text = "%s %s" % (osm.me.nick, text)
         else:
@@ -1000,9 +1000,9 @@ class DCHandler(BaseDCProtocol):
 
 
     def event_ChatMessage(self, n, nick, text, flags):
-        if flags & dtella_core.NOTICE_BIT:
+        if flags & core.NOTICE_BIT:
             self.pushChatMessage(("*N# %s" % nick), text)
-        elif flags & dtella_core.SLASHME_BIT:
+        elif flags & core.SLASHME_BIT:
             self.pushChatMessage("*", "%s %s" % (nick, text))
         else:
             self.pushChatMessage(nick, text)
@@ -1066,7 +1066,7 @@ class DtellaBot(object):
                 return True
 
         # Filter out location-specific commands
-        if not dtella_local.use_locations:
+        if not local.use_locations:
             if cmd[0] in self.location_cmds:
                 return False
             
@@ -1255,7 +1255,7 @@ class DtellaBot(object):
             for command, description in self.minihelp:
 
                 # Filter location-specific commands
-                if not dtella_local.use_locations:
+                if not local.use_locations:
                     if command in self.location_cmds:
                         continue
                 
@@ -1278,7 +1278,7 @@ class DtellaBot(object):
 
             try:
                 # Filter location-specific commands
-                if not dtella_local.use_locations:
+                if not local.use_locations:
                     if key in self.location_cmds:
                         raise KeyError
                     
@@ -1604,7 +1604,7 @@ class DtellaBot(object):
 
     def handleCmd_VERSION(self, out, args, prefix):
         if len(args) == 0:
-            out("You have Dtella version %s." % dtella_local.version)
+            out("You have Dtella version %s." % local.version)
 
             if self.main.dnsh.version:
                 min_v, new_v, url = self.main.dnsh.version

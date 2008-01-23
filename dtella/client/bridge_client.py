@@ -1,7 +1,7 @@
 """
 Dtella - Bridge Client Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -22,11 +22,11 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from twisted.internet import reactor
 
-from dtella_core import (BadTimingError, BadPacketError, BadBroadcast,
-                         Reject, NickError)
-import dtella_core
+import dtella.common.core as core
+from dtella.common.core import (BadTimingError, BadPacketError, BadBroadcast,
+                                Reject, NickError)
 
-from dtella_util import RandSet, Ad, dcall_discard, parse_incoming_info
+from dtella.common.util import RandSet, Ad, dcall_discard, parse_incoming_info
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
 from Crypto.PublicKey import RSA
@@ -37,7 +37,7 @@ import random
 class ChunkError(Exception):
     pass
 
-class BridgeClientProtocol(dtella_core.PeerHandler):
+class BridgeClientProtocol(core.PeerHandler):
 
     def verifySignature(self, rsa_obj, data, sig, broadcast):
         # 0:2 = kind
@@ -92,7 +92,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
             (pktnum, expire, sesid, uptime, flags, rest
              ) = self.decodePacket('!QH4sIB+', rest)
 
-            persist = bool(flags & dtella_core.PERSIST_BIT)
+            persist = bool(flags & core.PERSIST_BIT)
 
             (hashes, rest
              ) = self.decodeString1(rest, 16)
@@ -157,7 +157,7 @@ class BridgeClientProtocol(dtella_core.PeerHandler):
 
         self.checkSource(src_ipp, ad, exempt_ip=True)
 
-        persist = bool(flags & dtella_core.PERSIST_BIT)
+        persist = bool(flags & core.PERSIST_BIT)
 
         (hashes, rest
          ) = self.decodeString1(rest, 16)
@@ -842,7 +842,7 @@ class BridgeNodeData(object):
                 if topic_len > 1024 or len(topic) != topic_len:
                     raise ChunkError("T: topic length mismatch")
 
-                changed = bool(flags & dtella_core.CHANGE_BIT)
+                changed = bool(flags & core.CHANGE_BIT)
 
                 if not outdated:
                     osm.tm.updateTopic(
@@ -861,7 +861,7 @@ class BridgeNodeData(object):
                     raise ChunkError("F: struct error")
 
                 if not outdated:
-                    self.moderated = bool(flags & dtella_core.MODERATED_BIT)
+                    self.moderated = bool(flags & core.MODERATED_BIT)
 
             else:
                 raise ChunkError("Unknown Chunk '%s'" % data[ptr])
@@ -886,10 +886,10 @@ class BridgeNodeData(object):
                     raise Reject
 
         except Reject:
-            ack_flags |= dtella_core.ACK_REJECT_BIT
+            ack_flags |= core.ACK_REJECT_BIT
 
         self.main.ph.sendAckPacket(
-            self.parent_n.ipp, dtella_core.ACK_PRIVATE, ack_flags, ack_key)
+            self.parent_n.ipp, core.ACK_PRIVATE, ack_flags, ack_key)
 
 
     def updateNick(self, nick, mode, pktnum):
@@ -981,14 +981,14 @@ class BridgeNodeData(object):
         
         dch = self.main.getOnlineDCH()
         if dch:
-            if flags & dtella_core.NOTICE_BIT:
+            if flags & core.NOTICE_BIT:
                 # Notice sent directly to this user.
                 # Display it in the chat window
                 dch.pushChatMessage("*N %s" % nick, text)
             else:
                 # Can't support /me very well in a private message,
                 # so just stick a * at the beginning.
-                if flags & dtella_core.SLASHME_BIT:
+                if flags & core.SLASHME_BIT:
                     text = '* ' + text
                 dch.pushPrivMsg(nick, text)
 
@@ -1017,7 +1017,7 @@ class BridgeNodeData(object):
             # Make sure I'm online, and this kick isn't old somehow
             if dch and not outdated:
 
-                rejoin = bool(flags & dtella_core.REJOIN_BIT)
+                rejoin = bool(flags & core.REJOIN_BIT)
 
                 # Yell at user and make them invisible
                 dch.kickMe(l33t, reason, rejoin)

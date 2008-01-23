@@ -1,7 +1,7 @@
 """
 Dtella - Utility Functions
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -20,7 +20,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-import dtella_local
+import dtella.local_config as local
 
 import struct
 import random
@@ -175,7 +175,7 @@ def get_os():
 
 
 def get_version_string():
-    return "Dt:%s/%s" % (dtella_local.version, get_os())
+    return "Dt:%s/%s" % (local.version, get_os())
 
 
 def get_user_path(filename):
@@ -374,7 +374,7 @@ class Ad(object):
 
         if 's' in kinds:
             # Static evaluation
-            if not dtella_local.validateIP(self.ip):
+            if not local.validateIP(self.ip):
                 return False
 
         return True

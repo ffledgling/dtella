@@ -1,7 +1,7 @@
 """
-Dtella - DNS Lookup Module
-Copyright (C) 2007  Dtella Labs (http://www.dtella.org)
-Copyright (C) 2007  Paul Marks
+Dtella - Dynamic Config Puller Module
+Copyright (C) 2008  Dtella Labs (http://www.dtella.org)
+Copyright (C) 2008  Paul Marks
 
 $Id$
 
@@ -20,10 +20,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-import dtella_local
-import dtella_crypto
-from dtella_util import (Ad, cmpify_version, word_wrap, parse_bytes,
-                         dcall_discard)
+import dtella.local_config as local
+from dtella.common.util import (Ad, cmpify_version, word_wrap, parse_bytes,
+                                dcall_discard)
 
 from twisted.python.runtime import seconds
 from twisted.internet import reactor
@@ -38,12 +37,15 @@ import random
 from twisted.names import client, dns
 
 
+# TODO: Make this rely on the stuff under dtella.modules.pull_*
+
+
 class DNSHandler(object):
 
     def __init__(self, main):
         self.main = main
 
-        self.override_vc = cmpify_version(dtella_local.version)
+        self.override_vc = cmpify_version(local.version)
         self.resetReportedVersion()
 
         self.cfg_lastUpdate = None
@@ -58,7 +60,7 @@ class DNSHandler(object):
         self.minshare = 1
         self.version = None
 
-        dns_servers = dtella_local.dns_servers[:]
+        dns_servers = local.dns_servers[:]
         random.shuffle(dns_servers)
 
         self.resolver = client.Resolver(
@@ -67,7 +69,7 @@ class DNSHandler(object):
 
 
     def resetReportedVersion(self):
-        self.reported_vc = cmpify_version(dtella_local.version)
+        self.reported_vc = cmpify_version(local.version)
 
 
     def getConfigFromDNS(self, cb):
@@ -82,7 +84,7 @@ class DNSHandler(object):
 
             if stale or self.cfg_busy:
                 self.main.showLoginStatus(
-                    "Requesting config from %s..." % dtella_local.dnshost,
+                    "Requesting config from %s..." % local.dnshost,
                     counter=0)
 
         # If an update is already in progress, just wait for it.
@@ -121,7 +123,7 @@ class DNSHandler(object):
         # Do Query
         self.cfg_busy = True
         d = self.resolver.query(
-            dns.Query(dtella_local.dnshost, type=dns.TXT))
+            dns.Query(local.dnshost, type=dns.TXT))
 
         d.addCallback(success_cb)
         d.addErrback(err_cb)
@@ -153,7 +155,7 @@ class DNSHandler(object):
                 except ValueError:
                     pass
                 else:
-                    cap = dtella_local.minshare_cap
+                    cap = local.minshare_cap
                     if (cap is not None) and (self.minshare > cap):
                         self.minshare = cap
 
@@ -233,7 +235,7 @@ class DNSHandler(object):
                 " ",
                 "Your version of Dtella (%s) is too old to be used on this "
                 "network.  Please upgrade to the latest version (%s)."
-                % (dtella_local.version, new_v),
+                % (local.version, new_v),
                 " ",
                 "[If unusual circumstances prevent you from upgrading, "
                 "type !VERSION_OVERRIDE to attempt to connect using this "
@@ -264,7 +266,7 @@ class DNSHandler(object):
                 say = self.main.dch.bot.say
                 say("You have Dtella version %s.  "
                     "A newer version (%s) is available."
-                    % (dtella_local.version, new_v))
+                    % (local.version, new_v))
                 say("Download link: %s" % url)
                 
                 self.reported_vc = new_vc
@@ -283,51 +285,3 @@ class DNSHandler(object):
             self.override_vc = min_vc
 
         return True
-
-
-class ReverseLookupHandler(object):
-
-    def __init__(self):
-        dns_servers = dtella_local.rdns_servers[:]
-        random.shuffle(dns_servers)
-
-        self.resolver = client.Resolver(
-            servers=[(ip, dns.PORT) for ip in dns_servers],
-            timeout=(1,2,3))
-
-
-    def ipToHostname(self, ad, cb):
-        # Try to determine the hostname of the provided address.
-        # When done, call the cb function.  If it fails, the
-        # argument is None.
-
-        revip = '.'.join('%d' % o for o in reversed(ad.ip))
-        host = "%s.in-addr.arpa" % revip
-
-        def success_cb(result):
-            try:
-                hostname = result[0][0].payload.name.name
-                if not hostname:
-                    raise ValueError
-            except:
-                hostname = None
-
-            try:
-                cb(hostname)
-            except:
-                twisted.python.log.err()
-
-        def err_cb(failure):
-            try:
-                cb(None)
-            except:
-                twisted.python.log.err()
-
-        d = self.resolver.query(dns.Query(host, type=dns.PTR))
-
-        d.addCallback(success_cb)
-        d.addErrback(err_cb)
-
-
-# Simplified lookup interface
-ipToHostname = ReverseLookupHandler().ipToHostname
