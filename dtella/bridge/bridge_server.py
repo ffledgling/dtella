@@ -388,6 +388,8 @@ class IRCServer(LineOnlyReceiver):
         if kind == 'Z' and args[2] == '*':
             ipmask = args[3]
 
+            LOG.info("IP ban: %s %s" % (addrem, ipmask))
+
             try:
                 ip, subnet = ipmask.split('/', 1)
             except ValueError:
@@ -396,15 +398,13 @@ class IRCServer(LineOnlyReceiver):
             try:
                 ip, = struct.unpack('!i', Ad().setTextIP(ip).getRawIP())
             except (ValueError, struct.error):
-                LOG.error( "Invalid IP format" )
+                LOG.error("TKL: Invalid IP format: '%s'" % ip)
                 return
-
-            LOG.debug( "ip= %s" % ip )
 
             try:
                 subnet = int(subnet)
             except ValueError:
-                LOG.error( "Subnet not a number")
+                LOG.error("TKL: Subnet not a number: '%s'" % subnet)
                 return
 
             if subnet == 0:
@@ -412,11 +412,8 @@ class IRCServer(LineOnlyReceiver):
             elif 1 <= subnet <= 32:
                 mask = ~0 << (32-subnet)
             else:
-                LOG.error( "Subnet out of range" )
+                LOG.error("TKL: Subnet out of range: %d" % subnet)
                 return
-
-            LOG.info( "kind=" + kind )
-            LOG.info( "ip,mask=%s, %s" % (ip, mask) )
 
             if addrem == '+':
                 self.data.addNetBan(ip, mask)
@@ -433,13 +430,13 @@ class IRCServer(LineOnlyReceiver):
 
                 if nickmask == cfg.dc_to_irc_prefix + '*':
                     return
-                
+
+                LOG.info("TKL: Adding Qline: %s" % nickmask)
                 self.data.qlines[nickmask] = (wild_to_regex(nickmask),
                                               reason)
-                
-                LOG.info( "Adding Qline: %s" % nickmask )
 
             elif addrem == '-':
+                LOG.info("TKL: Removing Qline: %s" % nickmask)
                 self.data.qlines.pop(nickmask, None)
 
 
@@ -488,7 +485,7 @@ class IRCServer(LineOnlyReceiver):
         if prefix != self.server_name:
             return
 
-        LOG.info( "SYNCD!!!!" )
+        LOG.info("Finished receiving IRC sync data.")
 
         self.showirc = True
 
@@ -644,7 +641,7 @@ class IRCServer(LineOnlyReceiver):
         osm = self.main.osm
         CHECK(self.server_name and osm and osm.syncd)
 
-        LOG.info( "Sending Dtella state to IRC..." )
+        LOG.info("Sending Dtella state to IRC...")
 
         nicks = osm.nkm.nickmap.values()
         nicks.sort(key=lambda n: n.nick)
@@ -723,7 +720,7 @@ class IRCServer(LineOnlyReceiver):
             self.ping_dcall = None
 
             if self.ping_waiting:
-                LOG.error( "Ping timeout!" )
+                LOG.error("Ping timeout!")
                 self.transport.loseConnection()
             else:
                 self.sendLine("PING :%s" % cfg.my_host)
@@ -766,10 +763,8 @@ class IRCServer(LineOnlyReceiver):
                 if q.match(inick):
                     raise NickError("Nick '%s' is Q-lined: %s" % (n.nick, reason))
 
-            LOG.debug( "Nick '%s' is okay" % n.nick )
-
         except NickError, e:
-            LOG.debug( "Nick is not okay" )
+            LOG.debug("Bad nick: %s" % str(e))
             # Bad nick.  KICK!
             osm = self.main.osm
             chunks = []
@@ -894,11 +889,13 @@ class IRCServerData(object):
         try:
             u = self.users.pop(oldnick)
         except KeyError:
-            LOG.debug( "Nick doesn't exist" )
+            LOG.error("changeNick '%s'->'%s': Source nick not found."
+                      % (oldnick, newnick))
             return
 
         if newnick in self.users:
-            LOG.debug( "New nick already exists!" )
+            LOG.error("changeNick '%s'->'%s': Dest nick already exists."
+                      % (oldnick, newnick))
             return
 
         u.nick = newnick
@@ -956,13 +953,20 @@ class IRCServerData(object):
                 osm.nkm.removeNode(n, "Kicked")
                 n.setNoUser()
 
+                # Skip the users/chanusers stuff below for DC nicks
+                return
+
         try:
             u = self.users[n00b]
         except KeyError:
-            LOG.debug( "Nick doesn't exist" )
+            LOG.error("gotKick '%s': Nick not found on IRC." % n00b)
             return
 
-        self.chanusers.remove(u)
+        try:
+            self.chanusers.remove(u)
+        except KeyError:
+            LOG.error("gotKick '%s': Nick wasn't in channel." % n00b)
+            return
 
 
     def gotKill(self, l33t, n00b, reason):
@@ -1004,13 +1008,16 @@ class IRCServerData(object):
                 del n.inick
                 osm.nkm.removeNode(n, "Killed")
                 n.setNoUser()
+                return
 
         # Forget this nick
         try:
             u = self.users.pop(n00b)
         except KeyError:
+            LOG.error("gotKill '%s': Nick not found on IRC." % n00b)
             return
 
+        # Remove from channel, if present
         self.chanusers.discard(u)
 
 
@@ -1018,11 +1025,11 @@ class IRCServerData(object):
         try:
             u = self.users[nick]
         except KeyError:
-            print "nick %s doesn't exist!" % (nick,)
+            LOG.error("gotJoin '%s': Nick not found on IRC." % nick)
             return
 
         if u in self.chanusers:
-            LOG.warning( "already in channel!" )
+            LOG.error("gotJoin '%s': Nick already in channel." % nick)
             return
 
         self.chanusers.add(u)
@@ -1190,12 +1197,13 @@ class IRCServerData(object):
         try:
             u = self.users.pop(nick)
         except KeyError:
-            print "nick %s doesn't exist!" % (nick,)
+            LOG.error("gotQuit '%s': Nick not found on IRC." % nick)
             return
 
         try:
             self.chanusers.remove(u)
         except KeyError:
+            # Not in this channel.
             return
 
         osm = self.ircs.main.osm
@@ -1210,12 +1218,13 @@ class IRCServerData(object):
         try:
             u = self.users[nick]
         except KeyError:
-            print "nick %s doesn't exist!" % (nick,)
+            LOG.error("gotPart '%s': Nick not found on IRC." % nick)
             return
 
         try:
             self.chanusers.remove(u)
         except KeyError:
+            LOG.error("gotPart '%s': Nick not in this channel." % nick)
             return
 
         osm = self.ircs.main.osm
@@ -1250,11 +1259,11 @@ class IRCServerData(object):
         try:
             u = self.users[nick]
         except KeyError:
-            # shouldn't really happen
+            LOG.warning("getInfoIndex '%s': Nick not found on IRC." % nick)
             return 6
 
         if u not in self.chanusers:
-            # virtual
+            # Out of the channel, virtual nick.
             return 6
         
         try:
@@ -1405,10 +1414,8 @@ class BridgeServerManager(object):
 
         if self.bridge_pktnum >> 24 == t:
             self.bridge_pktnum += 1
-            LOG.debug( "nextPktNum: Incrementing" )
         else:
             self.bridge_pktnum = (t << 24L)
-            LOG.debug( "nextPktNum: New Time" )
 
         return struct.pack("!Q", self.bridge_pktnum)
 
@@ -1448,7 +1455,7 @@ class BridgeServerManager(object):
         
         t = time.time()
         sig, = self.rsa_obj.sign(data_hash, None)
-        LOG.debug( "Sign Time= %s" % (time.time() - t) )
+        LOG.debug("Sign Time = %f sec" % (time.time() - t))
 
         packet.append(long_to_bytes(sig))
 
@@ -1651,7 +1658,7 @@ class BridgeServerManager(object):
         packet = ''.join(packet)
 
         def fail_cb(detail):
-            print "bC failed: %s" % detail
+            LOG.debug("bC failed: %s" % detail)
 
         n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 
@@ -1760,7 +1767,7 @@ class BridgeServerManager(object):
         try:
             b = self.cached_blocks[bhash]
         except KeyError:
-            LOG.warning( "Requested block not found" )
+            LOG.warning("Requested block not found")
             return
 
         b.scheduleExpire(self.cached_blocks, bhash)
@@ -1947,7 +1954,7 @@ class ReverseDNSManager(object):
             self.limiter += 1
             self.advanceQueue()
 
-        LOG.debug( "Querying %s" % Ad().setRawIP(ip).getTextIP())
+        LOG.debug("Querying %s" % Ad().setRawIP(ip).getTextIP())
         ipToHostname(Ad().setRawIP(ip)).addCallback(cb)
 
 
