@@ -19,8 +19,9 @@
 
 
 
-!define PRODUCT_NAME "Dtella@Purdue"
-!define PRODUCT_VERSION "SVN"
+!define PRODUCT_NAME "PATCH_ME"
+!define PRODUCT_VERSION "PATCH_ME"
+!define PRODUCT_SIMPLENAME "PATCH_ME"
 !define PRODUCT_PUBLISHER "Dtella Labs"
 !define PRODUCT_WEB_SITE "http://www.dtella.org/"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}\dtella.exe"
@@ -62,8 +63,8 @@ SetCompressor lzma
 ; MUI end ------
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
-OutFile "dtella-purdue-${PRODUCT_VERSION}.exe"
-InstallDir "$PROGRAMFILES\Dtella@Purdue"
+OutFile "${PRODUCT_SIMPLENAME}.exe"
+InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
 ShowUnInstDetails show
@@ -71,8 +72,6 @@ ShowUnInstDetails show
 Section -Pre
   SetShellVarContext all
   ExecWait '"$INSTDIR\dtella.exe" --terminate'
-
-
 SectionEnd
 
 
@@ -92,7 +91,7 @@ SectionEnd
 
 Section /o "Source Code" INST_SOURCE
   SetOutPath "$INSTDIR"
-  File "dtella-purdue-${PRODUCT_VERSION}.tar.bz2"
+  File "${PRODUCT_SIMPLENAME}.tar.bz2"
 SectionEnd
 
 Section -AdditionalIcons
@@ -131,7 +130,7 @@ Section "un.Dtella" UNINST_DTELLA
   Delete "$INSTDIR\changelog.txt"
   Delete "$INSTDIR\msvcr71.dll"
   Delete "$INSTDIR\dtella.exe"
-  Delete "$INSTDIR\dtella-purdue-*.tar.bz2"
+  Delete "$INSTDIR\${PRODUCT_SIMPLENAME}.tar.bz2"
   RMDir "$INSTDIR"
 
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Uninstall.lnk"
@@ -147,6 +146,7 @@ SectionEnd
 
 Section "un.Dtella Settings File" UNINST_SETTINGS
   Delete "$PROFILE\.dtella\dtella.state"
+  Delete "$PROFILE\.dtella\dtella.client.log"
   RmDir "$PROFILE\.dtella"
 SectionEnd
 

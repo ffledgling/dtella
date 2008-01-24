@@ -11,22 +11,22 @@ del %DTDIR%.tar
 del %DTDIR%.tar.bz2
 
 mkdir %DTDIR%
+mkdir %DTDIR%/dtella
+mkdir %DTDIR%/dtella/client
+mkdir %DTDIR%/dtella/common
+mkdir %DTDIR%/dtella/modules
+mkdir %DTDIR%/docs
 
 copy ..\dtella.py                %DTDIR%
-copy ..\dtella_bridgeclient.py   %DTDIR%
-copy ..\dtella_core.py           %DTDIR%
-copy ..\dtella_crypto.py         %DTDIR%
-copy ..\dtella_dc.py             %DTDIR%
-copy ..\dtella_dnslookup.py      %DTDIR%
-copy ..\dtella_fixtwisted.py     %DTDIR%
-copy ..\dtella_local.py          %DTDIR%
-copy ..\dtella_state.py          %DTDIR%
-copy ..\dtella_log.py            %DTDIR%
-copy ..\dtella_util.py           %DTDIR%
-copy ..\docs\readme.txt          %DTDIR%
-copy ..\docs\changelog.txt       %DTDIR%
-copy ..\docs\requirements.txt    %DTDIR%
-copy ..\docs\gpl.txt             %DTDIR%
+copy ..\dtella\__init__.py       %DTDIR%\dtella
+copy ..\dtella\local_config.py   %DTDIR%\dtella
+copy ..\dtella\client\*          %DTDIR%\dtella\client
+copy ..\dtella\common\*          %DTDIR%\dtella\common
+copy ..\dtella\modules\*         %DTDIR%\dtella\modules
+copy ..\docs\readme.txt          %DTDIR%\docs
+copy ..\docs\changelog.txt       %DTDIR%\docs
+copy ..\docs\requirements.txt    %DTDIR%\docs
+copy ..\docs\gpl.txt             %DTDIR%\docs
 
 %ARC% a -ttar %DTDIR%.tar %DTDIR%
 %ARC% a -tbzip2 %DTDIR%.tar.bz2 %DTDIR%.tar
@@ -66,3 +66,4 @@ del msvcr71.dll
 del readme.txt
 del changelog.txt
 del dtella.exe
+del dtella.nsi
