@@ -1,10 +1,31 @@
+@echo off
 set DTDIR="dtella-purdue-SVN"
 set ARC="C:\Program Files\7-Zip\7z.exe"
-set NSIS="C:\Program Files\NSIS\makensisw.exe"
+set NSIS="C:\Program Files\NSIS\makensis.exe"
+set NSIS64="C:\Program Files (x86)\NSIS\makensisw.exe"
 set OUTDIR="Output"
 
 
+REM ----- DEPENDENCY CHECK ------
+
+echo Now Checking for Build Utilities...
+IF EXIST %ARC% (echo Found 7-Zip Archiver...) ELSE (
+echo ERROR: 7-Zip Archiver Not Found.
+pause
+EXIT
+)
+
+IF EXIST %NSIS% (echo Found NSIS compiler...) ELSE (
+IF EXIST %NSIS64% (echo Found NSIS compiler...) ELSE (
+echo ERROR: NSIS Compiler Not Found.
+pause
+EXIT
+) )
+echo All Dependencies Found, continuing...
+
+
 REM ------- SOURCE CODE ---------
+echo Collecting source code...
 
 rmdir /s /q %DTDIR%
 del %DTDIR%.tar
@@ -36,6 +57,7 @@ rmdir /s /q %DTDIR%
 
 
 REM ------- EXE -------------
+echo Building Windows binary files...
 
 pushd ..
 call build_py2exe
@@ -48,9 +70,11 @@ copy ..\docs\changelog.txt .
 
 
 REM ------- INSTALLER -------
+echo Building the installer...
 
-%NSIS% dtella.nsi
+IF EXIST %NSIS% (%NSIS% dtella.nsi) ELSE (%NSIS64% dtella.nsi)
 
+echo The build process is now complete!
 pause
 
 

@@ -1,7 +1,7 @@
 ; Dtella - NSIS Installer Script
-; Copyright (C) 2007  Dtella Labs (http://www.dtella.org/)
-; Copyright (C) 2007  Paul Marks (http://www.pmarks.net/)
-; Copyright (C) 2007  Jacob Feisley  (http://www.feisley.com/)
+; Copyright (C) 2007-2008  Dtella Labs (http://dtella.org/)
+; Copyright (C) 2007-2008  Paul Marks (http://pmarks.net/)
+; Copyright (C) 2007-2008  Jacob Feisley (http://feisley.com/)
 ;
 ; This program is free software; you can redistribute it and/or
 ; modify it under the terms of the GNU General Public License
@@ -23,7 +23,7 @@
 !define PRODUCT_VERSION "PATCH_ME"
 !define PRODUCT_SIMPLENAME "PATCH_ME"
 !define PRODUCT_PUBLISHER "Dtella Labs"
-!define PRODUCT_WEB_SITE "http://www.dtella.org/"
+!define PRODUCT_WEB_SITE "http://dtella.org/"
 !define PRODUCT_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${PRODUCT_NAME}\dtella.exe"
 !define PRODUCT_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 !define PRODUCT_UNINST_ROOT_KEY "HKLM"
@@ -89,6 +89,11 @@ Section "!Dtella (Required)" INST_DTELLA
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk" "$INSTDIR\changelog.txt"
 SectionEnd
 
+Section "Run Dtella on Startup (Recommended)" INST_STARTUP
+  SetOutPath "$INSTDIR"
+  CreateShortCut "$SMSTARTUP\Dtella.lnk" "$INSTDIR\dtella.exe"
+SectionEnd
+
 Section /o "Source Code" INST_SOURCE
   SetOutPath "$INSTDIR"
   File "${PRODUCT_SIMPLENAME}.tar.bz2"
@@ -112,6 +117,7 @@ SectionEnd
 ; Section Descriptions
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
   !insertmacro MUI_DESCRIPTION_TEXT ${INST_DTELLA} "The main Dtella program."
+  !insertmacro MUI_DESCRIPTION_TEXT ${INST_STARTUP} "This will automatically load Dtella for you when your computer starts."
   !insertmacro MUI_DESCRIPTION_TEXT ${INST_SOURCE} "If you don't know what this is for, then you don't need it."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
@@ -139,6 +145,8 @@ Section "un.Dtella" UNINST_DTELLA
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Readme.lnk"
   Delete "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk"
   RMDir "$SMPROGRAMS\${PRODUCT_NAME}"
+  
+  Delete "$SMSTARTUP\Dtella.lnk"
   
   DeleteRegKey ${PRODUCT_UNINST_ROOT_KEY} "${PRODUCT_UNINST_KEY}"
   DeleteRegKey HKLM "${PRODUCT_DIR_REGKEY}"
