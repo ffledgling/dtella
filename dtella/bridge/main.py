@@ -67,7 +67,7 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         self.rdns = bridge_server.ReverseDNSManager(self)
 
         # DNS Update Manager
-        self.dum = push_dconfig.DNSUpdateManager(self)
+        self.dum = push_dconfig.DynamicConfigUpdateManager(self)
 
         # Bind UDP Port
         try:

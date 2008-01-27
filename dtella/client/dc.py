@@ -675,7 +675,7 @@ class DCHandler(BaseDCProtocol):
         # If I don't meet the minimum share, yell and return True
 
         osm = self.main.osm
-        minshare = self.main.dnsh.minshare
+        minshare = self.main.dcfg.minshare
 
         if osm.me.shared < minshare:
             self.pushStatus(
@@ -1606,8 +1606,8 @@ class DtellaBot(object):
         if len(args) == 0:
             out("You have Dtella version %s." % local.version)
 
-            if self.main.dnsh.version:
-                min_v, new_v, url = self.main.dnsh.version
+            if self.main.dcfg.version:
+                min_v, new_v, url = self.main.dcfg.version
                 out("The minimum required version is %s." % min_v)
                 out("The latest posted version is %s." % new_v)
                 out("Download Link: %s" % url)
@@ -1626,7 +1626,7 @@ class DtellaBot(object):
 
 
     def handleCmd_VERSION_OVERRIDE(self, out, text, prefix):
-        if self.main.dnsh.overrideVersion():
+        if self.main.dcfg.overrideVersion():
             out("Overriding minimum version!  Don't be surprised "
                 "if something breaks.")
             self.main.startConnecting()

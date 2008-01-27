@@ -34,13 +34,8 @@ import struct
 import time
 import random
 
-from twisted.names import client, dns
 
-
-# TODO: Make this rely on the stuff under dtella.modules.pull_*
-
-
-class DNSHandler(object):
+class DynamicConfigPuller(object):
 
     def __init__(self, main):
         self.main = main
@@ -52,20 +47,13 @@ class DNSHandler(object):
         self.cfg_busy = False
         self.cfg_cb = None
 
-        # Increases logarithmically until we get a first DNS reply
+        # Increases logarithmically until we get a first reply
         self.fail_delay = 10.0
 
         self.cfgRefresh_dcall = None
 
         self.minshare = 1
         self.version = None
-
-        dns_servers = local.dns_servers[:]
-        random.shuffle(dns_servers)
-
-        self.resolver = client.Resolver(
-            servers=[(ip, dns.PORT) for ip in dns_servers],
-            timeout=(1,2,3))
 
 
     def resetReportedVersion(self):
@@ -84,8 +72,7 @@ class DNSHandler(object):
 
             if stale or self.cfg_busy:
                 self.main.showLoginStatus(
-                    "Requesting config from %s..." % local.dnshost,
-                    counter=0)
+                    local.dconfig_puller.startText(), counter=0)
 
         # If an update is already in progress, just wait for it.
         if self.cfg_busy:
@@ -97,39 +84,42 @@ class DNSHandler(object):
             return
 
         def success_cb(result):
-            if not result[0]:
-                raise ValueError("Empty DNS Reply")
+            if not result:
+                # This will trigger the err_cb below.
+                raise ValueError("Empty Config Reply")
 
             try:
-                self.handleTXT(result)
+                self.handleConfig(result)
                 self.cfg_lastUpdate = seconds()
                 self.cfg_busy = False
                 self.schedulePeriodicUpdates()
                 self.doCallback()
             except:
+                # Don't want errors propagating up the chain.
                 twisted.python.log.err()
 
         def err_cb(failure):
             try:
                 if cb:
                     self.main.showLoginStatus(
-                        "DNS query failed!  Trying to proceed without it...")
+                        "Query failed!  Trying to proceed without it...")
                 self.cfg_busy = False
                 self.schedulePeriodicUpdates()
                 self.doCallback()
             except:
+                # Don't want errors propagating up the chain.
                 twisted.python.log.err()
 
         # Do Query
         self.cfg_busy = True
-        d = self.resolver.query(
-            dns.Query(local.dnshost, type=dns.TXT))
-
+        d = local.dconfig_puller.query()
         d.addCallback(success_cb)
         d.addErrback(err_cb)
 
 
-    def handleTXT(self, reply):
+    def handleConfig(self, config_lines):
+        # config_lines is a series of raw "key=value" lines.
+        # Extract some useful information out of them.
 
         state = self.main.state
 
@@ -138,12 +128,10 @@ class DNSHandler(object):
         self.version = None
         state.dns_pkhashes = set()
         state.dns_ipcache = (0, [])
-        
-        for a in reply[0]:
-            data = a.payload.data[0]
 
+        for line in config_lines:
             try:
-                name, value = data.split('=', 1)
+                name, value = line.split('=', 1)
             except ValueError:
                 continue
 
@@ -217,6 +205,7 @@ class DNSHandler(object):
 
     def dtellaShutdown(self):
         dcall_discard(self, 'cfgRefresh_dcall')
+        self.cfg_cb = None
 
 
     def belowMinimumVersion(self):

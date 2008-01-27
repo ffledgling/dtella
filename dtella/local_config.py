@@ -42,19 +42,6 @@ hub_name = "Dtella@Purdue"
 # setting the minshare to 99999TiB, and effectively disabling the network.
 minshare_cap = 100 * (1024**3)   # (=100GiB)
 
-# Public DNS servers, which will be used to query config.
-dns_servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222']
-
-# DNS address where the config TXT record resides.
-# This usually contains a small encrypted IP cache, version information,
-# minimum share, and a hash of the IRC bridge's public key.
-dnshost = 'purdue.config.dtella.org'
-
-# DNS servers which will be used for doing IP->Hostname reverse lookups.
-# These should be set to your school's local DNS servers.  If for some reason
-# your network isn't localized, you could set rnds_servers = dns_servers.
-rdns_servers = ['128.210.11.5','128.210.11.57','128.10.2.5','128.46.154.76']
-
 # This function should examine an IP address, and return True if it's
 # permitted on the network, False otherwise.  Since this is called for every
 # packet, it should be as fast as possible.
@@ -63,16 +50,36 @@ def validateIP(ip):
     # ip is a tuple of 4 integers (a, b, c, d)
     return ip[0] == 128 and ip[1] in (10,46,210,211)
 
+# Here we configure an object which pulls 'Dynamic Config' from some source
+# at a known fixed location on the Internet.  This config contains a small
+# encrypted IP cache, version information, minimum share, and a hash of the
+# IRC bridge's public key.
+
+# -- Use DNS TXT Record --
+import dtella.modules.pull_dns
+dconfig_puller = dtella.modules.pull_dns.DnsTxtPuller(
+    # Some public DNS servers to query through. (GTE and OpenDNS)
+    servers = ['4.2.2.1','4.2.2.2','208.67.220.220','208.67.222.222'],
+    # Hostname where the DNS TXT record resides.
+    hostname = "purdue.config.dtella.org"
+    )
+
 # Enable this if you can devise a meaningful mapping from a user's hostname
 # to their location.  Locations are displayed in the "Connection / Speed"
 # column of the DC client.
 use_locations = True
 
-# if use_locations is True, then hostnameToLocation will be called to perform
-# the location translation.  If you set use_locations = False, then
-# hostnameToLocation will never be called, and you may delete the rest of
-# the lines in this file.
+###############################################################################
 
+# if use_locations is True, then rdns_servers and hostnameToLocation will be
+# used to perform the location translation.  If you set use_locations = False,
+# then you may delete the rest of the lines in this file.
+
+# DNS servers which will be used for doing IP->Hostname reverse lookups.
+# These should be set to your school's local DNS servers, for efficiency.
+rdns_servers = ['128.210.11.5','128.210.11.57','128.10.2.5','128.46.154.76']
+
+# Customized data for our implementation of hostnameToLocation
 import re
 suffix_re = re.compile(r".*\.([^.]+)\.purdue\.edu")
 prefix_re = re.compile(r"^([a-z]{1,6}).*\.purdue\.edu")

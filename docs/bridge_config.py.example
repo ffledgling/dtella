@@ -1,6 +1,6 @@
 # This is the config file used by the IRC-to-Dtella bridge.
-# It should be renamed to dtella_bridge_config.py
-# The 
+# It should be copied to ./dtella/bridge_config.py on the system running
+# the bridge, but otherwise kept as secret as possible.
 
 # Connection info for peering with an UnrealIRCd server.
 # Leave irc_server blank to run in DNS-only mode.
@@ -21,6 +21,12 @@ hostmask_prefix = "pre"
 hostmask_keys = ["key1",
                  "key2",
                  "key3"]
+
+# DNS servers which will be used for doing IP->Hostname reverse lookups.
+# These should be set to your school's local DNS servers, for efficiency.
+# If you've already set rdns_servers in local_config.py, then you can leave
+# this one blank, because the two lists will be merged together.
+rdns_servers = []
 
 # Bot Parameters
 irc_to_dc_bot = "*IRC"
@@ -50,8 +56,8 @@ ip_cache = ['1.2.3.4:41234']
 # (Tuple of long integers)
 private_key = ()
 
-# DNS Updater Stuff
-dnsup_fixed_entries = {
+# Dynamic config updater stuff
+dconfig_fixed_entries = {
     # Minimum share size needed to transfer files.
     # A number of bytes, optionally followed by K, M, G, T
     'minshare': '256M',
@@ -61,21 +67,24 @@ dnsup_fixed_entries = {
     'version': '13.37 13.38 http://www.example.com/'
     }
 
-# How often to push a DNS update, in seconds.
+# How often to push a dynamic config update, in seconds.
 # (Note: The first update is always pushed after 30 seconds.)
-dnsup_interval = 60*60
+dconfig_push_interval = 60*60
 
-# Set dnsup_update_func, a function which pushes DNS updates.
+# Set dconfig_push_func, the function which does the actual updating.
+# This function accepts a dictionary of strings, and returns a Deferred
+# object.  You can choose one of these provided config pushers,
+# or write your own custom one.
 
-# -- Write to a plain text file --
+# -- Write to a plain text file, for testing. --
 import dtella.modules.push_textfile
-dnsup_update_func = dtella.modules.push_textfile.TextFileUpdater(
+dconfig_push_func = dtella.modules.push_textfile.TextFileUpdater(
     fname="test-dns.txt"
     ).update
 
 # -- Use yi.org --
 ##import dtella.modules.push_yi
-##dnsup_update_func = dtella.modules.push_yi.YiUpdater(
+##dconfig_push_func = dtella.modules.push_yi.YiUpdater(
 ##    username = "username",
 ##    password = "password",
 ##    host_id = 12345,
@@ -83,7 +92,7 @@ dnsup_update_func = dtella.modules.push_textfile.TextFileUpdater(
 
 # -- Use Dynamic DNS UPDATE --
 ##import dtella.modules.push_dnsupdate
-##dnsup_update_func = dtella.modules.push_dnsupdate.DynamicDNSUpdater(
+##dconfig_push_func = dtella.modules.push_dnsupdate.DynamicDNSUpdater(
 ##    tsig_key = {'keyname': 'keyvalue'},
 ##    zone = "foo.config.dtella.org",
 ##    record = "",
@@ -94,9 +103,9 @@ dnsup_update_func = dtella.modules.push_textfile.TextFileUpdater(
 # -- Use Google Spreadsheets --
 # To use this method, sign into a Gmail or Apps account, create an empty
 # spreadsheet, and publish it.  The sheet key is the random string of
-# characters in the page URL.  (Be careful to never delete the sheet!)
+# characters from the page URL.  (Be careful to never delete the sheet!)
 ##import dtella.modules.push_gdata
-##dnsup_update_func = dtella.modules.push_gdata.GDataUpdater(
+##dconfig_push_func = dtella.modules.push_gdata.GDataUpdater(
 ##    email = "foo@gmail.com",
 ##    password = "...",
 ##    sheet_key = "pJPozIo..."

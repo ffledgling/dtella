@@ -38,13 +38,13 @@ from dtella.common.util import Ad
 # TODO: Implement a stand-alone config pusher (./dtella.py --configpusher)
 
 
-class DNSUpdateManager(object):
+class DynamicConfigUpdateManager(object):
 
-    # Calls the 'dnsup_update_func' function in dtella_bridge_config,
+    # Calls the 'dconfig_push_func' function from bridge_config.py,
     # which accepts a dictionary of key=value pairs, and returns a twisted
     # Deferred object.  We currently have a module which writes to a text
     # file, and another which performs a Dynamic DNS update.  Other modules
-    # could potentially be written for free DNS hosting services.
+    # could potentially be written for various kinds of hosting services.
     
     def __init__(self, main):
         self.main = main
@@ -65,7 +65,7 @@ class DNSUpdateManager(object):
 
             self.busy = True
             
-            d = cfg.dnsup_update_func(entries)
+            d = cfg.dconfig_push_func(entries)
             d.addCallback(self.updateSuccess)
             d.addErrback(self.updateFailed)
 
@@ -75,28 +75,29 @@ class DNSUpdateManager(object):
     def updateSuccess(self, result):
         self.busy = False
 
-        LOG.debug("DNS Update Successful: %s" % result)
+        LOG.debug("Dconfig Update Successful: %s" % result)
         
-        self.scheduleUpdate(cfg.dnsup_interval)
+        self.scheduleUpdate(cfg.dconfig_push_interval)
 
 
     def updateFailed(self, why):
         self.busy = False
 
-        LOG.warning("DNS Update Failed: %s" % why)
+        LOG.warning("Dconfig Update Failed: %s" % why)
         
-        self.scheduleUpdate(cfg.dnsup_interval)
+        self.scheduleUpdate(cfg.dconfig_push_interval)
 
 
     def getEntries(self):
-        # Build and return a dict of entries which should be sent to DNS
+        # Build and return a dict of entries which should be sent to the
+        # dynamic config store.
 
         def b64(arg):
             return binascii.b2a_base64(arg).rstrip()
         
         # Dictionary of key=value pairs to return.
         # Start out with the static entries provided in the config.
-        entries = cfg.dnsup_fixed_entries.copy()
+        entries = cfg.dconfig_fixed_entries.copy()
 
         osm = self.main.osm
 

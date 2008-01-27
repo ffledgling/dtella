@@ -82,7 +82,7 @@ class DtellaMain_Client(core.DtellaMain_Base):
         self.state.initLoad()
 
         # DNS Handler
-        self.dnsh = dtella.client.pull_dconfig.DNSHandler(self)
+        self.dcfg = dtella.client.pull_dconfig.DynamicConfigPuller(self)
 
 
     def reconnectDesired(self):
@@ -193,7 +193,7 @@ class DtellaMain_Client(core.DtellaMain_Base):
 
             self.startInitialContact()
 
-        self.dnsh.getConfigFromDNS(dns_cb)
+        self.dcfg.getDynamicConfig(dns_cb)
 
 
     def queryLocation(self, my_ipp):
@@ -288,8 +288,8 @@ class DtellaMain_Client(core.DtellaMain_Base):
         if self.dch:
             self.dch.dtellaShutdown()
 
-        # Cancel the dns update timer
-        self.dnsh.dtellaShutdown()
+        # Cancel the dns update timer, and remove pending callback.
+        self.dcfg.dtellaShutdown()
 
 
     def getOnlineDCH(self):
@@ -325,8 +325,8 @@ class DtellaMain_Client(core.DtellaMain_Base):
             dch.pushStatus(text)
 
             # Send a message if there's a newer version
-            self.dnsh.resetReportedVersion()
-            self.dnsh.reportNewVersion()
+            self.dcfg.resetReportedVersion()
+            self.dcfg.reportNewVersion()
 
 
     def removeDCHandler(self, dch):

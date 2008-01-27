@@ -22,17 +22,30 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from twisted.names import client, dns
 import random
-import dtella.local_config as local
 
 
 class ReverseLookupHandler(object):
 
     def __init__(self):
-        dns_servers = local.rdns_servers[:]
-        random.shuffle(dns_servers)
+        # Merge rdns_servers entries from local and bridge configs.
+        servers = set()
+        try:
+            import dtella.local_config as local
+            servers.update(local.rdns_servers)
+        except (ImportError, AttributeError):
+            pass
+        try:
+            import dtella.bridge_config as cfg
+            servers.update(cfg.rdns_servers)
+        except (ImportError, AttributeError):
+            pass
+
+        # Convert to list, and randomize.
+        servers = list(servers)
+        random.shuffle(servers)
 
         self.resolver = client.Resolver(
-            servers=[(ip, dns.PORT) for ip in dns_servers],
+            servers=[(ip, dns.PORT) for ip in servers],
             timeout=(1,2,3))
 
 
