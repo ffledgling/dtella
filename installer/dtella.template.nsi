@@ -89,7 +89,7 @@ Section "!Dtella (Required)" INST_DTELLA
   CreateShortcut "$SMPROGRAMS\${PRODUCT_NAME}\Changelog.lnk" "$INSTDIR\changelog.txt"
 SectionEnd
 
-Section "Run Dtella on Startup (Recommended)" INST_STARTUP
+Section /o "Run Dtella on Startup (Recommended)" INST_STARTUP
   SetOutPath "$INSTDIR"
   CreateShortCut "$SMSTARTUP\Dtella.lnk" "$INSTDIR\dtella.exe"
 SectionEnd
