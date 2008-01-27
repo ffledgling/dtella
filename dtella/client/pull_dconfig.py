@@ -60,8 +60,8 @@ class DynamicConfigPuller(object):
         self.reported_vc = cmpify_version(local.version)
 
 
-    def getConfigFromDNS(self, cb):
-        # Requery the TXT record if we haven't gotten an update in the
+    def getDynamicConfig(self, cb):
+        # Requery the config if we haven't gotten an update in the
         # last hour.
 
         stale = ((self.cfg_lastUpdate is None) or

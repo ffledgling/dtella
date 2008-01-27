@@ -46,6 +46,7 @@ class DnsTxtPuller(object):
             dns.Query(self.hostname, type=dns.TXT))
 
         def cb(result):
+            # Convert DNS reply into a simple list of strings.
             return [a.payload.data[0] for a in result[0]]
 
         d.addCallback(cb)
