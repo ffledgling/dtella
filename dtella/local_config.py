@@ -64,6 +64,12 @@ dconfig_puller = dtella.modules.pull_dns.DnsTxtPuller(
     hostname = "purdue.config.dtella.org"
     )
 
+# -- Use Google Spreadsheet --
+##import dtella.modules.pull_gdata
+##dconfig_puller = dtella.modules.pull_gdata.GDataPuller(
+##    sheet_key = "..."
+##    )
+
 # Enable this if you can devise a meaningful mapping from a user's hostname
 # to their location.  Locations are displayed in the "Connection / Speed"
 # column of the DC client.
