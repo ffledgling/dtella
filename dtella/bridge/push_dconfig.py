@@ -23,9 +23,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 import binascii
 import md5
 import random
-import time
 
 from twisted.internet import reactor
+from twisted.python.runtime import seconds
 
 from Crypto.Util.number import long_to_bytes
 from Crypto.PublicKey import RSA
@@ -45,7 +45,7 @@ class DynamicConfigUpdateManager(object):
     # Deferred object.  We currently have a module which writes to a text
     # file, and another which performs a Dynamic DNS update.  Other modules
     # could potentially be written for various kinds of hosting services.
-    
+
     def __init__(self, main):
         self.main = main
         self.update_dcall = None
@@ -64,7 +64,7 @@ class DynamicConfigUpdateManager(object):
             entries = self.getEntries()
 
             self.busy = True
-            
+
             d = cfg.dconfig_push_func(entries)
             d.addCallback(self.updateSuccess)
             d.addErrback(self.updateFailed)
@@ -76,7 +76,7 @@ class DynamicConfigUpdateManager(object):
         self.busy = False
 
         LOG.debug("Dconfig Update Successful: %s" % result)
-        
+
         self.scheduleUpdate(cfg.dconfig_push_interval)
 
 
@@ -84,7 +84,7 @@ class DynamicConfigUpdateManager(object):
         self.busy = False
 
         LOG.warning("Dconfig Update Failed: %s" % why)
-        
+
         self.scheduleUpdate(cfg.dconfig_push_interval)
 
 
@@ -94,7 +94,7 @@ class DynamicConfigUpdateManager(object):
 
         def b64(arg):
             return binascii.b2a_base64(arg).rstrip()
-        
+
         # Dictionary of key=value pairs to return.
         # Start out with the static entries provided in the config.
         entries = cfg.dconfig_fixed_entries.copy()
@@ -134,18 +134,28 @@ class DynamicConfigUpdateManager(object):
         # Add the IPPs of online nodes
         if (osm and osm.syncd):
 
-            now = time.time()
+            sec = seconds()
 
             def n_uptime(n):
-                uptime = max(0, now - n.uptime)
+                uptime = max(0, sec - n.uptime)
                 if n.persist:
                     uptime *= 1.5
                 return -uptime
-            
+
+            # Sort nodes by uptime, highest first
             nodes = osm.nodes[:]
             nodes.sort(key=n_uptime)
 
-            for n in nodes:
+            # Chop list down to the top eighth or so.
+            del nodes[min(GOAL, len(nodes) // 8):]
+
+            # Select a random sample from the best nodes.
+            try:
+                selected_nodes = random.sample(nodes, GOAL)
+            except ValueError:
+                selected_nodes = nodes
+
+            for n in selected_nodes:
                 add_ipp(n.ipp)
                 if len(ipps) >= GOAL:
                     break
