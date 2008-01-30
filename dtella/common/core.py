@@ -3751,6 +3751,14 @@ class ChatMessageSequencer(object):
             if (type(n.chatq[idx]) is float):
                 n.chatq[idx] = msg
 
+            # Possible spoof?
+            # Don't know which one's real, so flush the queue and move on.
+            elif n.chatq[idx] != msg:
+                if unlocked:
+                    n.chatq.insert(idx + 1, msg)
+                    self.flushQueue(n)
+                    return
+
             if unlocked:
                 self.advanceQueue(n)
 
