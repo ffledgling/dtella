@@ -1055,6 +1055,11 @@ class PeerHandler(DatagramProtocol):
 
             if src_ipp == osm.me.ipp:
                 # Possibly a spoofed chat from me
+                if nhash == osm.me.nickHash():
+                    dch = self.main.getOnlineDCH():
+                    if dch:
+                        dch.pushStatus(
+                            "*** Chat spoofing detected: %s" % text)
                 raise BadBroadcast("Spoofed chat")
 
             if not osm.syncd:
@@ -1095,6 +1100,12 @@ class PeerHandler(DatagramProtocol):
                 raise BadPacketError("Extra data")
 
             if src_ipp == osm.me.ipp:
+                # Possibly a spoofed topic from me
+                if nhash == osm.me.nickHash():
+                    dch = self.main.getOnlineDCH():
+                    if dch:
+                        dch.pushStatus(
+                            "*** Topic spoofing detected: %s" % topic)
                 raise BadBroadcast("Spoofed topic")
 
             if not osm.syncd:
