@@ -33,6 +33,7 @@ from dtella.common.util import (Ad, validateNick, word_wrap, split_info,
 import dtella.common.core as core
 import dtella.local_config as local
 import struct
+import random
 import re
 import binascii
 import socket
@@ -936,8 +937,8 @@ class DCHandler(BaseDCProtocol):
     def kickMe(self, l33t, reason, rejoin):
 
         if rejoin:
-            # Pop back on after 5 minutes
-            self.goInvisible(rejoin_time=60*5)
+            # Pop back on after 5-10 minutes
+            self.goInvisible(rejoin_time=random.uniform(60*5, 60*10))
         else:
             self.goInvisible()
 
