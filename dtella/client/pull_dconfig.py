@@ -198,7 +198,7 @@ class DynamicConfigPuller(object):
 
         def cb():
             self.cfgRefresh_dcall = None
-            self.getConfigFromDNS(None)
+            self.getDynamicConfig(None)
         
         self.cfgRefresh_dcall = reactor.callLater(when, cb)
 
