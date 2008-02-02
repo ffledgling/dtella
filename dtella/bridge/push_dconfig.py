@@ -35,8 +35,6 @@ from dtella.common.log import LOG
 
 from dtella.common.util import Ad
 
-# TODO: Implement a stand-alone config pusher (./dtella.py --configpusher)
-
 
 class DynamicConfigUpdateManager(object):
 
@@ -122,18 +120,21 @@ class DynamicConfigUpdateManager(object):
             ipps.discard(ipp[:4] + '\0\0')
             ipps.add(ipp)
 
-        # Add my own IP
-        if osm:
-            add_ipp(osm.me.ipp)
-        else:
-            try:
-                add_ipp(self.main.selectMyIP())
-            except ValueError:
-                pass
+        syncd = (osm and osm.syncd)
+
+        # Add my own IP.
+        # If I'm a hidden node, then only add it if I'm not online yet.
+        if (not self.main.hide_node) or (not syncd):
+            if osm:
+                add_ipp(osm.me.ipp)
+            else:
+                try:
+                    add_ipp(self.main.selectMyIP())
+                except ValueError:
+                    pass
 
         # Add the IPPs of online nodes
-        if (osm and osm.syncd):
-
+        if syncd:
             sec = seconds()
 
             def n_uptime(n):
@@ -151,11 +152,11 @@ class DynamicConfigUpdateManager(object):
 
             # Select a random sample from the best nodes.
             try:
-                selected_nodes = random.sample(nodes, GOAL)
+                nodes = random.sample(nodes, GOAL)
             except ValueError:
-                selected_nodes = nodes
+                pass
 
-            for n in selected_nodes:
+            for n in nodes:
                 add_ipp(n.ipp)
                 if len(ipps) >= GOAL:
                     break

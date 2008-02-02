@@ -82,6 +82,22 @@ def runBridge():
     reactor.run()
 
 
+def runDconfigPusher():
+    import dtella.common.log
+    dtella.common.log.initLogger("dtella.bridge.log", 4<<20, 4)
+    from dtella.common.log import LOG
+    LOG.debug("Dconfig Pusher Logging Manager Initialized")
+
+    def twistedErrorHandler(text):
+        LOG.critical(text)
+    setupLogObserver(twistedErrorHandler)
+
+    import dtella.bridge.push_dconfig_main
+
+    dtMain = dtella.bridge.push_dconfig_main.DtellaMain_DconfigPusher()
+    reactor.run()
+
+
 def runClient():
     #Logging for Dtella Client
     import dtella.common.log
@@ -165,8 +181,8 @@ def main():
     except ImportError:
         pass
     else:
-        usage_str += " [--bridge] [--makeprivatekey]"
-        allowed_opts.extend(['bridge', 'makeprivatekey'])
+        usage_str += " [--bridge] [--dconfigpusher] [--makeprivatekey]"
+        allowed_opts.extend(['bridge', 'dconfigpusher', 'makeprivatekey'])
 
     try:
         opts, args = getopt.getopt(sys.argv[1:], '', allowed_opts)
@@ -178,6 +194,10 @@ def main():
 
     if '--bridge' in opts:
         runBridge()
+        return
+
+    if '--dconfigpusher' in opts:
+        runDconfigPusher()
         return
 
     if '--makeprivatekey' in opts:

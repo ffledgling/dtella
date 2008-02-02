@@ -2595,8 +2595,8 @@ class OnlineStateManager(object):
     def sendMyStatus(self, sendfull=True):
         # Immediately send my status, and keep sending updates over time.
 
-        if self.bsm:
-            # Skip this stuff for Bridge Servers.
+        if self.bsm or self.main.hide_node:
+            # Skip this stuff for Bridge Servers and hidden nodes.
             return
 
         self.checkStatusLimit()
@@ -3444,6 +3444,8 @@ class MessageRoutingManager(object):
         osm = self.main.osm
 
         if data[10:16] == osm.me.ipp:
+            CHECK(not self.main.hide_node)
+
             if data[0:2] in ('NH','CH','SQ','TP'):
                 # Save the current status_pktnum for this message, because
                 # it's useful if we receive a Reject message later.
@@ -3539,7 +3541,7 @@ class MessageRoutingManager(object):
         ph = self.main.ph
         osm = self.main.osm
 
-        if (osm and osm.syncd):
+        if (osm and osm.syncd and not self.main.hide_node):
             sendto = [n for n in osm.pgm.inbound | osm.pgm.outbound]
 
             packet = osm.makeExitPacket()
@@ -4065,6 +4067,9 @@ class DtellaMain_Base(object):
         reactor.addSystemEventTrigger('before', 'shutdown',
                                       self.cleanupOnExit)
 
+        # Set to True to prevent this node from broadcasting.
+        self.hide_node = False
+
 
     def cleanupOnExit(self):
         raise NotImplemented("Override me!")
@@ -4111,7 +4116,8 @@ class DtellaMain_Base(object):
 
                 # If we receive an IQ packet after finding no nodes, then
                 # assume we're a root node and form an empty network
-                self.accept_IQ_trigger = True
+                if not self.hide_node:
+                    self.accept_IQ_trigger = True
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
