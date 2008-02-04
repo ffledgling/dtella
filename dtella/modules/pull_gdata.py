@@ -20,8 +20,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-import twisted.web.client
 from twisted.internet import reactor
+from twisted.internet.threads import deferToThread
+import urllib
 import xml.dom.minidom
 
 PAGE_TEMPLATE = ("https://spreadsheets.google.com/feeds/cells/"
@@ -36,7 +37,11 @@ class GDataPuller(object):
         return "Requesting config data from Google Spreadsheet..."
 
     def query(self):
-        d = twisted.web.client.getPage(PAGE_TEMPLATE % self.sheet_key)
+
+        def f(url):
+            return urllib.urlopen(url).read()
+
+        d = deferToThread(f, PAGE_TEMPLATE % self.sheet_key)
 
         def cb(result):
             config_list = []
