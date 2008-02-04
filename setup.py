@@ -23,16 +23,29 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 from distutils.core import setup
 import sys
+import dtella.local_config as local
 
 class Error(Exception):
     pass
 
 def get_excludes():
     ex = []
-    
-    # The GData fetcher may need these, but leave them out for now.
-    ex.append("xml")
-    ex.append("_ssl")
+
+    # Ignore XML and SSL, unless the puller needs them.
+    def check_attr(o, a):
+        try:
+            return getattr(o, a)
+        except AttributeError:
+            return False
+
+    if not check_attr(local.dconfig_puller, 'needs_xml'):
+        ex.append("xml")
+
+    if not check_attr(local.dconfig_puller, 'needs_ssl'):
+        ex.append("_ssl")
+
+    # No client should need this
+    ex.append("OpenSSL")
 
     # Skip over any bridge components.
     ex.append("dtella.bridge_config")
@@ -45,7 +58,6 @@ def patch_nsi_template():
     # Generate NSI file from template, replacing name and version
     # with data from local_config.
 
-    import dtella.local_config as local
     import re
     
     dt_name = local.hub_name

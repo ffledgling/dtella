@@ -30,6 +30,10 @@ PAGE_TEMPLATE = ("https://spreadsheets.google.com/feeds/cells/"
 
 class GDataPuller(object):
 
+    # Tell our py2exe script to let XML/SSL be included.
+    needs_xml = True
+    needs_ssl = True
+
     def __init__(self, sheet_key):
         self.sheet_key = sheet_key
 
