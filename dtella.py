@@ -52,8 +52,9 @@ def setupLogObserver(handler):
 
 
 def runBridge():
+    import dtella.bridge_config as cfg
     import dtella.common.log
-    dtella.common.log.initLogger("dtella.bridge.log", 4<<20, 4)
+    dtella.common.log.initLogger(cfg.file_base + ".log", 4<<20, 4)
     from dtella.common.log import LOG
     LOG.debug("Bridge Logging Manager Initialized")
 
@@ -61,7 +62,6 @@ def runBridge():
         LOG.critical(text)
     setupLogObserver(twistedErrorHandler)
 
-    import dtella.bridge_config as cfg
     import dtella.bridge.bridge_server as bridge_server
     import dtella.bridge.main
 
@@ -83,8 +83,9 @@ def runBridge():
 
 
 def runDconfigPusher():
+    import dtella.bridge_config as cfg
     import dtella.common.log
-    dtella.common.log.initLogger("dtella.bridge.log", 4<<20, 4)
+    dtella.common.log.initLogger(cfg.file_base + ".log", 4<<20, 4)
     from dtella.common.log import LOG
     LOG.debug("Dconfig Pusher Logging Manager Initialized")
 

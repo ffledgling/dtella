@@ -44,7 +44,7 @@ class DtellaMain_DconfigPusher(core.DtellaMain_Base):
 
         # State Manager
         self.state = dtella.common.state.StateManager(
-            self, 'dtella_bridge.state',
+            self, cfg.file_base + '.state',
             dtella.common.state.bridge_loadsavers)
         self.state.initLoad()
         

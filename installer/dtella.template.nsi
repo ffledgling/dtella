@@ -154,7 +154,7 @@ SectionEnd
 
 Section "un.Dtella Settings File" UNINST_SETTINGS
   Delete "$PROFILE\.dtella\dtella.state"
-  Delete "$PROFILE\.dtella\dtella.client.log"
+  Delete "$PROFILE\.dtella\dtella.log"
   RmDir "$PROFILE\.dtella"
 SectionEnd
 

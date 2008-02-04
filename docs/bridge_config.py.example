@@ -42,6 +42,10 @@ irc_to_dc_prefix = '~'    # Prefix given to IRC users, as seen from DC.
 # Maximum IRC nick length.  This should equal Unreal's configured length.
 max_irc_nick_len = 30
 
+# Log and state files are stored under ~/.dtella/[file_base].*
+# Change this if you want to run multiple bridges simultaneously.
+file_base = "dtella_bridge"
+
 # UDP Port used by this Dtella node.
 udp_port = 41236
 
