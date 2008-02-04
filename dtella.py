@@ -101,7 +101,7 @@ def runDconfigPusher():
 def runClient():
     #Logging for Dtella Client
     import dtella.common.log
-    dtella.common.log.initLogger("dtella.client.log", 1<<20, 1)
+    dtella.common.log.initLogger("dtella.log", 1<<20, 1)
     from dtella.common.log import LOG
     LOG.debug("Client Logging Manager Initialized")
 
