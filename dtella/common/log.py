@@ -36,12 +36,14 @@ from dtella.common.util import get_user_path, CHECK
 # PACKET    5
 # NOTSET    0
 
-LOG = None
-
 def initLogger(filename, max_size, max_archives):
     global LOG
-    CHECK(LOG is None)
-
+    try:
+        LOG
+        raise AssertionError("initLogger already called")
+    except NameError:
+        pass
+    
     # Add custom levels
     logging.addLevelName(5, "PACKET")
 
