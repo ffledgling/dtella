@@ -209,6 +209,7 @@ def main():
     # User-specified TCP port
     if '--port' in opts:
         try:
+            global tcp_port
             tcp_port = int(opts['--port'])
             if not (1 <= tcp_port < 65536):
                 raise ValueError
