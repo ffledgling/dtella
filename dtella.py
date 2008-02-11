@@ -34,41 +34,34 @@ import socket
 import time
 import getopt
 
-tcp_port = 7314
+from dtella.common.log import initLogger
 
 
-def setupLogObserver(handler):
-
+def addTwistedErrorCatcher(handler):
     def logObserver(eventDict):
-        if eventDict["isError"]:
-            if eventDict.has_key('failure'):
-                text = eventDict['failure'].getTraceback()
-            else:
-                text = " ".join([str(m) for m in eventDict["message"]]) + "\n"
-
-            handler(text)
-
+        if not eventDict['isError']:
+            return
+        try:
+            text = eventDict['failure'].getTraceback()
+        except KeyError:
+            text = ' '.join(str(m) for m in eventDict['message'])
+        handler(text)
     twisted.python.log.startLoggingWithObserver(logObserver, setStdout=False)
 
 
 def runBridge():
     import dtella.bridge_config as cfg
-    import dtella.common.log
-    dtella.common.log.initLogger(cfg.file_base + ".log", 4<<20, 4)
-    from dtella.common.log import LOG
+    LOG = initLogger(cfg.file_base + ".log", 4<<20, 4)
     LOG.debug("Bridge Logging Manager Initialized")
 
-    def twistedErrorHandler(text):
-        LOG.critical(text)
-    setupLogObserver(twistedErrorHandler)
+    addTwistedErrorCatcher(LOG.critical)
 
-    import dtella.bridge.bridge_server as bridge_server
-    import dtella.bridge.main
-
-    dtMain = dtella.bridge.main.DtellaMain_Bridge()
-
+    from dtella.bridge.main import DtellaMain_Bridge
+    dtMain = DtellaMain_Bridge()
+    
     if cfg.irc_server:
-        ifactory = bridge_server.IRCFactory(dtMain)
+        from dtella.bridge.bridge_server import IRCFactory
+        ifactory = IRCFactory(dtMain)
         if cfg.irc_ssl:
             from twisted.internet import ssl
             sslContext = ssl.ClientContextFactory()
@@ -84,55 +77,48 @@ def runBridge():
 
 def runDconfigPusher():
     import dtella.bridge_config as cfg
-    import dtella.common.log
-    dtella.common.log.initLogger(cfg.file_base + ".log", 4<<20, 4)
-    from dtella.common.log import LOG
+    LOG = initLogger(cfg.file_base + ".log", 4<<20, 4)
     LOG.debug("Dconfig Pusher Logging Manager Initialized")
 
-    def twistedErrorHandler(text):
-        LOG.critical(text)
-    setupLogObserver(twistedErrorHandler)
+    addTwistedErrorCatcher(LOG.critical)
 
-    import dtella.bridge.push_dconfig_main
-
-    dtMain = dtella.bridge.push_dconfig_main.DtellaMain_DconfigPusher()
+    from dtella.bridge.push_dconfig_main import DtellaMain_DconfigPusher
+    dtMain = DtellaMain_DconfigPusher()
     reactor.run()
 
 
-def runClient():
+def runClient(dc_port):
     #Logging for Dtella Client
-    import dtella.common.log
-    dtella.common.log.initLogger("dtella.log", 1<<20, 1)
-    from dtella.common.log import LOG
+    LOG = initLogger("dtella.log", 1<<20, 1)
     LOG.debug("Client Logging Manager Initialized")
 
-    import dtella.client.main
-    import dtella.client.dc
-    import dtella.local_config as local
+    from dtella.client.main import DtellaMain_Client
+    dtMain = DtellaMain_Client()
 
-    dtMain = dtella.client.main.DtellaMain_Client()
-
-    def twistedErrorHandler(text):
+    def botErrorReporter(text):
         dch = dtMain.dch
         if dch:
             dch.bot.say(
                 "Something bad happened.  If you have the latest version "
                 "of Dtella, then you might want to email this to "
                 "bugs@dtella.org so we'll know about it:\n" + text)
-        LOG.critical(text)
-    setupLogObserver(twistedErrorHandler)
 
-    dfactory = dtella.client.dc.DCFactory(dtMain, tcp_port)
-    
+    addTwistedErrorCatcher(botErrorReporter)
+    addTwistedErrorCatcher(LOG.critical)
+
+    from dtella.client.dc import DCFactory
+    dfactory = DCFactory(dtMain, dc_port)
+
+    import dtella.local_config as local
     LOG.info("%s %s" % (local.hub_name, local.version))
 
     def cb(first):
         try:
-            reactor.listenTCP(tcp_port, dfactory, interface='127.0.0.1')
+            reactor.listenTCP(dc_port, dfactory, interface='127.0.0.1')
         except twisted.internet.error.CannotListenError:
             if first:
                 LOG.warning("TCP bind failed.  Killing old process...")
-                if terminate():
+                if terminate(dc_port):
                     LOG.info("Ok.  Sleeping...")
                     reactor.callLater(2.0, cb, False)
                 else:
@@ -142,20 +128,20 @@ def runClient():
                 LOG.error("Bind failed again.  Giving up.")
                 reactor.stop()
         else:
-            LOG.info("Listening on 127.0.0.1:%d" % tcp_port)
+            LOG.info("Listening on 127.0.0.1:%d" % dc_port)
             dtMain.startConnecting()
 
     reactor.callWhenRunning(cb, True)
     reactor.run()
 
 
-def terminate():
+def terminate(dc_port):
     # Terminate another Dtella process on the local machine
     
     try:
-        print "Sending Packet of Death on port %d..." % tcp_port
+        print "Sending Packet of Death on port %d..." % dc_port
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect(('127.0.0.1', tcp_port))
+        sock.connect(('127.0.0.1', dc_port))
         sock.sendall("$KillDtella|")
         sock.close()
     except socket.error:
@@ -207,11 +193,11 @@ def main():
         return
 
     # User-specified TCP port
+    dc_port = 7314
     if '--port' in opts:
         try:
-            global tcp_port
-            tcp_port = int(opts['--port'])
-            if not (1 <= tcp_port < 65536):
+            dc_port = int(opts['--port'])
+            if not (1 <= dc_port < 65536):
                 raise ValueError
         except ValueError:
             print "Port must be between 1-65535"
@@ -219,14 +205,14 @@ def main():
 
     # Try to terminate an existing process
     if '--terminate' in opts:
-        if terminate():
+        if terminate(dc_port):
             # Give the other process time to exit first
             print "Sleeping..."
             time.sleep(2.0)
         print "Done."
         return
 
-    runClient()
+    runClient(dc_port)
 
 
 if __name__=='__main__':

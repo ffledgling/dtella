@@ -65,3 +65,5 @@ def initLogger(filename, max_size, max_archives):
         "%(asctime)s - %(levelname).1s - %(message)s"))
     LOG.addHandler(fh)
 
+    return LOG
+
