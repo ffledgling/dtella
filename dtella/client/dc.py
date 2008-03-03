@@ -1112,6 +1112,7 @@ class DtellaBot(object):
         ("--",         "ACTIONS"),
         ("REJOIN",     "Hop back online after a kick or collision"),
         ("ADDPEER",    "Add the address of another node to your cache"),
+        ("INVITE",     "Get your current IP and port to give to a friend"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
         ("TERMINATE",  "Completely kill your current Dtella process."),
         ("--",         "SETTINGS"),
@@ -1221,6 +1222,13 @@ class DtellaBot(object):
             "remote config data or your local neighbor cache, then you "
             "can use this command to manually add the address of an existing "
             "node that you know about."
+            ),
+            
+        "INVITE":(
+            "",
+            "If you wish to invite another user to join the network using the "
+            "!addpeer command, you can use this command to retrieve your "
+            "current IP and port to give to them to use."
             ),
 
         "REBOOT":(
@@ -1351,6 +1359,23 @@ class DtellaBot(object):
                 return
 
         self.syntaxHelp(out, 'ADDPEER', prefix)
+        
+    
+    def handleCmd_INVITE(self, out, args, prefix):
+        
+        if len(args) == 0:
+            if self.main.osm:
+                out("Tell your friend to enter the following into their client "
+                    "to join the network: !addpeer %d.%d.%d.%d:%d "
+                    % (struct.unpack('!BBBBH', self.main.osm.me.ipp)))
+            else:
+                out("You cannot invite someone until you are connected to the "
+                    "network yourself.")
+        
+        return 
+        
+        self.syntaxHelp(out, 'INVITE', prefix)
+        
 
 
     def handleCmd_PERSISTENT(self, out, args, prefix):
