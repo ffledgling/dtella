@@ -1372,7 +1372,7 @@ class DtellaBot(object):
                 out("You cannot invite someone until you are connected to the "
                     "network yourself.")
         
-        return 
+            return
         
         self.syntaxHelp(out, 'INVITE', prefix)
         
