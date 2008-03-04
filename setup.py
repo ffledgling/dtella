@@ -4,7 +4,7 @@ Copyright (C) 2007-2008  Dtella Labs (http://dtella.org/)
 Copyright (C) 2007-2008  Paul Marks (http://pmarks.net/)
 Copyright (C) 2007-2008  Jacob Feisley (http://feisley.com/)
 
-$Id: dtella.py 473 2008-01-23 04:54:25Z paul248 $
+$Id$
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
