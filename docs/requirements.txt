@@ -5,20 +5,27 @@ RUNNING DTELLA
 
 In order to run dtella you will need the following:
 
-* Python 2.4+ 		(http://www.python.org/)
-* TwistedPython		(http://twistedmatrix.com/)
-* PyCrypto		(http://www.voidspace.org.uk/python/modules.shtml#pycrypto)
+* Python 2.4+
+  -> http://www.python.org/
+* Twisted 8.0+
+  -> http://twistedmatrix.com/
+* PyCrypto 2.0.1+
+  -> http://www.voidspace.org.uk/python/modules.shtml#pycrypto
 
 The bridge server will require the following additional modules, depending on
 which config update method you use:
 - Dynamic DNS:
-  * dnspython		(http://www.dnspython.org/)
+  * dnspython
+    -> http://www.dnspython.org/
 - Google Spreadsheets:
-  * gdata 1.0.10+   (http://code.google.com/p/gdata-python-client/)
+  * gdata 1.0.10+
+    -> http://code.google.com/p/gdata-python-client/
 
 If you wish to use SSL links in the bridge also grab:
-* pyOpenSSL		(http://pyopenssl.sourceforge.net/)
-* OpenSSL		(http://www.openssl.org/)
+* pyOpenSSL
+  -> http://pyopenssl.sourceforge.net/
+* OpenSSL
+  -> http://www.openssl.org/
 
 
 --
@@ -27,7 +34,10 @@ BUILDING
 In order to build Dtella (for Windows) you will need all components required to
 run Dtella as well as the following:
 
-* py2exe		(http://www.py2exe.org/)
-* NSIS Install System	(http://nsis.sourceforge.net/)
-* 7zip			(http://www.7-zip.org/)
+* py2exe
+  -> http://www.py2exe.org/
+* NSIS Install System
+  -> http://nsis.sourceforge.net/
+* 7zip
+  -> http://www.7-zip.org/
 
