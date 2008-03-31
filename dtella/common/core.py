@@ -21,7 +21,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
 import struct
-import md5
 import heapq
 import time
 import random
@@ -29,6 +28,7 @@ import bisect
 import weakref
 import socket
 from binascii import hexlify
+from hashlib import md5
 
 from twisted.internet.protocol import DatagramProtocol
 from twisted.internet import reactor
@@ -1766,16 +1766,16 @@ class Node(object):
         nb_key = self.ipp + self.sesid
 
         if my_key <= nb_key:
-            self.dist = md5.new(my_key + nb_key).digest()
+            self.dist = md5(my_key + nb_key).digest()
         else:
-            self.dist = md5.new(nb_key + my_key).digest()
+            self.dist = md5(nb_key + my_key).digest()
 
 
     def nickHash(self):
         # Return a 4-byte hash to prevent a transient nick mismapping
         
         if self.nick:
-            return md5.new(self.ipp + self.sesid + self.nick).digest()[:4]
+            return md5(self.ipp + self.sesid + self.nick).digest()[:4]
         else:
             return None
 
@@ -1822,7 +1822,7 @@ class Node(object):
             # Node is uninitialized
             self.infohash = None
         else:
-            self.infohash = md5.new(
+            self.infohash = md5(
                 self.sesid + self.flags() + self.nick + '|' + info
                 ).digest()[:4]
 
@@ -3401,7 +3401,7 @@ class MessageRoutingManager(object):
         # 9:10 = flags
         # 10:16 = source ipp
         # 16: = "the rest"
-        return md5.new(data[0:2] + data[10:]).digest()[:8]
+        return md5(data[0:2] + data[10:]).digest()[:8]
 
 
     def pokeMessage(self, ack_key, nb_ipp):

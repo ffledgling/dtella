@@ -30,7 +30,7 @@ from dtella.common.util import RandSet, Ad, dcall_discard, parse_incoming_info
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
 from Crypto.PublicKey import RSA
-import md5
+from hashlib import md5
 import struct
 import random
 
@@ -57,7 +57,7 @@ class BridgeClientProtocol(core.PeerHandler):
         else:
             body = data[:-len(sig)]
 
-        data_hash = md5.new(body).digest()
+        data_hash = md5(body).digest()
         sig_tuple = (bytes_to_long(sig),)
 
         try:
@@ -114,7 +114,7 @@ class BridgeClientProtocol(core.PeerHandler):
                 raise BadBroadcast
 
             # Make sure public key matches a hash in DNS
-            pkhash = md5.new(pubkey).digest()
+            pkhash = md5(pubkey).digest()
             if pkhash not in self.main.state.dns_pkhashes:
                 # Not useful to me, but still forward it
                 return
@@ -193,7 +193,7 @@ class BridgeClientProtocol(core.PeerHandler):
                     raise Skip
 
             # Make sure public key matches a hash in DNS
-            pkhash = md5.new(pubkey).digest()
+            pkhash = md5(pubkey).digest()
             if pkhash not in self.main.state.dns_pkhashes:
                 raise Skip
 
@@ -1192,7 +1192,7 @@ class BridgeClientManager(object):
 
         osm = self.main.osm
 
-        bhash = md5.new(data).digest()
+        bhash = md5(data).digest()
         key = (ipp, bhash)
 
         try:

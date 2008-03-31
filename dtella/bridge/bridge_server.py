@@ -32,10 +32,10 @@ from Crypto.PublicKey import RSA
 
 import time
 import struct
-import md5
 import re
 import binascii
 from collections import deque
+from hashlib import md5
 
 import dtella.common.core as core
 import dtella.common.state
@@ -92,7 +92,7 @@ def base_convert(chars, from_digits, to_digits, min_len=1):
 
 
 def n_user(ipp):
-    h = binascii.hexlify(md5.new(ipp).digest())[:6]
+    h = binascii.hexlify(md5(ipp).digest())[:6]
     return "dt" + h.upper()
 
 
@@ -1451,7 +1451,7 @@ class BridgeServerManager(object):
         else:
             body = data
 
-        data_hash = md5.new(body).digest()
+        data_hash = md5(body).digest()
         
         t = time.time()
         sig, = self.rsa_obj.sign(data_hash, None)
@@ -1605,7 +1605,7 @@ class BridgeServerManager(object):
         for i in range(0, len(chunks), 1024):
             blocks.append(chunks[i:i+1024])
 
-        block_hashes = [md5.new(b).digest() for b in blocks]
+        block_hashes = [md5(b).digest() for b in blocks]
 
         # Add the list of block hashes
         packet.append(struct.pack("!B", len(block_hashes)))

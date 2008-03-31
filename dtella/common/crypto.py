@@ -21,12 +21,12 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
 from Crypto.Cipher import AES
-import md5
+from hashlib import md5
 
 class PacketEncoder(object):
 
     def __init__(self, key):
-        self.aes = AES.new(md5.new(key).digest())
+        self.aes = AES.new(md5(key).digest())
 
 
     def encrypt(self, data):
@@ -36,7 +36,7 @@ class PacketEncoder(object):
         
         hlen = ((10-len(data)) % 16) + 5
 
-        h = md5.new(data).digest()[:hlen] + '\0'*(hlen-16)
+        h = md5(data).digest()[:hlen] + '\0'*(hlen-16)
 
         data += h + chr(hlen)
 
@@ -57,7 +57,7 @@ class PacketEncoder(object):
         h = data[-(hlen+1):-1][:16]
         data = data[:-(hlen+1)]
 
-        if h != md5.new(data).digest()[:hlen]:
+        if h != md5(data).digest()[:hlen]:
             raise ValueError("Bad Hash Value")
 
         return data

@@ -20,9 +20,9 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-import md5
 import array
 import dtella.bridge_config as cfg
+from hashlib import md5
 
 KEY1, KEY2, KEY3 = cfg.hostmask_keys
 
@@ -34,7 +34,7 @@ def split_ip(ip):
 
 def m(s):
     # MD5
-    return md5.new(s).digest()
+    return md5(s).digest()
 
 def d(in_str):
     # Downsample

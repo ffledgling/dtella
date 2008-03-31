@@ -21,8 +21,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
 import binascii
-import md5
 import random
+from hashlib import md5
 
 from twisted.internet import reactor
 from twisted.python.runtime import seconds
@@ -102,7 +102,7 @@ class DynamicConfigUpdateManager(object):
         # Generate public key hash
         if cfg.private_key:
             pubkey = long_to_bytes(RSA.construct(cfg.private_key).n)
-            entries['pkhash'] = b64(md5.new(pubkey).digest())
+            entries['pkhash'] = b64(md5(pubkey).digest())
 
         # Collect IPPs for the ipcache string
         GOAL = 10

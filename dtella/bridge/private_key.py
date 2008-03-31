@@ -23,7 +23,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 from Crypto.PublicKey import RSA
 from Crypto.Util.randpool import RandomPool
 from Crypto.Util.number import long_to_bytes
-import md5, binascii
+import binascii
+from hashlib import md5
 
 
 def makePrivateKey():
@@ -31,7 +32,7 @@ def makePrivateKey():
     k = RSA.generate(1024, RandomPool().get_bytes)
 
     # Generate Public Key Hash
-    print "pkhash=" + binascii.b2a_base64(md5.new(long_to_bytes(k.n)).digest())
+    print "pkhash=" + binascii.b2a_base64(md5(long_to_bytes(k.n)).digest())
 
     # Show private key
     print "For ./dtella/bridge_config.py:"
