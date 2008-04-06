@@ -6,6 +6,10 @@ Dtella Changelog
 - Fixed a bug in the progress bar, where it was possible for the sync to
 complete before reaching 100%.
 - Fixed a bug which could cause a node to request extra bridge blocks.
+- Added an !invite command to show your current IP:Port.
+- Restructured the code to use packages, with one common executable for
+bridge and client functions.
+- Should now be more robust against the UDP socket getting reset.
 
 1.0.4 (2007-03-08):
 - Added the ability to whitelist an IP for running an offcampus bridge or

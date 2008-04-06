@@ -5,7 +5,7 @@ RUNNING DTELLA
 
 In order to run dtella you will need the following:
 
-* Python 2.4+
+* Python 2.5+
   -> http://www.python.org/
 * Twisted 8.0+
   -> http://twistedmatrix.com/
