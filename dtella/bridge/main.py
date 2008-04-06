@@ -69,13 +69,6 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         # DNS Update Manager
         self.dum = push_dconfig.DynamicConfigUpdateManager(self)
 
-        # Bind UDP Port
-        try:
-            reactor.listenUDP(cfg.udp_port, self.ph)
-        except twisted.internet.error.BindError:
-            LOG.error("Failed to bind UDP port!")
-            raise SystemExit
-
         # IRC Server
         self.ircs = None
 
@@ -94,6 +87,17 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
 
 
     def startConnecting(self):
+        udp_state = self.ph.getSocketState()
+        if udp_state == 'dead':
+            try:
+                reactor.listenUDP(cfg.udp_port, self.ph)
+            except twisted.internet.error.BindError:
+                LOG.error("Failed to bind UDP port!")
+                raise SystemExit
+        elif udp_state == 'dying':
+            return
+        
+        CHECK(self.ph.getSocketState() == 'alive')
         self.startInitialContact()
 
 

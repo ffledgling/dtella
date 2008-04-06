@@ -216,11 +216,46 @@ class PeerHandler(DatagramProtocol):
         self.choke_time = seconds() - self.CHOKE_PERIOD
         self.choke_reported = seconds() - 999
 
+        # True iff we're shutting down after a socket failure.
+        self.stopping_protocol = False
+
+
+    def stopProtocol(self):
+        # If this is the final termination, don't do anything.
+        if not reactor.running:
+            return
+
+        self.main.showLoginStatus("UDP socket was reset.")
+
+        # Otherwise, our UDP port randomly died, so try reconnecting.
+        # Disable transmits during the shutdown.
+        self.stopping_protocol = True
+        try:
+            self.main.shutdown(reconnect='instant')
+        finally:
+            self.stopping_protocol = False
+
+
+    def getSocketState(self):
+        # Figure out the state of our UDP socket.
+        if self.stopping_protocol:
+            return 'dying'
+        elif not self.transport:
+            return 'dead'
+        elif hasattr(self.transport, "d"):
+            return 'dying'
+        else:
+            return 'alive'
+
 
     def sendPacket(self, data, addr, broadcast=False):
         # Send a packet, passing it through the encrypter
         # returns False if an error occurs
-        
+
+        if self.stopping_protocol:
+            # Still cleaning up after a socket asplosion.
+            return False
+
         self.main.logPacket("%s -> %s:%d" % (data[:2], addr[0], addr[1]))
         data = self.main.pk_enc.encrypt(data)
 
@@ -1419,7 +1454,7 @@ class InitialContactManager(DatagramProtocol):
             reactor.listenUDP(0, self)
         except twisted.internet.error.BindError:
             self.main.showLoginStatus("Failed to bind alt UDP port!")
-            cb()
+            self.done_callback('no_nodes', None)
             return
 
         self.peers = {}  # {IPPort -> PeerInfo object}
@@ -1492,6 +1527,7 @@ class InitialContactManager(DatagramProtocol):
                 # Send from the alternate port
                 self.transport.write(packet, ad.getAddrTuple())
             except (AttributeError, socket.error):
+                # Socket got funky, let the timeouts take care of it.
                 pass
             except RuntimeError:
                 # Workaround for the Twisted infinte recursion bug
@@ -1673,7 +1709,7 @@ class InitialContactManager(DatagramProtocol):
 
             if rank[0][0] == 0:
                 # Nobody replied
-                self.done_callback('', None)
+                self.done_callback('no_nodes', None)
 
             else:
                 # Return the name of the failure which occurred most
@@ -4109,7 +4145,7 @@ class DtellaMain_Base(object):
             elif result == 'dead_port':
                 self.needPortForward()
 
-            else:
+            elif result == 'no_nodes':
                 self.showLoginStatus(
                     "No online nodes found.")
                 self.shutdown(reconnect='normal')
@@ -4118,6 +4154,10 @@ class DtellaMain_Base(object):
                 # assume we're a root node and form an empty network
                 if not self.hide_node:
                     self.accept_IQ_trigger = True
+
+            else:
+                # Impossible result
+                CHECK(False)
 
         self.ph.remap_ip = None
         self.icm = InitialContactManager(self, cb)
@@ -4220,22 +4260,27 @@ class DtellaMain_Base(object):
 
         if reconnect == 'no':
             return
-        elif reconnect == 'normal':
-            pass
         elif reconnect == 'max':
             self.reconnect_interval = RECONNECT_RANGE[1]
         else:
-            raise KeyError("Unknown reconnect value")
+            CHECK(reconnect in ('normal', 'instant'))
 
-        # Decide how long to wait before reconnecting
-        when = self.reconnect_interval * random.uniform(0.8, 1.2)
+        if reconnect == 'instant':
+            # Just do an instant reconnect without saying anything.
+            when = 0
+            self.reconnect_interval = RECONNECT_RANGE[0]
 
-        # Increase the reconnect interval logarithmically
-        self.reconnect_interval = min(self.reconnect_interval * 1.5,
-                                      RECONNECT_RANGE[1])
+        else:
+            # Decide how long to wait before reconnecting
+            when = self.reconnect_interval * random.uniform(0.8, 1.2)
 
-        self.showLoginStatus("--")
-        self.showLoginStatus("Next reconnect attempt in %d seconds." % when)
+            # Increase the reconnect interval logarithmically
+            self.reconnect_interval = min(self.reconnect_interval * 1.5,
+                                          RECONNECT_RANGE[1])
+
+            self.showLoginStatus("--")
+            self.showLoginStatus(
+                "Next reconnect attempt in %d seconds." % when)
 
         def cb():
             self.reconnect_dcall = None

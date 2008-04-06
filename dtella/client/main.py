@@ -57,10 +57,6 @@ class DtellaMain_Client(core.DtellaMain_Base):
         self.login_counter = 0
         self.login_text = ""
 
-        # Port state stuff
-        self.changing_port = False
-        self.udp_bound = False
-
         # DC Handler(s)
         self.dch = None
         self.pending_dch = None
@@ -100,32 +96,46 @@ class DtellaMain_Client(core.DtellaMain_Base):
     def changeUDPPort(self, udp_port):
         # Shut down the node, and start up with a different UDP port
 
-        # Pseudo-mutex: can't change the port twice simultaneously
-        if self.changing_port:
-            return False
-
-        self.changing_port = True
-
+        # Set a new UDP port, which will be used on the next bind.
         self.state.udp_port = udp_port
         self.state.saveState()
 
-        def cb(result):
-            self.changing_port = False
-            self.startConnecting()
+        udp_state = self.ph.getSocketState()
 
-        self.unbindUDPPort(cb)
-        return True
+        if udp_state == 'alive':
+            # Port is alive, so shutdown and kill it.  PeerHandler will
+            # reconnect when it notices the port is gone.
+            self.shutdown(reconnect='no')
+            self.ph.transport.stopListening()
+
+        elif udp_state == 'dying':
+            # Port is dying, maybe because of a previous change request.
+            # Just let the existing callbacks take care of it.
+            pass
+
+        else:
+            # Port is already gone, so try reconnecting.
+            CHECK(udp_state == 'dead')
+            self.startConnecting()
 
 
     def bindUDPPort(self):
         # Returns True if the UDP port is bound
 
-        if self.udp_bound:
+        udp_state = self.ph.getSocketState()
+
+        if udp_state == 'alive':
+            # Port already bound, yay!
             return True
+        elif udp_state == 'dying':
+            # Port is busy disconnecting.  Wait.
+            return False
+
+        # Otherwise, the port is dead, so try to rebind it.
+        CHECK(udp_state == 'dead')
 
         try:
             reactor.listenUDP(self.state.udp_port, self.ph)
-            self.udp_bound = True
 
         except twisted.internet.error.BindError:
 
@@ -145,20 +155,7 @@ class DtellaMain_Client(core.DtellaMain_Base):
             for line in word_wrap(text):
                 self.showLoginStatus(line)
 
-        return self.udp_bound
-
-
-    def unbindUDPPort(self, cb):
-        # Release the UDP port, and call cb when done
-
-        if self.udp_bound:
-            self.shutdown(reconnect='no')
-            self.udp_bound = False
-            self.ph.transport.stopListening().addCallback(cb)
-
-        else:
-            # Not bound yet, just do the callback
-            reactor.callLater(0, cb, None)
+        return self.ph.getSocketState() == 'alive'
 
 
     def startConnecting(self):

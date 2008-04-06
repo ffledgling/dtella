@@ -1306,8 +1306,7 @@ class DtellaBot(object):
 
         if len(args) == 0:
             out("Rebooting Node...")
-            self.main.shutdown(reconnect='no')
-            self.main.startConnecting()
+            self.main.shutdown(reconnect='instant')
             return
 
         self.syntaxHelp(out, 'REBOOT', prefix)
@@ -1327,10 +1326,8 @@ class DtellaBot(object):
             except ValueError:
                 pass
             else:
-                if self.main.changeUDPPort(port):
-                    out("Changing UDP port to: %d." % port)
-                else:
-                    out("Can't change UDP port; busy.")
+                out("Changing UDP port to: %d" % port)
+                self.main.changeUDPPort(port)
                 return
             
         self.syntaxHelp(out, 'UDP', prefix)
@@ -1689,6 +1686,9 @@ class DtellaBot(object):
                 self.dbg_show_packets = True
             elif args[1] == "off":
                 self.dbg_show_packets = False
+
+        elif args[0] == "killudp":
+            self.main.ph.transport.stopListening()
 
 
     def debug_neighbors(self, out):
