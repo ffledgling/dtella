@@ -41,7 +41,23 @@ from dtella.common.util import (RandSet, dcall_discard, dcall_timeleft,
                                 parse_incoming_info, get_version_string,
                                 parse_dtella_tag, CHECK)
 from dtella.common.ipv4 import Ad
+from dtella.common.log import LOG
 
+# Check for some non-fatal but noteworthy conditions.
+def doWarnings():
+    import twisted
+    from twisted.python import versions
+    if (twisted.version < versions.Version('twisted', 8, 0, 0)):
+        LOG.warning("You should get Twisted 8 or later.  Previous versions "
+                    "have some bugs that affect Dtella.")
+
+    import Crypto.PublicKey
+    try:
+        import Crypto.PublicKey._fastmath
+    except ImportError:
+        LOG.warning("Your version of PyCrypto was compiled without "
+                    "GMP (fastmath).  Some stuff will be slower.")
+doWarnings()
 
 # Miscellaneous Exceptions
 class BadPacketError(Exception):
