@@ -20,7 +20,11 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
+# Note that there's no IPv6 stuff here.  If Dtella and IPv6 are ever popular
+# at the same time, we'll have to redesign the protocol to handle it.
+
 import dtella.local_config as local
+import bisect
 import struct
 import socket
 from socket import inet_aton, inet_ntoa
@@ -28,10 +32,11 @@ from socket import inet_aton, inet_ntoa
 from dtella.common.util import CHECK
 
 
+# Class for holding an IP:Port, and converting to/from various formats.
 class Ad(object):
 
-    ip = None
-    port = None
+    ip = None       # ip is a 4-byte string
+    port = None     # port is a plain old integer
     orig_ip = None  # If an address gets NAT-remapped, this is the original.
 
     def __eq__(self, other):
@@ -43,6 +48,8 @@ class Ad(object):
     def auth(self, kinds, main):
         if self.ip is None:
             return False
+
+        int_ip = self.getIntIP()
 
         if 'b' in kinds:
             # Bans
@@ -56,18 +63,13 @@ class Ad(object):
 
         if 's' in kinds:
             # Static evaluation
-            if not local.validateIP(self.getIntTupleIP()):
+            if not local_matcher.containsIP(int_ip):
                 return False
 
         return True
 
     def isRFC1918(self):
-        # TODO FIX
-        ip = self.getIntTupleIP()
-        return ((ip[0] == 10) or
-                (ip[0] == 172 and 16<=ip[1]<=31) or
-                (ip[0] == 192 and ip[1] == 168)
-                )
+        return rfc1918_matcher.containsIP(self.getIntIP())
 
     # Set Stuff
     def setTextIP(self, ip):
@@ -202,3 +204,84 @@ def CidrStringToIPMask(cidr):
     ip = Ad().setTextIP(ip).getIntIP()
     mask = CidrNumToMask(int(subnet))
     return ip, mask
+
+
+# Test if an IP is a member of a subnet, or if a subnet is a subset of another
+# subnet.  Both arguments are (ip, mask) tuples.  A plain IP address should
+# have a mask of ~0, which corresponds to a /32.
+def IsSubsetOf(candidate, group):
+    c_ip, c_mask = candidate
+    g_ip, g_mask = group
+
+    # If the candidate is less specific than the group (i.e. the candidate
+    # mask has fewer bits), then it can't be a subset.
+    if (c_mask & g_mask) != g_mask:
+        return False
+
+    # Candidate is a subset if their prefixes are equal.
+    return (c_ip & g_mask) == (g_ip & g_mask)
+
+
+# Class for keeping track of a list of subnets, and testing whether
+# an IP address is a member of any of the subnets.  Subnets can be added
+# individually, but deleting requires a complete rebuild.
+#
+# IP lookups are O(log n) because of binary search.  In order for binary
+# search to work correctly, the class maintains some invariants:
+#
+# - The list of (ip, mask) tuples is kept in sorted order.
+# - On insertion, any stray bits after the mask are stripped from the ip.
+# - When a subnet is added that is a superset of existing subnets, those
+#   existing subnets are deleted.
+#
+# All this basically means that we keep a sorted list of prefixes, and
+# we can quickly search for the one prefix that might match a given IP.
+# Once the prefix is found, we use the IsSubsetOf() function to see if
+# the IP does in fact have that prefix.
+#
+class SubnetMatcher(object):
+
+    def __init__(self, initial_ranges=None):
+        self.nets = []
+        if initial_ranges:
+            for r in initial_ranges:
+                self.addRange(CidrStringToIPMask(r))
+
+    def addRange(self, ipmask):
+        ip, mask = ipmask
+        ipmask = (ip & mask, mask)
+
+        # See if this range is already covered.
+        if self.containsRange(ipmask):
+            return
+
+        # Delete any existing ranges that are covered by this new range.
+        deletes = []
+        for i, old_ipmask in enumerate(self.nets):
+            if IsSubsetOf(old_ipmask, ipmask):
+                deletes.append(i)
+        for i in reversed(deletes):
+            del self.nets[i]
+
+        # Insert the new range
+        bisect.insort_right(self.nets, ipmask)
+
+    def containsRange(self, ipmask):
+        i = bisect.bisect_right(self.nets, ipmask)
+        if i == 0:
+            return False
+        return IsSubsetOf(ipmask, self.nets[i-1])
+
+    def containsIP(self, int_ip):
+        return self.containsRange((int_ip, ~0))
+
+    def clear(self):
+        del self.nets[:]
+
+# Create a subnet matcher for RFC1918 addresses.
+rfc1918_matcher = SubnetMatcher(
+    ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'])
+
+# Create a subnet matcher for locally-configured IPs.
+local_matcher = SubnetMatcher(local.allowed_subnets)
+

@@ -42,13 +42,11 @@ hub_name = "Dtella@Purdue"
 # setting the minshare to 99999TiB, and effectively disabling the network.
 minshare_cap = 100 * (1024**3)   # (=100GiB)
 
-# This function should examine an IP address, and return True if it's
-# permitted on the network, False otherwise.  Since this is called for every
-# packet, it should be as fast as possible.
-# (You may want to consult a CS major who's familiar with Python.)
-def validateIP(ip):
-    # ip is a tuple of 4 integers (a, b, c, d)
-    return ip[0] == 128 and ip[1] in (10,46,210,211)
+# This is a list of subnets (in CIDR notation) which will be permitted on
+# the network.  Make sure you get this right initially, because you can't
+# make changes once the program has been distributed.  In the unlikely event
+# that you don't want any filtering, use ['0.0.0.0/0']
+allowed_subnets = ['128.210.0.0/15', '128.10.0.0/16', '128.46.0.0/16']
 
 # Here we configure an object which pulls 'Dynamic Config' from some source
 # at a known fixed location on the Internet.  This config contains a small
