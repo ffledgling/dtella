@@ -44,10 +44,12 @@ import dtella.bridge.hostmask
 from dtella.common.reverse_dns import ipToHostname
 from dtella.common.log import LOG
 
-from dtella.common.util import (Ad, dcall_discard, dcall_timeleft,
+from dtella.common.util import (dcall_discard, dcall_timeleft,
                                 validateNick, CHECK)
 from dtella.common.core import (Reject, BadPacketError, BadTimingError,
                                 NickError)
+from dtella.common.ipv4 import Ad
+import dtella.common.ipv4 as ipv4
 
 import dtella.bridge_config as cfg
 
@@ -386,33 +388,14 @@ class IRCServer(LineOnlyReceiver):
         osm = self.main.osm
 
         if kind == 'Z' and args[2] == '*':
-            ipmask = args[3]
+            cidr = args[3]
 
-            LOG.info("IP ban: %s %s" % (addrem, ipmask))
-
-            try:
-                ip, subnet = ipmask.split('/', 1)
-            except ValueError:
-                ip, subnet = ipmask, "32"
+            LOG.info("IP ban: %s %s" % (addrem, cidr))
 
             try:
-                ip, = struct.unpack('!i', Ad().setTextIP(ip).getRawIP())
-            except (ValueError, struct.error):
-                LOG.error("TKL: Invalid IP format: '%s'" % ip)
-                return
-
-            try:
-                subnet = int(subnet)
-            except ValueError:
-                LOG.error("TKL: Subnet not a number: '%s'" % subnet)
-                return
-
-            if subnet == 0:
-                mask = 0
-            elif 1 <= subnet <= 32:
-                mask = ~0 << (32-subnet)
-            else:
-                LOG.error("TKL: Subnet out of range: %d" % subnet)
+                ip, mask = ipv4.CidrStringToIPMask(cidr)
+            except ValueError, e:
+                LOG.error("TKL: bad CIDR string: %s", e)
                 return
 
             if addrem == '+':
@@ -1705,15 +1688,7 @@ class BridgeServerManager(object):
 
     def addBanChunk(self, chunks, ip, mask, enable):
 
-        subnet = 0
-        b = ~0 << 31
-        while ((b & mask) == b) and (subnet < 32):
-            b >>= 1
-            subnet += 1
-
-        if subnet == 0 and mask != 0:
-            raise ValueError
-
+        subnet = ipv4.MaskToCidrNum(mask)
         subnet |= (enable and 0x80)
 
         chunks.append('B')

@@ -36,9 +36,10 @@ import dtella.client.pull_dconfig
 if local.use_locations:
     from dtella.common.reverse_dns import ipToHostname
 
-from dtella.common.util import (dcall_discard, Ad, word_wrap, get_user_path,
+from dtella.common.util import (dcall_discard, word_wrap, get_user_path,
                                 CHECK)
 from dtella.common.log import LOG
+from dtella.common.ipv4 import Ad
 
 STATE_FILE = "dtella.state"
 

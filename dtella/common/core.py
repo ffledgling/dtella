@@ -36,10 +36,11 @@ from twisted.python.runtime import seconds
 
 import dtella.local_config as local
 import dtella.common.crypto
-from dtella.common.util import (RandSet, Ad, dcall_discard, dcall_timeleft,
+from dtella.common.util import (RandSet, dcall_discard, dcall_timeleft,
                                 randbytes, validateNick, word_wrap,
                                 parse_incoming_info, get_version_string,
                                 parse_dtella_tag, CHECK)
+from dtella.common.ipv4 import Ad
 
 
 # Miscellaneous Exceptions
@@ -3894,9 +3895,8 @@ class BanManager(object):
 
                 # Check all the other nodes
                 for n in osm.lookup_ipp.values():
+                    ip = Ad().setRawIPPort(n.ipp).getIntIP()
 
-                    ip, = struct.unpack('!i', n.ipp[:4])
-                    
                     if self.matchBan(ban_ip, ban_mask, ip):
 
                         # in nodes list
@@ -3909,7 +3909,7 @@ class BanManager(object):
 
                 # Check myself
                 if not osm.bsm:
-                    ip, = struct.unpack('!i', osm.me.ipp[:4])
+                    ip = Ad().setRawIPPort(osm.me.ipp).getIntIP()
                     if self.matchBan(ban_ip, ban_mask, ip):
                         self.main.showLoginStatus("You were banned.")
                         self.main.shutdown(reconnect='max')
@@ -3939,7 +3939,7 @@ class BanManager(object):
             return False
 
         # Search all bridges for a matching ban
-        ip, = struct.unpack('!i', ipp[:4])
+        ip = Ad().setRawIPPort(ipp).getIntIP()
 
         if osm.bcm:
             for bridge in osm.bcm.bridges:

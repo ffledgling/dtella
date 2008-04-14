@@ -26,7 +26,10 @@ import dtella.common.core as core
 from dtella.common.core import (BadTimingError, BadPacketError, BadBroadcast,
                                 Reject, NickError)
 
-from dtella.common.util import RandSet, Ad, dcall_discard, parse_incoming_info
+from dtella.common.util import RandSet, dcall_discard, parse_incoming_info
+
+import dtella.common.ipv4 as ipv4
+from dtella.common.ipv4 import Ad
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
 from Crypto.PublicKey import RSA
@@ -784,11 +787,9 @@ class BridgeNodeData(object):
                 enable = bool(subnet & 0x80)
                 subnet &= 0x3F
 
-                if subnet == 0:
-                    mask = 0
-                elif 1 <= subnet <= 32:
-                    mask = ~0 << (32-subnet)
-                else:
+                try:
+                    mask = ipv4.CidrNumToMask(subnet)
+                except ValueError:
                     raise ChunkError("B: Subnet out of range")
 
                 ipmask = (ip, mask)

@@ -21,8 +21,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
 import dtella.local_config as local
-from dtella.common.util import (Ad, cmpify_version, word_wrap, parse_bytes,
+from dtella.common.util import (cmpify_version, word_wrap, parse_bytes,
                                 dcall_discard)
+from dtella.common.ipv4 import Ad
 
 from twisted.python.runtime import seconds
 from twisted.internet import reactor

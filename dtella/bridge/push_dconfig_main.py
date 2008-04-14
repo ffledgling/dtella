@@ -27,7 +27,7 @@ import dtella.bridge_config as cfg
 import dtella.common.core as core
 import dtella.common.state
 import dtella.bridge.push_dconfig as push_dconfig
-from dtella.common.util import Ad
+from dtella.common.ipv4 import Ad
 from dtella.common.log import LOG
 
 # This uses a very limited subset of the bridge code to sit on the network

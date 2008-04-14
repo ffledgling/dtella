@@ -28,8 +28,9 @@ import dtella.common.core as core
 import dtella.common.state
 import dtella.bridge.bridge_server as bridge_server
 import dtella.bridge.push_dconfig as push_dconfig
-from dtella.common.util import (Ad, CHECK)
+from dtella.common.util import CHECK
 from dtella.common.log import LOG
+from dtella.common.ipv4 import Ad
 
 
 class DtellaMain_Bridge(core.DtellaMain_Base):

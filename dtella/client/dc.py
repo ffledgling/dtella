@@ -26,10 +26,11 @@ from twisted.internet import reactor
 from twisted.python.runtime import seconds
 import twisted.python.log
 
-from dtella.common.util import (Ad, validateNick, word_wrap, split_info,
+from dtella.common.util import (validateNick, word_wrap, split_info,
                                 split_tag, remove_dc_escapes, dcall_discard,
                                 format_bytes, dcall_timeleft,
                                 get_version_string, lock2key, CHECK)
+from dtella.common.ipv4 import Ad
 import dtella.common.core as core
 import dtella.local_config as local
 import struct

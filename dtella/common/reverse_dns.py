@@ -55,7 +55,7 @@ class ReverseLookupHandler(object):
         # If successful, the callback argument is a hostname string,
         # None otherwise.
 
-        revip = '.'.join('%d' % o for o in reversed(ad.ip))
+        revip = '.'.join(str(ord(o)) for o in ad.getRawIP()[::-1])
         host = "%s.in-addr.arpa" % revip
 
         def cb(result):

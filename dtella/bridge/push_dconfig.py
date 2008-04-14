@@ -33,7 +33,7 @@ from Crypto.PublicKey import RSA
 import dtella.bridge_config as cfg
 from dtella.common.log import LOG
 
-from dtella.common.util import Ad
+from dtella.common.ipv4 import Ad
 
 
 class DynamicConfigUpdateManager(object):
