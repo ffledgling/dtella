@@ -691,7 +691,7 @@ class PeerHandler(DatagramProtocol):
         src_ad = Ad()
         src_ad.port = port
         
-        if ad.isRFC1918() and my_ad.auth('sx', self.main):
+        if ad.isPrivate() and my_ad.auth('sx', self.main):
             # If the request came from a private IP address, but was sent
             # toward a public IP address, then assume the sender node also
             # has the same public IP address.
@@ -849,7 +849,7 @@ class PeerHandler(DatagramProtocol):
          ) = self.decodePacket('!2s6s4sB+', data)
 
         src_ad = Ad().setRawIPPort(src_ipp)
-        if ad.isRFC1918():
+        if ad.isPrivate():
             if not src_ad.auth('sx', self.main):
                 raise BadPacketError("Invalid reported source IP")
         else:
@@ -875,7 +875,7 @@ class PeerHandler(DatagramProtocol):
          ) = self.decodePacket('!2s6s4sB+', data)
 
         src_ad = Ad().setRawIPPort(src_ipp)
-        if ad.isRFC1918():
+        if ad.isPrivate():
             if not src_ad.auth('sx', self.main):
                 raise BadPacketError("Invalid reported source IP")
         else:
@@ -2753,7 +2753,7 @@ class OnlineStateManager(object):
         if ad.ip == myad.ip:
             return
 
-        if ad.isRFC1918():
+        if ad.isPrivate():
             # This matches an RFC1918 address, so it looks like a router.
             # Remap this address to my external IP in the future
 

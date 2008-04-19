@@ -65,11 +65,17 @@ class Ad(object):
             # Static evaluation
             if not local_matcher.containsIP(int_ip):
                 return False
+            if self.isPrivate():
+                return False
 
         return True
 
-    def isRFC1918(self):
-        return rfc1918_matcher.containsIP(self.getIntIP())
+    def isPrivate(self):
+        # Return True for an IP in RFC1918 space, except for parts of
+        # RFC1918 which have been declared as local.
+        int_ip = self.getIntIP()
+        return (rfc1918_matcher.containsIP(int_ip)
+                and not not_private_matcher.containsIP(int_ip))
 
     # Set Stuff
     def setTextIP(self, ip):
@@ -278,10 +284,18 @@ class SubnetMatcher(object):
     def clear(self):
         del self.nets[:]
 
+# Create a subnet matcher for locally-configured IPs.
+local_matcher = SubnetMatcher(local.allowed_subnets)
+
 # Create a subnet matcher for RFC1918 addresses.
 rfc1918_matcher = SubnetMatcher(
     ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'])
 
-# Create a subnet matcher for locally-configured IPs.
-local_matcher = SubnetMatcher(local.allowed_subnets)
+# If any explicitly-allowed subnets are subsets of RFC1918 space,
+# then IPs in those subnets should NOT be classified as private.
+not_private_matcher = SubnetMatcher()
+for r in local.allowed_subnets:
+    ipmask = CidrStringToIPMask(r)
+    if rfc1918_matcher.containsRange(ipmask):
+        not_private_matcher.addRange(ipmask)
 
