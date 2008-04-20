@@ -1363,6 +1363,10 @@ class PeerHandler(DatagramProtocol):
         if not (osm and osm.syncd):
             raise BadTimingError("Not ready to handle a sync request")
 
+        # Hidden nodes shouldn't be getting sync requests.
+        if self.main.hide_node:
+            raise BadTimingError("Hidden node can't handle sync requests.")
+
         self.checkSource(nb_ipp, ad, exempt_ip=True)
 
         src_ad = Ad().setRawIPPort(src_ipp)
