@@ -29,6 +29,7 @@ import dtella.common.state
 import dtella.bridge.push_dconfig as push_dconfig
 from dtella.common.ipv4 import Ad
 from dtella.common.log import LOG
+from dtella.common.util import CHECK
 
 # This uses a very limited subset of the bridge code to sit on the network
 # and push dynamic config updates, without broadcasting my presence to the
@@ -71,13 +72,6 @@ class DtellaMain_DconfigPusher(core.DtellaMain_Base):
         # DNS Update Manager
         self.dum = push_dconfig.DynamicConfigUpdateManager(self)
 
-        # Bind UDP Port
-        try:
-            reactor.listenUDP(cfg.udp_port, self.ph)
-        except twisted.internet.error.BindError:
-            LOG.error("Failed to bind UDP port!")
-            raise SystemExit
-
         self.startConnecting()
 
     def cleanupOnExit(self):
@@ -86,6 +80,17 @@ class DtellaMain_DconfigPusher(core.DtellaMain_Base):
         self.state.saveState()
 
     def startConnecting(self):
+        udp_state = self.ph.getSocketState()
+        if udp_state == 'dead':
+            try:
+                reactor.listenUDP(cfg.udp_port, self.ph)
+            except twisted.internet.error.BindError:
+                LOG.error("Failed to bind UDP port!")
+                raise SystemExit
+        elif udp_state == 'dying':
+            return
+        
+        CHECK(self.ph.getSocketState() == 'alive')
         self.startInitialContact()
 
     def reconnectDesired(self):
