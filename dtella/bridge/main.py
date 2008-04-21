@@ -155,15 +155,19 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
 
         self.ircs = None
 
+        osm = self.osm
+        if not osm:
+            return
+
         # If the IRC server had been syncd, then broadcast a mostly-empty
         # status update to Dtella, to show that all the nicks are gone.
-        osm = self.osm
-        if (osm and osm.syncd and ircs.syncd):
+        if (osm.syncd and ircs.syncd):
             osm.bsm.sendState()
 
         # Cancel all the nick-specific state
-        if osm:
-            for n in self.osm.nodes:
-                n.nickRemoved(self)
+        for n in osm.nodes:
+            n.nickRemoved(self)
 
+        # Rebuild ban table.
+        osm.banm.scheduleRebuildBans()
 

@@ -1155,7 +1155,7 @@ class IRCServerData(object):
             osm.bsm.sendBridgeChange(chunks)
 
         if osm:
-            osm.banm.enforceNewBan((ip, mask))
+            osm.banm.scheduleRebuildBans()
 
 
     def removeNetBan(self, ip, mask):

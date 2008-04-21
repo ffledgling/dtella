@@ -40,7 +40,7 @@ from dtella.common.util import (RandSet, dcall_discard, dcall_timeleft,
                                 randbytes, validateNick, word_wrap,
                                 parse_incoming_info, get_version_string,
                                 parse_dtella_tag, CHECK)
-from dtella.common.ipv4 import Ad
+from dtella.common.ipv4 import Ad, SubnetMatcher
 from dtella.common.log import LOG
 
 # Check for some non-fatal but noteworthy conditions.
@@ -2809,6 +2809,10 @@ class OnlineStateManager(object):
         if self.banm:
             self.banm.shutdown()
 
+        # Shut down the BridgeClientManager
+        if self.bcm:
+            self.bcm.shutdown()
+
         # Shut down the SyncRequestRoutingManager
         if self.yqrm:
             self.yqrm.shutdown()
@@ -3894,93 +3898,61 @@ class BanManager(object):
 
     def __init__(self, main):
         self.main = main
-        self.ban_dcall = None
-        self.newbans = set()
+        self.rebuild_bans_dcall = None
+        self.ban_matcher = SubnetMatcher()
+        self.isBanned = self.ban_matcher.containsIP
 
-
-    def enforceNewBan(self, ipmask):
-        # Remove all nodes which match the given ban
-
-        self.newbans.add(ipmask)
-
-        if self.ban_dcall:
+    def scheduleRebuildBans(self):
+        if self.rebuild_bans_dcall:
             return
 
         def cb():
-            self.ban_dcall = None
-
+            self.rebuild_bans_dcall = None
             osm = self.main.osm
+            self.ban_matcher.clear()
 
-            for ban_ip, ban_mask in self.newbans:
+            # Get all bans from bridges.
+            if osm.bcm:
+                for bridge in osm.bcm.bridges:
+                    for b in bridge.bans.itervalues():
+                        if b.enable:
+                            self.ban_matcher.addRange(b.ipmask)
 
-                # Check all the other nodes
-                for n in osm.lookup_ipp.values():
-                    ip = Ad().setRawIPPort(n.ipp).getIntIP()
+            # If I'm a bridge, get bans from IRC.
+            if osm.bsm and self.main.ircs:
+                for ipmask in self.main.ircs.data.bans:
+                    self.ban_matcher.addRange(ipmask)
 
-                    if self.matchBan(ban_ip, ban_mask, ip):
-
-                        # in nodes list
-                        if n.inlist:
-                            osm.nodeExited(n, "Node Banned")
-
-                        # in inbound | outbound
-                        if n.is_ping_nb:
-                            osm.pgm.instaKillNeighbor(n)
-
-                # Check myself
-                if not osm.bsm:
-                    ip = Ad().setRawIPPort(osm.me.ipp).getIntIP()
-                    if self.matchBan(ban_ip, ban_mask, ip):
-                        self.main.showLoginStatus("You were banned.")
-                        self.main.shutdown(reconnect='max')
-                        break
-
-            self.newbans.clear()
+            self.enforceAllBans()
 
         # This time is slightly above zero, so that broadcast deliveries
         # will have a chance to take place before carnage occurs.
-        self.ban_dcall = reactor.callLater(0.1, cb)
+        self.rebuild_bans_dcall = reactor.callLater(1.0, cb)
 
-
-    def matchBan(self, ban_ip, ban_mask, ip):
-        # All 3 input arguments should be ints
-        return not ((ip ^ ban_ip) & ban_mask)
-
-
-    def isBanned(self, ipp):
-
+    def enforceAllBans(self):
         osm = self.main.osm
 
-        if not (osm.bcm or osm.bsm):
-            return False
+        # Check all the other nodes
+        for n in osm.lookup_ipp.values():
+            int_ip = Ad().setRawIPPort(n.ipp).getIntIP()
+            if self.isBanned(int_ip):
+                # in nodes list
+                if n.inlist:
+                    osm.nodeExited(n, "Node Banned")
 
-         # Anything in the nodes/ping lists can't be banned
-        if ipp in self.main.osm.lookup_ipp:
-            return False
+                # in inbound | outbound
+                if n.is_ping_nb:
+                    osm.pgm.instaKillNeighbor(n)
 
-        # Search all bridges for a matching ban
-        ip = Ad().setRawIPPort(ipp).getIntIP()
-
-        if osm.bcm:
-            for bridge in osm.bcm.bridges:
-                for b in bridge.bans.itervalues():
-                    if not b.enable:
-                        continue
-                    ban_ip, ban_mask = b.ipmask
-                    if self.matchBan(ban_ip, ban_mask, ip):
-                        return True
-
-        elif osm.bsm and self.main.ircs:
-            for ban_ip, ban_mask in self.main.ircs.data.bans:
-                if self.matchBan(ban_ip, ban_mask, ip):
-                    return True
-
-        # Looks okay
-        return False
-
+        # Check myself
+        if not osm.bsm:
+            int_ip = Ad().setRawIPPort(osm.me.ipp).getIntIP()
+            if self.isBanned(int_ip):
+                self.main.showLoginStatus("You were banned.")
+                self.main.shutdown(reconnect='max')
 
     def shutdown(self):
-        dcall_discard(self, 'ban_dcall')
+        dcall_discard(self, 'rebuild_bans_dcall')
 
 
 ##############################################################################

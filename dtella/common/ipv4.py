@@ -53,7 +53,7 @@ class Ad(object):
 
         if 'b' in kinds:
             # Bans
-            if main.osm and main.osm.banm.isBanned(self.getRawIPPort()):
+            if main.osm and main.osm.banm.isBanned(int_ip):
                 return False
 
         if 'x' in kinds:

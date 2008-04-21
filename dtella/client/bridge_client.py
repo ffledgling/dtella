@@ -957,25 +957,20 @@ class BridgeNodeData(object):
             b = self.bans[ipmask]
         except KeyError:
             b = self.bans[ipmask] = self.Ban(ipmask, enable, pktnum)
-
-            if enable:
-                osm.banm.enforceNewBan(ipmask)
-
         else:
-            # Already got a newer status for this ban
-            if pktnum < b.pktnum:
+            # Update packet number, ignore old ones.
+            if b.pktnum < pktnum:
+                b.pktnum = pktnum
+            else:
                 return
 
-            b.pktnum = pktnum
-
-            # No change
-            if b.enable == enable:
+            # Update state, ignore non-changes.
+            if b.enable != enable:
+                b.enable = enable
+            else:
                 return
 
-            b.enable = enable
-
-            if enable:
-                osm.banm.enforceNewBan(ipmask)
+        osm.banm.scheduleRebuildBans()
 
 
     def handlePrivateMessage(self, flags, nick, text):
@@ -1080,7 +1075,8 @@ class BridgeNodeData(object):
         self.shutdown()
 
         # Unregister me from the BridgeClientManager
-        self.main.osm.bcm.bridges.remove(self)
+        osm.bcm.bridges.remove(self)
+        osm.banm.scheduleRebuildBans()
 
 
     def sendTopicChange(self, topic):
