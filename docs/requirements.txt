@@ -29,10 +29,9 @@ If you wish to use SSL links in the bridge also grab:
 
 
 --
-BUILDING
+BUILDING ON WINDOWS:
 
-In order to build Dtella (for Windows) you will need all components required to
-run Dtella as well as the following:
+You will need all components required to run Dtella as well as the following:
 
 * py2exe
   -> http://www.py2exe.org/
@@ -41,3 +40,26 @@ run Dtella as well as the following:
 * 7zip
   -> http://www.7-zip.org/
 
+- the DTDIR variable in build_installer.bat can be changed to match your
+desired output filename.
+
+- Run installer/build_installer.bat to create an installer
+- Run build_py2exe.bat to create only dtella.exe
+
+
+--
+BUILDING ON OS X:
+
+- Install latest Python and Xcode Tools
+
+- Use easy_install to get dependencies:
+curl -O http://peak.telecommunity.com/dist/ez_setup.py
+python ez_setup.py
+easy_install -U pycrypto
+easy_install -U Twisted
+easy_install -U modulegraph==dev
+easy_install -U macholib==dev
+easy_install -U py2app==dev
+
+- Run Dtella's build script:
+./build_osx.sh
