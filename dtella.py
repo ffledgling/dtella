@@ -23,6 +23,16 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
+# When Dtella is packaged by py2app, dtella.py and the dtella.* package are
+# split into separate directories, causing the import to fail.  We'll hack
+# around the problem by stripping the base directory from the path.
+if __name__ == '__main__':
+    try:
+        import dtella.common
+    except ImportError:
+        import sys
+        sys.path = [p for p in sys.path if p != sys.path[0]]
+
 # Patch the twisted bugs before doing anything else.
 import dtella.common.fix_twisted
 
