@@ -105,13 +105,15 @@ def runClient(dc_port):
     from dtella.client.main import DtellaMain_Client
     dtMain = DtellaMain_Client()
 
+    import dtella.local_config as local
+
     def botErrorReporter(text):
         dch = dtMain.dch
         if dch:
             dch.bot.say(
-                "Something bad happened.  If you have the latest version "
-                "of Dtella, then you might want to email this to "
-                "bugs@dtella.org so we'll know about it:\n" + text)
+                "Something bad happened.  You might want to email this to "
+                "bugs@dtella.org so we'll know about it:\n"
+                "Version: %s %s\n%s" % (local.hub_name, local.version, text))
 
     addTwistedErrorCatcher(botErrorReporter)
     addTwistedErrorCatcher(LOG.critical)
@@ -119,7 +121,6 @@ def runClient(dc_port):
     from dtella.client.dc import DCFactory
     dfactory = DCFactory(dtMain, dc_port)
 
-    import dtella.local_config as local
     LOG.info("%s %s" % (local.hub_name, local.version))
 
     def cb(first):

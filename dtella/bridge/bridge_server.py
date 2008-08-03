@@ -355,6 +355,10 @@ class IRCServer(LineOnlyReceiver):
             self.data.gotKill(l33t, n00b, reason)
 
 
+    # Treat SVSKILL the same as KILL.
+    handleCmd_SVSKILL = handleCmd_KILL
+
+
     def handleCmd_TOPIC(self, prefix, args):
         
         # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
