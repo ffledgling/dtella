@@ -1349,7 +1349,7 @@ class BridgeServerProtocol(core.PeerHandler):
 
         osm = self.main.osm
         if not (osm and osm.syncd):
-            raise BadTimingError("Not ready for Bq")
+            raise BadTimingError("Not ready for bQ")
 
         osm.bsm.receivedBlockRequest(src_ipp, bhash)
 
