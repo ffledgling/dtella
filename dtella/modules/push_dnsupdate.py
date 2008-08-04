@@ -65,7 +65,7 @@ class DynamicDNSUpdater(object):
         #print response
 
         if response.rcode() != 0:
-            raise ValueError("Unexpected Response Code")
+            raise ValueError("Unexpected Response Code: %s" % response)
 
         return str(response)
 
