@@ -50,7 +50,10 @@ desired output filename.
 --
 BUILDING ON OS X:
 
-- Install latest Python and Xcode Tools
+- Install a Python release from python.org
+  (the default Mac Python seems somewhat broken.)
+
+- Install Xcode Tools.
 
 - Use easy_install to get dependencies:
 curl -O http://peak.telecommunity.com/dist/ez_setup.py
@@ -63,3 +66,4 @@ easy_install -U py2app==dev
 
 - Run Dtella's build script:
 ./build_osx.sh
+

@@ -1,15 +1,16 @@
 Dtella Changelog
 
-1.0.x (TBD):
+1.2.0 (2008-08-05):
 - Enabled the logging of messages and errors to a file.
 - Added a --port command-line option for specifying a custom TCP port.
 - Fixed a bug in the progress bar, where it was possible for the sync to
 complete before reaching 100%.
 - Fixed a bug which could cause a node to request extra bridge blocks.
-- Added an !invite command to show your current IP:Port.
+- Added an !invite command to show your current IP:Port (contributed by CXLS)
 - Restructured the code to use packages, with one common executable for
 bridge and client functions.
 - Should now be more robust against the UDP socket getting reset.
+- Probably more I forgot to list.
 
 1.0.4 (2007-03-08):
 - Added the ability to whitelist an IP for running an offcampus bridge or
