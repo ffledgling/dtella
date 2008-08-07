@@ -12,7 +12,6 @@ rm $FILE_BASE.dmg
 
 python setup.py py2app || exit
 
-
 hdiutil eject /Volumes/Dtella
 hdiutil eject /Volumes/$FILE_BASE
 
