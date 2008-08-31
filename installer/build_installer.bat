@@ -41,9 +41,9 @@ mkdir %DTDIR%/docs
 copy ..\dtella.py                %DTDIR%
 copy ..\dtella\__init__.py       %DTDIR%\dtella
 copy ..\dtella\local_config.py   %DTDIR%\dtella
-copy ..\dtella\client\*          %DTDIR%\dtella\client
-copy ..\dtella\common\*          %DTDIR%\dtella\common
-copy ..\dtella\modules\*         %DTDIR%\dtella\modules
+copy ..\dtella\client\*.py       %DTDIR%\dtella\client
+copy ..\dtella\common\*.py       %DTDIR%\dtella\common
+copy ..\dtella\modules\*.py      %DTDIR%\dtella\modules
 copy ..\docs\readme.txt          %DTDIR%\docs
 copy ..\docs\changelog.txt       %DTDIR%\docs
 copy ..\docs\requirements.txt    %DTDIR%\docs
