@@ -20,6 +20,8 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
+# This is based on Unreal*/src/modules/cloak.c
+
 import array
 import dtella.bridge_config as cfg
 from hashlib import md5
@@ -39,13 +41,15 @@ def m(s):
 def d(in_str):
     # Downsample
     a = array.array('B', in_str)
-    parts = ["%02X" % (a[i]^a[i+1]^a[i+2]^a[i+3]) for i in range(0,16,4)]
-    return ''.join(parts)
+    result = 0
+    for i in range(0,16,4):
+        result = (result << 8) + (a[i]^a[i+1]^a[i+2]^a[i+3])
+    return result
 
 def mask_hostname(host):
     alpha = d(m(m("%s:%s:%s" % (KEY1, host, KEY2)) + KEY3))
 
-    out = "%s-%s" % (cfg.hostmask_prefix, alpha)
+    out = "%s-%X" % (cfg.hostmask_prefix, alpha)
 
     try:
         out += host[host.index('.'):]
@@ -60,4 +64,4 @@ def mask_ipv4(ip):
     beta =  d(m(m("%s:%s:%s" % (KEY3, ipstr(ip[:3]), KEY1)) + KEY2))
     gamma = d(m(m("%s:%s:%s" % (KEY1, ipstr(ip[:2]), KEY2)) + KEY3))
 
-    return "%s.%s.%s.IP" % (alpha, beta, gamma)
+    return "%X.%X.%X.IP" % (alpha, beta, gamma)
