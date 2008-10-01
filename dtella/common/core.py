@@ -3540,7 +3540,7 @@ class MessageRoutingManager(object):
         except KeyError:
             raise BadTimingError("Reject refers to an unknown broadcast")
 
-        if (m is self.rcollide_last_NS) and ipp:
+        if m is self.rcollide_last_NS:
             # Remote nick collision might have occurred
             
             self.rcollide_ipps.add(ipp)
@@ -3557,7 +3557,8 @@ class MessageRoutingManager(object):
         
         if osm.me.status_pktnum == m.status_pktnum:
             # One of my hash-containing broadcasts has been rejected, so
-            # send my full status to refresh everyone
+            # send my full status to refresh everyone.
+            # (Note: m.status_pktnum is None for irrelevant messages.)
             osm.sendMyStatus()
 
 
