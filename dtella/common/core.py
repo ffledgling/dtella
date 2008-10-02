@@ -75,6 +75,9 @@ class Reject(Exception):
 class NickError(Exception):
     pass
 
+class MessageCollisionError(Exception):
+    pass
+
 
 # How many seconds our node will last without incoming pings
 ONLINE_TIMEOUT = 30.0
@@ -550,7 +553,7 @@ class PeerHandler(DatagramProtocol):
             flags |= REJECT_BIT
 
         if hop > 0:
-            # Start with the boradcast header
+            # Start with the broadcast header
             packet = osm.mrm.broadcastHeader(kind, src_ipp, hop-1, flags)
            
             # Keep the rest of the message intact
@@ -3103,7 +3106,12 @@ class PingManager(object):
             packet.append(pkt_id)
             packet.append(n.sesid)
 
-            osm.mrm.newMessage(''.join(packet), tries=2)
+            try:
+                osm.mrm.newMessage(''.join(packet), tries=2)
+            except MessageCollisionError:
+                # It's possible, but rare, that we've seen this NF before
+                # without fully processing it.
+                pass
 
             osm.scheduleNodeExpire(n, NODE_EXPIRE_EXTEND)
 
@@ -3495,9 +3503,11 @@ class MessageRoutingManager(object):
     def newMessage(self, data, tries, nb_ipp=None):
         # Forward a new message to my neighbors
 
+        kind = data[0:2]
         ack_key = self.generateKey(data)
 
-        CHECK(ack_key not in self.msgs)
+        if ack_key in self.msgs:
+            raise MessageCollisionError("Duplicate " + kind)
 
         m = self.msgs[ack_key] = self.Message(data, tries)
         self.pokeMessage(ack_key, nb_ipp)
@@ -3507,12 +3517,12 @@ class MessageRoutingManager(object):
         if data[10:16] == osm.me.ipp:
             CHECK(not self.main.hide_node)
 
-            if data[0:2] in ('NH','CH','SQ','TP'):
+            if kind in ('NH','CH','SQ','TP'):
                 # Save the current status_pktnum for this message, because
                 # it's useful if we receive a Reject message later.
                 m.status_pktnum = osm.me.status_pktnum
 
-            elif data[0:2] == 'NS':
+            elif kind == 'NS':
                 # Save my last NS message, so that if it gets rejected,
                 # it can be interpreted as a remote nick collision.
                 self.rcollide_last_NS = m
