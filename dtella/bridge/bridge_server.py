@@ -873,15 +873,24 @@ class IRCServerData(object):
 
 
     def changeNick(self, oldnick, newnick):
+
+        # If the destination nick already exists, then our state must be
+        # somehow corrupted.  Oh well, just assume the server knows what
+        # it's talking about, and throw away the existing user.
+        try:
+            dest_u = self.users.pop(newnick)
+        except KeyError:
+            pass
+        else:
+            LOG.error("changeNick '%s'->'%s': Dest nick already exists."
+                      % (oldnick, newnick))
+            self.chanusers.discard(dest_u)
+
+        # Now find and rename the source user.
         try:
             u = self.users.pop(oldnick)
         except KeyError:
             LOG.error("changeNick '%s'->'%s': Source nick not found."
-                      % (oldnick, newnick))
-            return
-
-        if newnick in self.users:
-            LOG.error("changeNick '%s'->'%s': Dest nick already exists."
                       % (oldnick, newnick))
             return
 
