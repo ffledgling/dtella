@@ -37,6 +37,10 @@ from hashlib import md5
 import struct
 import random
 
+from zope.interface import implements
+from zope.interface.verify import verifyClass
+from dtella.common.interfaces import IDtellaNickNode
+
 class ChunkError(Exception):
     pass
 
@@ -392,6 +396,7 @@ class BridgeClientProtocol(core.PeerHandler):
 
 
 class NickNode(object):
+    implements(IDtellaNickNode)
 
     __lt__ = lambda self,other: self.nick <  other.nick
     __le__ = lambda self,other: self.nick <= other.nick
@@ -454,6 +459,8 @@ class NickNode(object):
 
     def checkRevConnectWindow(self):
         return False
+
+verifyClass(IDtellaNickNode, NickNode)
 
 
 ##############################################################################

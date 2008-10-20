@@ -39,6 +39,10 @@ import re
 import binascii
 import socket
 
+from zope.interface import implements
+from zope.interface.verify import verifyClass
+from dtella.common.interfaces import IDtellaStateObserver
+
 # Login Procedure
 # H>C $HubName
 # H<C $ValidateNick
@@ -53,7 +57,6 @@ LOCK_STR = "EXTENDEDPROTOCOLABCABCABCABCABCABC Pk=DTELLA"
 class BaseDCProtocol(LineOnlyReceiver):
 
     delimiter='|'
-
 
     def connectionMade(self):
         try:
@@ -223,11 +226,10 @@ class AbortTransfer_In(BaseDCProtocol):
 
 
 class DCHandler(BaseDCProtocol):
-
+    implements(IDtellaStateObserver)
 
     def __init__(self, main):
         self.main = main
-
 
     def connectionMade(self):
         BaseDCProtocol.connectionMade(self)
@@ -1008,6 +1010,8 @@ class DCHandler(BaseDCProtocol):
             self.pushChatMessage("*", "%s %s" % (nick, text))
         else:
             self.pushChatMessage(nick, text)
+
+verifyClass(IDtellaStateObserver, DCHandler)
 
 
 ##############################################################################

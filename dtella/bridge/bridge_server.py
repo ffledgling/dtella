@@ -53,6 +53,10 @@ import dtella.common.ipv4 as ipv4
 
 import dtella.bridge_config as cfg
 
+from zope.interface import implements
+from zope.interface.verify import verifyClass
+from dtella.common.interfaces import IDtellaStateObserver
+
 irc_nick_chars = (
     "-0123456789"
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
@@ -213,6 +217,7 @@ def irc_strip(text):
 
 
 class IRCServer(LineOnlyReceiver):
+    implements(IDtellaStateObserver)
     showirc = False
     
     def __init__(self, main):
@@ -835,6 +840,8 @@ class IRCServer(LineOnlyReceiver):
         
         if self.shutdown_deferred:
             self.shutdown_deferred.callback("Bye!")
+
+verifyClass(IDtellaStateObserver, IRCServer)
 
         
 ##############################################################################

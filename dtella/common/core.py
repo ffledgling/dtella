@@ -43,6 +43,10 @@ from dtella.common.util import (RandSet, dcall_discard, dcall_timeleft,
 from dtella.common.ipv4 import Ad, SubnetMatcher
 from dtella.common.log import LOG
 
+from zope.interface import implements
+from zope.interface.verify import verifyClass
+from dtella.common.interfaces import IDtellaNickNode
+
 # Check for some non-fatal but noteworthy conditions.
 def doWarnings():
     import twisted
@@ -1763,6 +1767,8 @@ class InitialContactManager(DatagramProtocol):
 
 
 class Node(object):
+    implements(IDtellaNickNode)
+
     __lt__ = lambda self,other: self.dist <  other.dist
     __le__ = lambda self,other: self.dist <= other.dist
 
@@ -2055,6 +2061,8 @@ class Node(object):
         if self.bridge_data:
             self.bridge_data.shutdown()
 
+verifyClass(IDtellaNickNode, Node)
+
 
 class MeNode(Node):
 
@@ -2072,6 +2080,8 @@ class MeNode(Node):
 
     def event_RevConnectToMe(self, main, fail_cb):
         fail_cb("can't connect to yourself!")
+
+verifyClass(IDtellaNickNode, MeNode)
 
 
 ##############################################################################
