@@ -11,7 +11,9 @@ irc_port = 6667
 irc_ssl = False
 irc_password = ""
 
-my_host = "bridge1.dtella.zomg"  # Hostname of this IRC server
+# IRC Server Link parameters. The my_host parameter must match the link
+# block in your unrealircd.conf file. 
+my_host = "bridge1.somedomain.com"  # Hostname of this IRC server
 my_name = "Dtella IRC Bridge"
 irc_chan = "#dtella"
 

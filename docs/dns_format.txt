@@ -1,4 +1,6 @@
-config data:
+== DNS CONFIGURATION DATA FORMAT ==
+
+
 
 version=<minver> <newver> http://foo.bar.baz/dtella.zip
 minshare=256M

@@ -1,4 +1,5 @@
-Dtella README (The basic important stuff!)
+== DTELLA README ==
+(The basic important stuff!)
 
 --
 
@@ -16,8 +17,8 @@ http://www.dcpp.net/
 --
 
 Create a favorite hub in DC++ with these options:
-> Name:    Dtella
-> Address: 127.0.0.1:7314
+-> Name:    Dtella
+-> Address: 127.0.0.1:7314
 
 --
 
@@ -25,8 +26,8 @@ Dtella needs a UDP port for peer communication, and DC++ needs
 a TCP port for file transfers.  If you have a firewall or router
 that's blocking ports, then check out these guides:
 
-http://wiki.dtella.org/Firewall_Setup_Guide
-http://wiki.dtella.org/Router_Setup_Guide
+http://wiki.dtella.org/wiki/Firewall_Setup_Guide
+http://wiki.dtella.org/wiki/Router_Setup_Guide
 
 --
 
