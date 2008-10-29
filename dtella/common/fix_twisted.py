@@ -22,7 +22,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import time
 import os
+import socket
 import twisted.python.runtime
+from twisted.internet import udp
 
 # Twisted uses the system time for firing events.  This could lead to
 # really bad things if the user fiddles with their clock.
@@ -62,4 +64,16 @@ def noop():
     reactor.callLater(55.0, noop)
 
 noop()
+
+# Tell doRead to ignore the socket errors that Windows likes to spew randomly.
+def patchDoRead():
+    f = udp.Port.doRead
+    def f2(*args, **kw):
+        try:
+            return f(*args, **kw)
+        except socket.error:
+            pass
+    udp.Port.doRead = f2
+
+patchDoRead()
 
