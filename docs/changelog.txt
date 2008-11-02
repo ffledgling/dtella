@@ -1,5 +1,10 @@
 Dtella Changelog
 
+1.2.1 (2008-11-01):
+- Made Twisted ignore some spurious Windows socket errors.
+- Fixed a mostly harmless race condition where a node tries to generate
+an already-seen NF broadcast.
+
 1.2.0 (2008-08-05):
 - Enabled the logging of messages and errors to a file.
 - Added a --port command-line option for specifying a custom TCP port.
