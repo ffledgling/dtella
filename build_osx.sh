@@ -30,6 +30,6 @@ hdiutil eject /Volumes/$FILE_BASE
 
 hdiutil convert $BLDIR/template.sparseimage -format UDBZ -o $FILE_BASE.dmg
 
-cp $FILE_BASE.dmg $OUTDIR
+mv $FILE_BASE.dmg $OUTDIR
 
 rm $BLDIR/template.sparseimage
