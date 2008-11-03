@@ -1,5 +1,11 @@
 Dtella Changelog
 
+1.2.2 (2008-11-02):
+- Fix a nasty bug introduced in 1.2.1; I imported the twisted UDP module
+before applying the time source patch, so different parts of Twisted were
+using different time bases, resulting in errors that resembled the movie
+"Groundhog Day."
+
 1.2.1 (2008-11-01):
 - Made Twisted ignore some spurious Windows socket errors.
 - Fixed a mostly harmless race condition where a node tries to generate

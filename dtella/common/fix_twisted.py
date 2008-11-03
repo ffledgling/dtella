@@ -24,7 +24,9 @@ import time
 import os
 import socket
 import twisted.python.runtime
-from twisted.internet import udp
+
+# WARNING: do not import any other Twisted libraries before patching
+# the time source!
 
 # Twisted uses the system time for firing events.  This could lead to
 # really bad things if the user fiddles with their clock.
@@ -67,6 +69,7 @@ noop()
 
 # Tell doRead to ignore the socket errors that Windows likes to spew randomly.
 def patchDoRead():
+    from twisted.internet import udp
     f = udp.Port.doRead
     def f2(*args, **kw):
         try:
