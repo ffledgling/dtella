@@ -101,7 +101,12 @@ else:
 excludes = get_excludes()
 
 setup(
-    options={
+    name = 'Dtella',
+    version = local.version,
+    description = 'Dtella Client',
+    author = 'Dtella Labs',
+    url = 'http://dtella.org',
+    options = {
         "py2exe": {
             "optimize": 2,
             "bundle_files": 1,
@@ -120,10 +125,10 @@ setup(
         }
     },
 
-    app=["dtella.py"],
+    app = ["dtella.py"],
 
-    zipfile=None,
-    windows=[{
+    zipfile = None,
+    windows = [{
         "script": "dtella.py",
         "icon_resources": [(1, "icons/dtella.ico"), (10, "icons/kill.ico")],
     }]
