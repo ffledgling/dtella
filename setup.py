@@ -65,7 +65,7 @@ def patch_nsi_template():
     dt_simplename = None
 
     # Pull DT_DIR from build_installer.bat
-    for line in file("installer/build_installer.bat"):
+    for line in file("build_installer.bat"):
         m = re.match(r'set DTDIR="(.+)"', line)
         if m:
             dt_simplename = m.group(1)
@@ -73,9 +73,9 @@ def patch_nsi_template():
     if not dt_simplename:
         raise Error("Can't find DTDIR in build_installer.bat")
 
-    wfile = file("installer/dtella.nsi", "w")
+    wfile = file("installer_win/dtella.nsi", "w")
 
-    for line in file("installer/dtella.template.nsi"):
+    for line in file("installer_win/dtella.template.nsi"):
         if "PATCH_ME" in line:
             if "PRODUCT_NAME" in line:
                 line = line.replace("PATCH_ME", dt_name)
