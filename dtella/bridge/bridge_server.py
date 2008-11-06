@@ -232,6 +232,7 @@ class IRCServer(LineOnlyReceiver):
 
 
     def connectionMade(self):
+        LOG.info("Connected to IRC server.")
         self.main.addIRCServer(self)
         self.sendLine("PASS :%s" % (cfg.irc_password,))
         self.sendLine("SERVER %s 1 :%s" % (cfg.my_host, cfg.my_name))
@@ -420,12 +421,17 @@ class IRCServer(LineOnlyReceiver):
             if addrem == '+':
                 reason = args[-1]
 
-                if nickmask == cfg.dc_to_irc_prefix + '*':
+                LOG.info("TKL: Adding Qline: %s" % nickmask)
+
+                # Do NOT allow all nicks to be Q-lined.  That would be bad.
+                nick_re = wild_to_regex(nickmask)
+                if nick_re.match(cfg.dc_to_irc_prefix):
+                    LOG.error("DC nick prefix is Q-lined! Terminating.")
+                    self.transport.loseConnection()
+                    reactor.stop()
                     return
 
-                LOG.info("TKL: Adding Qline: %s" % nickmask)
-                self.data.qlines[nickmask] = (wild_to_regex(nickmask),
-                                              reason)
+                self.data.qlines[nickmask] = (nick_re, reason)
 
             elif addrem == '-':
                 LOG.info("TKL: Removing Qline: %s" % nickmask)
@@ -836,6 +842,7 @@ class IRCServer(LineOnlyReceiver):
 
 
     def connectionLost(self, result):
+        LOG.info("Lost IRC connection.")
         self.main.removeIRCServer(self)
         
         if self.shutdown_deferred:
