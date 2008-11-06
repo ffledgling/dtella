@@ -298,7 +298,7 @@ class IRCServer(LineOnlyReceiver):
         oldnick = prefix
         newnick = args[0]
         
-        if newnick.startswith(cfg.irc_to_dc_prefix):
+        if newnick.startswith(cfg.dc_to_irc_prefix):
             self.sendLine(
                 ":%s KILL %s :%s (nick reserved for Dtella)"
                 % (cfg.my_host, newnick, cfg.my_host))
@@ -423,7 +423,13 @@ class IRCServer(LineOnlyReceiver):
 
                 LOG.info("TKL: Adding Qline: %s" % nickmask)
 
-                # Do NOT allow all nicks to be Q-lined.  That would be bad.
+                # If the Q-line is an exact match, assume I set it in a
+                # previous run, and ignore it.
+                # TODO: Resolve conflicts between real servers?
+                if nickmask == cfg.dc_to_irc_prefix + '*':
+                    return
+
+                # If the Q-line is an inexact match, then abort.
                 nick_re = wild_to_regex(nickmask)
                 if nick_re.match(cfg.dc_to_irc_prefix):
                     LOG.error("DC nick prefix is Q-lined! Terminating.")
