@@ -515,7 +515,7 @@ class IRCServer(LineOnlyReceiver):
             return
 
         src = prefix
-        who = args[0]
+        who = args[-1]
 
         if who == cfg.dc_to_irc_bot:
             self.pushWhoisReply(
