@@ -481,6 +481,9 @@ class IRCServer(LineOnlyReceiver):
 
         # This isn't very correct, because the Dtella nicks probably
         # haven't been sent yet, but it's the best we can practically do.
+        cloak_checksum = dtella.bridge.hostmask.get_checksum()
+        self.sendLine("NETINFO 0 %d 0 %s 0 0 0 :%s" %
+                      (time.time(), cloak_checksum, cfg.irc_network_name))
         self.sendLine(":%s EOS" % cfg.my_host)
 
 

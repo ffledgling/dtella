@@ -65,3 +65,8 @@ def mask_ipv4(ip):
     gamma = d(m(m("%s:%s:%s" % (KEY1, ipstr(ip[:2]), KEY2)) + KEY3))
 
     return "%X.%X.%X.IP" % (alpha, beta, gamma)
+
+def get_checksum():
+    checksum = m("%s:%s:%s" % (KEY1, KEY2, KEY3))
+    return "MD5:" + ''.join(("%02x" % ord(x))[::-1] for x in checksum)
+
