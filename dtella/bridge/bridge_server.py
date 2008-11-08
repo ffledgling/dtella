@@ -665,14 +665,17 @@ class IRCServer(LineOnlyReceiver):
                 self.main.rdns.addRequest(n)
 
 
-    def pushNick(self, nick, user, host, name):
+    def pushNick(self, nick, user, host, modes, ip, name):
+
+        # If an IP was provided, convert to a base64 parameter.
+        if ip:
+            ip = ' ' + binascii.b2a_base64(ip).rstrip()
+        else:
+            ip = ''
+
         self.sendLine(
-            "NICK %s 0 %d %s %s %s 1 :%s" %
-            (nick, time.time(), user, host, cfg.my_host, name))
-
-
-    def pushMode(self, nick, mode):
-        self.sendLine(":%s MODE %s :%s" % (nick, nick, mode))
+            "NICK %s 1 %d %s %s %s 1 %s *%s :%s" %
+            (nick, time.time(), user, host, cfg.my_host, modes, ip, name))
 
 
     def pushJoin(self, nick):
@@ -708,10 +711,11 @@ class IRCServer(LineOnlyReceiver):
     def pushBotJoin(self, do_nick=False):
         if do_nick:
             self.pushNick(
-                cfg.dc_to_irc_bot, B_USER, cfg.my_host, B_REALNAME)
+                cfg.dc_to_irc_bot, B_USER, cfg.my_host, "+Sq", None,
+                B_REALNAME)
 
+        # Join channel, and grant ops.
         self.pushJoin(cfg.dc_to_irc_bot)
-
         self.sendLine(
             ":%s MODE %s +ao %s %s" %
             (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
@@ -2016,8 +2020,8 @@ class ReverseDNSManager(object):
         inick = n.inick
 
         ircs.pushNick(
-            inick, n_user(n.ipp), hostname, "Dtella %s" % n.dttag[3:])
-        ircs.pushMode(inick, "+iwx")
+            inick, n_user(n.ipp), hostname, "+iwx", n.ipp[:4],
+            "Dtella %s" % n.dttag[3:])
         ircs.pushJoin(inick)
 
         # Send queued chat messages
