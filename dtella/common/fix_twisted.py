@@ -40,19 +40,12 @@ class NonDecreasingTimer:
         self.last = time.time()
         self.counter = 0.0
 
-        # On Windows, time.clock is more stable, but rumor on the street
-        # is that it loops after 49 days.
-        if os.name == 'nt':
-            self.timesrc = time.clock
-        else:
-            self.timesrc = time.time
-
     def seconds(self):
         # This method should be called at least once per minute to
         # keep the timer going.  If the system time moves backwards,
         # the timer will stay put.  If the time moves forwards,
         # the timer will increment, but never by more than 1 minute.
-        now = self.timesrc()
+        now = time.time()
         self.counter += min(60.0, max(0.0, now-self.last))
         self.last = now
         return self.counter
