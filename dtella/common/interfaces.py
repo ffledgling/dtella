@@ -31,6 +31,12 @@ class IDtellaStateObserver(Interface):
         pass
     def event_ChatMessage(n, nick, text, flags):
         pass
+    def event_DtellaUp():
+        pass
+    def event_DtellaDown():
+        pass
+    def event_KickMe(lines, rejoin_time):
+        pass
 
 class IDtellaNickNode(Interface):
     def setInfo(info):

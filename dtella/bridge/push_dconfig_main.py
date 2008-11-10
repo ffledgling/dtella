@@ -108,7 +108,7 @@ class DtellaMain_DconfigPusher(core.DtellaMain_Base):
     def queryLocation(self, my_ipp):
         pass
 
-    def shutdown_NotifyObservers(self):
+    def afterShutdownHandlers(self):
         pass
 
     def getOnlineDCH(self):

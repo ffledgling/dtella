@@ -123,8 +123,7 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         pass
 
 
-    def shutdown_NotifyObservers(self):
-        # TODO: maybe print a message to IRC saying Dtella sync was lost
+    def afterShutdownHandlers(self):
         pass
 
 
@@ -139,7 +138,7 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         if not (self.osm and self.osm.syncd):
             return None
 
-        if self.ircs and self.ircs.server_name:
+        if self.ircs:
             return self.ircs
 
         return None
@@ -147,7 +146,9 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
 
     def addIRCServer(self, ircs):
         CHECK(not self.ircs)
+        CHECK(ircs.syncd)
         self.ircs = ircs
+        self.stateChange_ObserverUp()
 
 
     def removeIRCServer(self, ircs):
@@ -155,19 +156,11 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
 
         self.ircs = None
 
+        # Send empty IRC state to Dtella.
+        self.stateChange_ObserverDown()
+
         osm = self.osm
-        if not osm:
-            return
-
-        # If the IRC server had been syncd, then broadcast a mostly-empty
-        # status update to Dtella, to show that all the nicks are gone.
-        if (osm.syncd and ircs.syncd):
-            osm.bsm.sendState()
-
-        # Cancel all the nick-specific state
-        for n in osm.nodes:
-            n.nickRemoved(self)
-
-        # Rebuild ban table.
-        osm.banm.scheduleRebuildBans()
+        if osm:
+            # Rebuild ban table.
+            osm.banm.scheduleRebuildBans()
 

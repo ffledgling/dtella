@@ -458,14 +458,10 @@ class DCHandler(BaseDCProtocol):
         self.addDispatch('$To:',             -5, self.d_PrivateMsg)
         self.addDispatch("<%s>" % self.nick, -1, self.d_PublicMsg)
 
+        # Announce my presence.
+        # If Dtella's online too, this will trigger an event_DtellaUp.
         self.state = 'ready'
         self.main.addDCHandler(self)
-
-        # If Dtella's online too, then sync both ways
-        if self.isOnline():
-            self.main.osm.updateMyInfo()
-            self.d_GetNickList()
-            self.grabDtellaTopic()
 
 
     def formatMyInfo(self):
@@ -854,36 +850,6 @@ class DCHandler(BaseDCProtocol):
         self.pushChatMessage(nick, text)
 
 
-    def goInvisible(self, rejoin_time=None):
-        # Node will become visible again if:
-        # 1. Dtella node loses its connection
-        # 2. User types !REJOIN
-        # 3. DC client reconnects (creates a new DCHandler)
-
-        CHECK(self.state == 'ready')
-
-        if self.main.osm:
-            self.main.osm.nkm.quitEverybody()
-
-        self.pushTopic()
-
-        self.state = 'invisible'
-        del self.chatq[:]
-
-        if rejoin_time is None:
-            return
-
-        # Automatically rejoin the chat after a timeout period
-        dcall_discard(self, 'autoRejoin_dcall')
-
-        def cb():
-            self.autoRejoin_dcall = None
-            self.pushStatus("Automatically rejoining...")
-            self.doRejoin()
-
-        self.autoRejoin_dcall = reactor.callLater(rejoin_time, cb)
-
-
     # Precompile a regex for pushSearchResult
     searchreply_re = re.compile(r"^\$SR ([^ |]+) ([^|]*) \([^ |]+\)\|?$")
 
@@ -905,24 +871,6 @@ class DCHandler(BaseDCProtocol):
                       % (nick, data, self.factory.listen_port))
 
 
-    def grabDtellaTopic(self):
-        if self.isOnline():
-            tm = self.main.osm.tm
-            self.pushTopic(tm.topic)
-            if tm.topic:
-                self.pushStatus(tm.getFormattedTopic())
-
-
-    def nickCollision(self):
-
-        self.goInvisible()
-
-        self.pushStatus(
-            "The nick <%s> is already in use on this network." % self.nick)
-        self.pushStatus(
-            "Please change your nick, or type !REJOIN to try again.")
-
-
     def remoteNickCollision(self):
 
         text = (
@@ -937,20 +885,6 @@ class DCHandler(BaseDCProtocol):
             self.pushStatus(line)
 
 
-    def kickMe(self, l33t, reason, rejoin):
-
-        if rejoin:
-            # Pop back on after 5-10 minutes
-            self.goInvisible(rejoin_time=random.uniform(60*5, 60*10))
-        else:
-            self.goInvisible()
-
-        # Show kick text
-        self.pushStatus("You were kicked by %s: %s" % (l33t, reason))
-        self.pushStatus("Type !REJOIN to get back in.")
-
-
-
     def doRejoin(self):
         if self.state != 'invisible':
             return
@@ -959,23 +893,27 @@ class DCHandler(BaseDCProtocol):
 
         self.state = 'ready'
 
-        if self.main.osm:
-            # Maybe tell the network that I'm back (unless it collides)
-            self.main.osm.updateMyInfo()
-            
-            # Maybe send a full nicklist+topic (if the update succeeded)
-            self.d_GetNickList()
-            self.grabDtellaTopic()
+        # This can trigger an event_DtellaUp()
+        self.main.stateChange_ObserverUp()
 
 
-    def dtellaShutdown(self):
-        # When the dtella node leaves the network, and we're still
-        # in an invisible state, reset to normal for the next login.
+    def isProtectedNick(self, nick):
+        return (nick.lower() in (self.nick.lower(), self.bot.nick.lower()))
 
-        if self.state == 'invisible':
-            self.state = 'ready'
 
-        dcall_discard(self, 'autoRejoin_dcall')
+    def event_DtellaUp(self):
+        CHECK(self.isOnline())
+        self.d_GetNickList()
+
+        # Grab the current topic from Dtella.
+        tm = self.main.osm.tm
+        self.pushTopic(tm.topic)
+        if tm.topic:
+            self.pushStatus(tm.getFormattedTopic())
+
+
+    def event_DtellaDown(self):
+        CHECK(self.isOnline())
 
         # Wipe out the topic
         self.pushTopic()
@@ -984,8 +922,35 @@ class DCHandler(BaseDCProtocol):
         del self.chatq[:]
 
 
-    def isProtectedNick(self, nick):
-        return (nick.lower() in (self.nick.lower(), self.bot.nick.lower()))
+    def event_KickMe(self, lines, rejoin_time):
+        # Sequence of events during a kick:
+        # 1. event_RemoveNick(*)
+        # 2. event_DtellaDown()
+        # 3. event_KickMe()
+        # 4. stateChange_ObserverDown()
+
+        # Node will become visible again if:
+        # - Dtella node loses its connection
+        # - User types !REJOIN
+        # - DC client reconnects (creates a new DCHandler)
+
+        CHECK(self.state == 'ready')
+        self.state = 'invisible'
+
+        for line in lines:
+            self.pushStatus(line)
+
+        if rejoin_time is None:
+            return
+
+        # Automatically rejoin the chat after a timeout period.
+        def cb():
+            self.autoRejoin_dcall = None
+            self.pushStatus("Automatically rejoining...")
+            self.doRejoin()
+
+        CHECK(self.autoRejoin_dcall is None)
+        self.autoRejoin_dcall = reactor.callLater(rejoin_time, cb)
 
 
     def event_AddNick(self, n):

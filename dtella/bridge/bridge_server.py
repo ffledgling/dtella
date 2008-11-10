@@ -233,7 +233,6 @@ class IRCServer(LineOnlyReceiver):
 
     def connectionMade(self):
         LOG.info("Connected to IRC server.")
-        self.main.addIRCServer(self)
         self.sendLine("PASS :%s" % (cfg.irc_password,))
         self.sendLine("SERVER %s 1 :%s" % (cfg.my_host, cfg.my_name))
 
@@ -445,7 +444,6 @@ class IRCServer(LineOnlyReceiver):
 
 
     def handleCmd_SERVER(self, prefix, args):
-
         if prefix:
             # Not from our connected server
             return
@@ -461,6 +459,8 @@ class IRCServer(LineOnlyReceiver):
         CHECK(args[0])
         self.server_name = args[0]
 
+        LOG.info("IRC Server Name: %s" % self.server_name)
+
         osm = self.main.osm
 
         # Tell the ReconnectingClientFactory that we're cool
@@ -475,11 +475,7 @@ class IRCServer(LineOnlyReceiver):
         # Send my own bridge nick
         self.pushBotJoin(do_nick=True)
 
-        # Maybe send Dtella nicks
-        if osm and osm.syncd:
-            self.sendState()
-
-        # This isn't very correct, because the Dtella nicks probably
+        # This isn't very correct, because the Dtella nicks
         # haven't been sent yet, but it's the best we can practically do.
         cloak_checksum = dtella.bridge.hostmask.get_checksum()
         self.sendLine("NETINFO 0 %d 0 %s 0 0 0 :%s" %
@@ -496,19 +492,13 @@ class IRCServer(LineOnlyReceiver):
 
         self.showirc = True
 
-        osm = self.main.osm
-
-        # If we enter the syncd state, send status to Dtella, if Dtella
-        # is ready.  Otherwise, Dtella will send its own state when it
-        # becomes ready.
+        # When we enter the syncd state, register this instance with Dtella.
+        # This will eventually trigger event_DtellaUp, where we send our state.
 
         if not self.syncd:
             self.syncd = True
-            
-            if osm and osm.syncd:
-                osm.bsm.sendState()
-
             self.schedulePing()
+            self.main.addIRCServer(self)
 
 
     def handleCmd_WHOIS(self, prefix, args):
@@ -643,28 +633,6 @@ class IRCServer(LineOnlyReceiver):
             osm.bsm.sendPrivateBridgeChange(n, chunks)
 
 
-    def sendState(self):
-        
-        osm = self.main.osm
-        CHECK(self.server_name and osm and osm.syncd)
-
-        LOG.info("Sending Dtella state to IRC...")
-
-        nicks = osm.nkm.nickmap.values()
-        nicks.sort(key=lambda n: n.nick)
-
-        for n in nicks:
-            try:
-                inick = self.checkIncomingNick(n)
-            except NickError:
-                osm.nkm.removeNode(n, "Bad Nick")
-                n.setNoUser()
-            else:
-                # Ok, get ready to send to IRC
-                n.inick = inick
-                self.main.rdns.addRequest(n)
-
-
     def pushNick(self, nick, user, host, modes, ip, name):
 
         # If an IP was provided, convert to a base64 parameter.
@@ -772,10 +740,10 @@ class IRCServer(LineOnlyReceiver):
 
             for q, reason in self.data.qlines.itervalues():
                 if q.match(inick):
-                    raise NickError("Nick '%s' is Q-lined: %s" % (n.nick, reason))
+                    raise NickError("Nick '%s' is Q-lined: %s" % (inick, reason))
 
         except NickError, e:
-            LOG.debug("Bad nick: %s" % str(e))
+            LOG.debug("Bad nick: %s %s" % (n.nick, str(e)))
             # Bad nick.  KICK!
             osm = self.main.osm
             chunks = []
@@ -827,6 +795,35 @@ class IRCServer(LineOnlyReceiver):
             self.pushPrivMsg(n.inick, text)
 
 
+    def event_DtellaUp(self):
+        osm = self.main.osm
+        CHECK(self.server_name and osm and osm.syncd)
+
+        LOG.info("Sending Dtella state to IRC...")
+
+        nicks = osm.nkm.nickmap.values()
+        nicks.sort(key=lambda n: n.nick)
+
+        for n in nicks:
+            try:
+                inick = self.checkIncomingNick(n)
+            except NickError:
+                osm.nkm.removeNode(n, "Bad Nick")
+                n.setNoUser()
+            else:
+                # Ok, get ready to send to IRC
+                n.inick = inick
+                self.main.rdns.addRequest(n)
+
+
+    def event_DtellaDown(self):
+        self.pushPrivMsg(cfg.dc_to_irc_bot, "Bridge lost connection to Dtella")
+
+
+    def event_KickMe(self, lines, rejoin_time):
+        raise NotImplemented("Bridge can't be kicked.")
+
+
     def shutdown(self):
 
         if self.shutdown_deferred:
@@ -856,7 +853,8 @@ class IRCServer(LineOnlyReceiver):
 
     def connectionLost(self, result):
         LOG.info("Lost IRC connection.")
-        self.main.removeIRCServer(self)
+        if self.syncd:
+            self.main.removeIRCServer(self)
         
         if self.shutdown_deferred:
             self.shutdown_deferred.callback("Bye!")
@@ -1451,16 +1449,6 @@ class BridgeServerManager(object):
         # Splice in some handlers
         osm.yqrm.sendSyncReply = self.sendSyncReply
         osm.makeExitPacket = self.makeExitPacket
-
-        ircs = self.main.ircs
-
-        # If the IRC server is ready to receive our state, then send it.
-        if ircs and ircs.server_name:
-            ircs.sendState()
-
-        # Broadcast the bridge state into Dtella.
-        # (This may have no IRC nicks if ircs isn't sycnd yet)
-        osm.bsm.sendState()
 
 
     def signPacket(self, packet, broadcast):

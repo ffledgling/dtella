@@ -215,15 +215,6 @@ class NickManager(object):
             so.event_UpdateInfo(n)
 
 
-    def quitEverybody(self):
-        # Tell dch/ircs that everyone's gone
-
-        so = self.main.getStateObserver()
-        if so:
-            for n in self.nickmap.itervalues():
-                so.event_RemoveNick(n, "Removing All Nicks")
-
-
 ##############################################################################
 
 
@@ -480,8 +471,7 @@ class PeerHandler(DatagramProtocol):
         return src_ad
 
 
-    def handleBroadcast(self, ad, data, check_cb, exempt_ip=False):
-
+    def handleBroadcast(self, ad, data, check_cb, bridgey=False):
         (kind, nb_ipp, hop, flags, src_ipp, rest
          ) = self.decodePacket('!2s6sBB6s+', data)
 
@@ -492,9 +482,10 @@ class PeerHandler(DatagramProtocol):
         # Make sure nb_ipp agrees with the sender's IP
         self.checkSource(nb_ipp, ad, exempt_ip=True)
 
-        # Make sure the src_ipp is valid
+        # Make sure the src_ipp is valid.
+        # Any broadcast which might be from a bridge is 'bridgey'
         src_ad = Ad().setRawIPPort(src_ipp)
-        if exempt_ip:
+        if bridgey:
             kinds = 'sbx'
         else:
             kinds = 'sb'
@@ -526,8 +517,12 @@ class PeerHandler(DatagramProtocol):
         except KeyError:
             src_n = None
 
-        # Callback the check_cb function
         try:
+            # Filter all non-bridgey broadcasts from bridge nodes.
+            if not bridgey and self.isFromBridgeNode(src_n, src_ipp):
+                raise BadBroadcast("Bridge can't use " + kind)
+
+            # Callback the check_cb function
             check_cb(src_n, src_ipp, rest)
 
         except BadBroadcast, e:
@@ -680,6 +675,15 @@ class PeerHandler(DatagramProtocol):
             osm.sendMyStatus(sendfull)
 
         return True
+
+
+    def isFromBridgeNode(self, src_n, src_ipp):
+        # Return true if a source matches a known bridge node.
+        # This is not authenticated, so it should only be used to drop
+        # packets that a bridge shouldn't be sending.
+        osm = self.main.osm
+        return ((src_n and src_n.bridge_data) or
+                (osm and osm.bsm and src_ipp == osm.me.ipp))
 
 
     def handlePacket_IQ(self, ad, data):
@@ -1007,9 +1011,6 @@ class PeerHandler(DatagramProtocol):
             (sesid,
              ) = self.decodePacket('!4s', rest)
 
-            if src_n and src_n.bridge_data:
-                raise BadBroadcast("Can't NX a bridge node")
-
             if osm.syncd:
                 if src_ipp == osm.me.ipp and sesid == osm.me.sesid:
                     # Yikes! Make me a new session id and rebroadcast it.
@@ -1125,9 +1126,6 @@ class PeerHandler(DatagramProtocol):
                 # Not syncd, forward blindly
                 return
 
-            if src_n and src_n.bridge_data:
-                raise BadBroadcast("Bridge can't chat")
-
             if osm.isModerated():
                 # Note: this may desync the sender's chat_pktnum, causing
                 # their next valid message to be delayed by 2 seconds, but
@@ -1171,9 +1169,6 @@ class PeerHandler(DatagramProtocol):
                 # Not syncd, forward blindly
                 return None
 
-            if src_n and src_n.bridge_data:
-                raise BadBroadcast("Bridge can't use TP")
-            
             if src_n and src_n.expire_dcall and nhash == src_n.nickHash():
                 osm.tm.gotTopic(src_n, topic)
 
@@ -1199,9 +1194,6 @@ class PeerHandler(DatagramProtocol):
 
             if src_ipp == osm.me.ipp:
                 raise BadBroadcast("Spoofed search")
-
-            if src_n and src_n.bridge_data:
-                raise BadBroadcast("Bridge can't search")
 
             if not osm.syncd:
                 # Not syncd, forward blindly
@@ -1423,6 +1415,9 @@ class PeerHandler(DatagramProtocol):
             n = osm.lookup_ipp[src_ipp]
         except KeyError:
             n = None
+
+        if self.isFromBridgeNode(n, src_ipp):
+            raise BadPacketError("Bridge can't use YR")
 
         # Check for outdated status, in case an NS already arrived.
         if not self.isOutdatedStatus(n, pktnum):
@@ -2449,22 +2444,16 @@ class OnlineStateManager(object):
         # Connect to the "closest" neighbors
         self.pgm.scheduleMakeNewLinks()
 
-        self.updateMyInfo(send=True)
-
-        # Maybe send the full user list to the DC client
-        dch = self.main.getOnlineDCH()
-        if dch:
-            dch.d_GetNickList()
+        # Tell observers to get the nick list, topic, etc.
+        self.main.stateChange_DtellaUp()
 
         self.main.showLoginStatus(
             "Sync Complete; You're Online!", counter='inc')
 
-        if dch:
-            dch.grabDtellaTopic()
-
 
     def refreshNodeStatus(self, src_ipp, pktnum, expire, sesid, uptime,
                           persist, nick, info):
+        CHECK(src_ipp != self.me.ipp)
         try:
             n = self.lookup_ipp[src_ipp]
         except KeyError:
@@ -2617,6 +2606,12 @@ class OnlineStateManager(object):
     def updateMyInfo(self, send=False):
         # Grab my info from the DC client (if any) and maybe broadcast
         # it into the network.
+
+        # If I'm a bridge, send bridge state instead.
+        if self.bsm:
+            if self.syncd:
+                self.bsm.sendState()
+            return
         
         dch = self.main.getOnlineDCH()
 
@@ -2652,9 +2647,14 @@ class OnlineStateManager(object):
             try:
                 self.nkm.addNode(me)
             except NickError:
-                me.info_out = "<%s>" % me.dttag
-                me.setNoUser()
-                dch.nickCollision()
+                # Nick collision.  Force the DC client to go invisible.
+                # This will recursively call updateMyInfo with an empty nick.
+                lines = [
+                    "The nick <%s> is already in use on this network." % nick,
+                    "Please change your nick, or type !REJOIN to try again."
+                ]
+                self.main.kickObserver(lines=lines, rejoin_time=None)
+                return
 
         changed = (old_state != (me.nick, me.info_out, me.persist))
 
@@ -2665,8 +2665,11 @@ class OnlineStateManager(object):
     def sendMyStatus(self, sendfull=True):
         # Immediately send my status, and keep sending updates over time.
 
-        if self.bsm or self.main.hide_node:
-            # Skip this stuff for Bridge Servers and hidden nodes.
+        # This should never be called for a bridge.
+        CHECK(not self.bsm)
+
+        # Skip this stuff for hidden nodes.
+        if self.main.hide_node:
             return
 
         self.checkStatusLimit()
@@ -2793,10 +2796,6 @@ class OnlineStateManager(object):
         # Cancel all the dcalls here
         dcall_discard(self, 'sendStatus_dcall')
         dcall_discard(self, 'statusLimit_dcall')
-
-        # Tell the DC client that all nicks are gone
-        if self.nkm:
-            self.nkm.quitEverybody()
 
         # If I'm still syncing, shutdown the SyncManager
         if self.sm:
@@ -4259,11 +4258,15 @@ class DtellaMain_Base(object):
 
         # Shut down OnlineStateManager
         if self.osm:
+            # Notify any observers that all the nicks are gone.
+            if self.osm.syncd:
+                self.stateChange_DtellaDown()
+
             self.osm.shutdown()
             self.osm = None
 
-        # Notify dch/ircs of the shutdown
-        self.shutdown_NotifyObservers()
+        # Notify some random handlers of the shutdown
+        self.afterShutdownHandlers()
 
         # Schedule a Reconnect (maybe) ...
 
@@ -4302,7 +4305,7 @@ class DtellaMain_Base(object):
         self.reconnect_dcall = reactor.callLater(when, cb)
 
 
-    def shutdown_NotifyObservers(self):
+    def afterShutdownHandlers(self):
         raise NotImplemented("Override me!")
 
 
@@ -4312,6 +4315,67 @@ class DtellaMain_Base(object):
 
     def getStateObserver(self):
         raise NotImplemented("Override me!")
+
+
+    def kickObserver(self, lines, rejoin_time):
+        so = self.getStateObserver()
+        CHECK(so)
+
+        # Act as if Dtella is shutting down.
+        self.stateChange_DtellaDown()
+
+        # Force the observer to go invisible, with a kick message.
+        so.event_KickMe(lines, rejoin_time)
+
+        # Send empty state to Dtella.
+        self.stateChange_ObserverDown()
+
+
+    def stateChange_ObserverUp(self):
+        # Called after a DC client / IRC server / etc. has become available.
+        osm = self.osm
+        if osm and osm.syncd:
+            self.osm.updateMyInfo()
+
+        # Make sure the observer's still online, because a nick collison
+        # in updateMyInfo could have killed it.
+        so = self.getStateObserver()
+        if so:
+            so.event_DtellaUp()
+
+
+    def stateChange_ObserverDown(self):
+        # Called after a DC client / IRC server / etc. has gone away.
+        CHECK(not self.getStateObserver())
+
+        osm = self.osm
+        if osm and osm.syncd:
+            osm.updateMyInfo()
+
+            # Cancel all nick-specific messages.
+            for n in osm.nodes:
+                n.nickRemoved(self)
+
+
+    def stateChange_DtellaUp(self):
+        # Called after Dtella has finished syncing.
+        osm = self.osm
+        CHECK(osm and osm.syncd)
+        osm.updateMyInfo(send=True)
+
+        so = self.getStateObserver()
+        if so:
+            so.event_DtellaUp()
+
+
+    def stateChange_DtellaDown(self):
+        # Called before Dtella network shuts down.
+        so = self.getStateObserver()
+        if so:
+            # Remove every nick.
+            for n in self.osm.nkm.nickmap.itervalues():
+                so.event_RemoveNick(n, "Removing All Nicks")
+            so.event_DtellaDown()
 
 
     def addMyIPReport(self, from_ad, my_ad):

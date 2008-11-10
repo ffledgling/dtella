@@ -149,7 +149,7 @@ class BridgeClientProtocol(core.PeerHandler):
             osm.bcm.refreshBridgeNodeStatus(
                 n, pktnum, rsa_obj, hashes, do_request=False)
 
-        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
+        self.handleBroadcast(ad, data, check_cb, bridgey=True)
 
 
     def handlePacket_bY(self, ad, data):
@@ -255,7 +255,7 @@ class BridgeClientProtocol(core.PeerHandler):
 
             osm.bcm.handleDataBlock(src_ipp, blockdata)
 
-        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
+        self.handleBroadcast(ad, data, check_cb, bridgey=True)
 
 
     def handlePacket_BC(self, ad, data):
@@ -293,7 +293,7 @@ class BridgeClientProtocol(core.PeerHandler):
             except ChunkError, e:
                 self.main.logPacket("BC chunk error: %s" % str(e))
 
-        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
+        self.handleBroadcast(ad, data, check_cb, bridgey=True)
 
 
     def handlePacket_BX(self, ad, data):
@@ -330,7 +330,7 @@ class BridgeClientProtocol(core.PeerHandler):
             # Exit the node
             osm.nodeExited(src_n, "Bridge Exit")
 
-        self.handleBroadcast(ad, data, check_cb, exempt_ip=True)
+        self.handleBroadcast(ad, data, check_cb, bridgey=True)
         
 
     def handlePacket_bC(self, ad, data):
@@ -1020,15 +1020,22 @@ class BridgeNodeData(object):
             # Make sure I'm online, and this kick isn't old somehow
             if dch and not outdated:
 
-                rejoin = bool(flags & core.REJOIN_BIT)
+                # If the bridge requested a rejoin, then have the client come
+                # back in 5..10 minutes.
+                if flags & core.REJOIN_BIT:
+                    rejoin_time = random.uniform(60*5, 60*10)
+                else:
+                    rejoin_time = None
 
-                # Yell at user and make them invisible
-                dch.kickMe(l33t, reason, rejoin)
-
-                # Broadcast an update so nodes who aren't bridge-aware
-                # will also see us disappear.
+                # Fix pktnum for my next status update.
                 me.status_pktnum = pktnum
-                osm.updateMyInfo()
+
+                # Force the DC client to become invisible.
+                lines = [
+                    "You were kicked by %s: %s" % (l33t, reason),
+                    "Type !REJOIN to get back in."
+                ]
+                self.main.kickObserver(lines, rejoin_time)
 
         else:
             # Display text even for outdated messages, because the

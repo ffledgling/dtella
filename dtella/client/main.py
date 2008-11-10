@@ -281,10 +281,10 @@ class DtellaMain_Client(core.DtellaMain_Base):
             dch.pushStatus(text)
 
 
-    def shutdown_NotifyObservers(self):
-        # Tell the DC Handler that we lost the peer connection
+    def afterShutdownHandlers(self):
+        # If DC client had been kicked, reset.
         if self.dch:
-            self.dch.dtellaShutdown()
+            self.dch.doRejoin()
 
         # Cancel the dns update timer, and remove pending callback.
         self.dcfg.dtellaShutdown()
@@ -308,7 +308,8 @@ class DtellaMain_Client(core.DtellaMain_Base):
     def addDCHandler(self, dch):
 
         CHECK(not self.dch)
-        
+        CHECK(dch.state == 'ready')
+
         self.dch = dch
 
         # Cancel the disconnect timeout
@@ -326,6 +327,8 @@ class DtellaMain_Client(core.DtellaMain_Base):
             self.dcfg.resetReportedVersion()
             self.dcfg.reportNewVersion()
 
+        self.stateChange_ObserverUp()
+
 
     def removeDCHandler(self, dch):
         # DC client has left.
@@ -339,13 +342,9 @@ class DtellaMain_Client(core.DtellaMain_Base):
         self.dch = None
         self.abort_nick = None
 
-        if self.osm:
-            # Announce the DC client's departure
-            self.osm.updateMyInfo()
-
-            # Cancel all nick-specific stuff
-            for n in self.osm.nodes:
-                n.nickRemoved(self)
+        # Announce the DC client's departure.
+        if dch.state == 'ready':
+            self.stateChange_ObserverDown()
 
         # If another handler is waiting, let it on.
         if self.pending_dch:
