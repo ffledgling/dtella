@@ -3,7 +3,7 @@
 
 --
 
-If you run into any roadblocks, you can go to http://www.dtella.org and
+If you run into any roadblocks, you can go to http://dtella.org and
 click [IRC] to chat with all the Dtella users from your browser.
 
 --
