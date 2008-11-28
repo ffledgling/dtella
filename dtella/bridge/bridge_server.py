@@ -120,6 +120,10 @@ def wild_to_regex(in_str):
     return re.compile(out, re.IGNORECASE)
 
 
+def matches_dc_to_irc_prefix(nick):
+    return nick.lower().startswith(cfg.dc_to_irc_prefix.lower())
+
+
 def dc_to_irc(dnick):
     # Encode a DC nick, for use in IRC.
 
@@ -150,7 +154,7 @@ def dc_from_irc(inick):
     # Decode an IRC-encoded DC nick, for use in Dtella.
 
     # Verify prefix
-    if not inick.startswith(cfg.dc_to_irc_prefix):
+    if not matches_dc_to_irc_prefix(inick):
         raise NickError("Bad prefix")
 
     dnick = inick[len(cfg.dc_to_irc_prefix):]
@@ -211,6 +215,13 @@ ircstrip_re = re.compile(
 
 def irc_strip(text):
     return ircstrip_re.sub('', text)
+
+
+# Make sure IRC bot has the right prefix.  This will let other bridges
+# know we've reserved the prefix, even when no Dtella nicks are online.
+CHECK(cfg.dc_to_irc_prefix)
+if not cfg.dc_to_irc_bot.startswith(cfg.dc_to_irc_prefix):
+    cfg.dc_to_irc_bot = cfg.dc_to_irc_prefix + cfg.dc_to_irc_bot
 
 
 ##############################################################################
@@ -296,11 +307,9 @@ class IRCServer(LineOnlyReceiver):
 
         oldnick = prefix
         newnick = args[0]
-        
-        if newnick.startswith(cfg.dc_to_irc_prefix):
-            self.sendLine(
-                ":%s KILL %s :%s (nick reserved for Dtella)"
-                % (cfg.my_host, newnick, cfg.my_host))
+
+        if self.syncd and matches_dc_to_irc_prefix(newnick):
+            self.pushKill(newnick)
             return
             
         if oldnick:
@@ -342,7 +351,8 @@ class IRCServer(LineOnlyReceiver):
 
         if chan == cfg.irc_chan:
             if n00b == cfg.dc_to_irc_bot:
-                self.pushBotJoin()
+                if self.syncd:
+                    self.pushBotJoin()
             else:
                 self.data.gotKick(l33t, n00b, reason)
 
@@ -355,7 +365,8 @@ class IRCServer(LineOnlyReceiver):
         reason = irc_strip(args[1])
 
         if n00b == cfg.dc_to_irc_bot:
-            self.pushBotJoin(do_nick=True)
+            if self.syncd:
+                self.pushBotJoin(do_nick=True)
         else:
             self.data.gotKill(l33t, n00b, reason)
 
@@ -422,25 +433,25 @@ class IRCServer(LineOnlyReceiver):
 
                 LOG.info("TKL: Adding Qline: %s" % nickmask)
 
-                # If the Q-line is an exact match, assume I set it in a
-                # previous run, and ignore it.
-                # TODO: Resolve conflicts between real servers?
-                if nickmask == cfg.dc_to_irc_prefix + '*':
-                    return
-
-                # If the Q-line is an inexact match, then abort.
                 nick_re = wild_to_regex(nickmask)
-                if nick_re.match(cfg.dc_to_irc_prefix):
-                    LOG.error("DC nick prefix is Q-lined! Terminating.")
-                    self.transport.loseConnection()
-                    reactor.stop()
-                    return
+
+                # After EOS, auto-remove any Q-lines which conflict with mine.
+                # This may cause a conflicting bridge to abort.
+                if self.syncd:
+                    if nick_re.match(cfg.dc_to_irc_prefix):
+                        self.pushRemoveQLine(nickmask)
+                        return
 
                 self.data.qlines[nickmask] = (nick_re, reason)
 
             elif addrem == '-':
                 LOG.info("TKL: Removing Qline: %s" % nickmask)
                 self.data.qlines.pop(nickmask, None)
+
+                if self.syncd and (nickmask == cfg.dc_to_irc_prefix + "*"):
+                    LOG.error("My own Q-line was removed! Terminating.")
+                    self.transport.loseConnection()
+                    reactor.stop()
 
 
     def handleCmd_SERVER(self, prefix, args):
@@ -466,15 +477,6 @@ class IRCServer(LineOnlyReceiver):
         # Tell the ReconnectingClientFactory that we're cool
         self.factory.resetDelay()
 
-        # Set up nick reservation
-        self.sendLine(
-            ":%s TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
-            (cfg.my_host, cfg.dc_to_irc_prefix,
-             cfg.my_host, time.time()))
-
-        # Send my own bridge nick
-        self.pushBotJoin(do_nick=True)
-
         # This isn't very correct, because the Dtella nicks
         # haven't been sent yet, but it's the best we can practically do.
         cloak_checksum = dtella.bridge.hostmask.get_checksum()
@@ -488,17 +490,43 @@ class IRCServer(LineOnlyReceiver):
         if prefix != self.server_name:
             return
 
+        if self.syncd:
+            return
+
         LOG.info("Finished receiving IRC sync data.")
 
         self.showirc = True
 
+        # Check for conflicting bridges.
+        if self.data.findConflictingBridge():
+            LOG.error("My nick prefix is in use! Terminating.")
+            self.transport.loseConnection()
+            reactor.stop()
+            return
+
+        # Set up nick reservation
+        self.sendLine(
+            "TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
+            (cfg.dc_to_irc_prefix, cfg.my_host, time.time()))
+
+        # Find any reserved nicks, and KILL them.
+        bad_nicks = [nick for nick in self.data.users
+                     if matches_dc_to_irc_prefix(nick)]
+        LOG.info("Conflicting nicks: %r" % bad_nicks)
+        for nick in bad_nicks:
+            if matches_dc_to_irc_prefix(nick):
+                self.pushKill(nick)
+                self.data.gotKill(None, nick, None)
+
+        # Send my own bridge nick
+        self.pushBotJoin(do_nick=True)
+
         # When we enter the syncd state, register this instance with Dtella.
         # This will eventually trigger event_DtellaUp, where we send our state.
 
-        if not self.syncd:
-            self.syncd = True
-            self.schedulePing()
-            self.main.addIRCServer(self)
+        self.syncd = True
+        self.schedulePing()
+        self.main.addIRCServer(self)
 
 
     def handleCmd_WHOIS(self, prefix, args):
@@ -689,6 +717,16 @@ class IRCServer(LineOnlyReceiver):
             (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
 
 
+    def pushKill(self, nick):
+        self.sendLine(":%s KILL %s :%s (nick reserved for Dtella)"
+                      % (cfg.my_host, nick, cfg.my_host))
+
+
+    def pushRemoveQLine(self, nickmask):
+        LOG.info("Telling network to remove Q-line: %s" % nickmask)
+        self.sendLine("TKL - Q * %s %s" % (nickmask, cfg.my_host))
+
+
     def schedulePing(self):
 
         if self.ping_dcall:
@@ -737,6 +775,9 @@ class IRCServer(LineOnlyReceiver):
     def checkIncomingNick(self, n):
         try:
             inick = dc_to_irc(n.nick)
+
+            if inick.lower() == cfg.dc_to_irc_bot.lower():
+                raise NickError("Nick '%s' conflicts with IRC bot." % inick)
 
             for q, reason in self.data.qlines.itervalues():
                 if q.match(inick):
@@ -830,10 +871,7 @@ class IRCServer(LineOnlyReceiver):
             return self.shutdown_deferred
         
         # Remove nick ban
-        self.sendLine(
-            ":%s TKL - Q * %s* %s" %
-            (cfg.my_host, cfg.dc_to_irc_prefix, cfg.my_host)
-            )
+        self.pushRemoveQLine(cfg.dc_to_irc_prefix + "*")
 
         # Scream
         self.pushQuit(cfg.dc_to_irc_bot, "AIEEEEEEE!")
@@ -869,11 +907,9 @@ class IRCServerData(object):
     # All users on the IRC network
 
     class User(object):
-
         def __init__(self, nick):
             self.nick = nick
             self.chanmodes = []
-
 
     def __init__(self, ircs):
         self.ircs = ircs
@@ -1275,6 +1311,36 @@ class IRCServerData(object):
             osm.bsm.sendBridgeChange(chunks)
 
 
+    def findConflictingBridge(self):
+        # Determine if another bridge conflicts with me.
+        # Return True if we need to abort.
+        CHECK(not self.ircs.syncd)
+
+        stale_qlines = []
+        for nickmask, (q, reason) in self.qlines.iteritems():
+            # Look for Q-lines which conflict with my prefix.
+            if not q.match(cfg.dc_to_irc_prefix):
+                continue
+            LOG.info("Found a conflicting Q-line: %s" % nickmask)
+
+            # If any nicks exist under that Q-line, we'll need to abort.
+            for nick in self.users:
+                if q.match(nick):
+                    LOG.info("... and a nick to go with it: %s" % nick)
+                    return True
+
+            stale_qlines.append(nickmask)
+
+        # Remove all stale Q-lines from the network.
+        LOG.info("Stale qlines: %r" % stale_qlines)
+        for nickmask in stale_qlines:
+            del self.qlines[nickmask]
+            self.ircs.pushRemoveQLine(nickmask)
+
+        # Conflict has been neutralized.
+        return False
+
+
     def getInfoIndex(self, nick):
         # Get the Dtella info index for this user
         try:
@@ -1554,7 +1620,8 @@ class BridgeServerManager(object):
                 packet.append(b)
                 osm.mrm.newMessage(''.join(packet), tries=4)
 
-        self.sendState_dcall = reactor.callLater(0, cb)
+        # The first time, send state immediately.
+        cb()
 
 
     def getStateData(self, packet):

@@ -33,7 +33,7 @@ rdns_servers = []
 
 # Bot Parameters
 irc_to_dc_bot = "*IRC"
-dc_to_irc_bot = "Dtella"
+dc_to_irc_bot = "DtellaBridge"
 
 # Make these IRC nicks appear in the Dtella chat (list of strings)
 virtual_nicks = []
