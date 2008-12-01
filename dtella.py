@@ -106,6 +106,7 @@ def runClient(dc_port):
     dtMain = DtellaMain_Client()
 
     import dtella.local_config as local
+    from dtella.common.util import get_version_string
 
     def botErrorReporter(text):
         dch = dtMain.dch
@@ -113,7 +114,8 @@ def runClient(dc_port):
             dch.bot.say(
                 "Something bad happened.  You might want to email this to "
                 "bugs@dtella.org so we'll know about it:\n"
-                "Version: %s %s\n%s" % (local.hub_name, local.version, text))
+                "Version: %s %s\n%s" %
+                (local.hub_name, get_version_string()[3:], text))
 
     addTwistedErrorCatcher(botErrorReporter)
     addTwistedErrorCatcher(LOG.critical)
