@@ -6,14 +6,15 @@ set NSIS64="C:\Program Files (x86)\NSIS\makensisw.exe"
 set PYTHON="C:\python25\python.exe"
 set OUTDIR="dist"
 
-REM ----- SET FILEBASE -----
-%PYTHON% makevars.py > makevars.bat
-call makevars.bat
-del makevars.bat
-
 REM ----- DEPENDENCY CHECK ------
-
 echo Now Checking for Build Utilities...
+
+IF EXIST %PYTHON% (echo Found Python...) ELSE (
+echo ERROR: Python Not Found.
+pause
+EXIT
+)
+
 IF EXIST %ARC% (echo Found 7-Zip Archiver...) ELSE (
 echo ERROR: 7-Zip Archiver Not Found.
 pause
@@ -28,6 +29,15 @@ EXIT
 ) )
 echo All Dependencies Found, continuing...
 
+REM ----- SET FILEBASE -----
+%PYTHON% makevars.py > makevars.bat
+call makevars.bat
+del makevars.bat
+IF ()==(%FILEBASE%) (
+echo ERROR: Could not generate FILEBASE.
+pause
+EXIT
+)
 
 REM ------- SOURCE CODE ---------
 echo Collecting source code...
