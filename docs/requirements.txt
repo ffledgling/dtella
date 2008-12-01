@@ -40,10 +40,7 @@ You will need all components required to run Dtella as well as the following:
 * 7zip
   -> http://www.7-zip.org/
 
-- the DTDIR variable in build_installer.bat can be changed to match your
-desired output filename.
-
-- Run installer/build_installer.bat to create an installer
+- Run build_installer.bat to create an installer
 - Run build_py2exe.bat to create only dtella.exe
 
 

@@ -58,20 +58,9 @@ def patch_nsi_template():
     # Generate NSI file from template, replacing name and version
     # with data from local_config.
 
-    import re
-    
     dt_name = local.hub_name
     dt_version = local.version
-    dt_simplename = None
-
-    # Pull DT_DIR from build_installer.bat
-    for line in file("build_installer.bat"):
-        m = re.match(r'set DTDIR="(.+)"', line)
-        if m:
-            dt_simplename = m.group(1)
-            break
-    if not dt_simplename:
-        raise Error("Can't find DTDIR in build_installer.bat")
+    dt_simplename = local.build_prefix + local.version
 
     wfile = file("installer_win/dtella.nsi", "w")
 

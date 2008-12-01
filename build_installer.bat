@@ -1,11 +1,15 @@
 @echo off
 set BLDIR="installer_win"
-set DTDIR="dtella-purdue-SVN"
 set ARC="C:\Program Files\7-Zip\7z.exe"
 set NSIS="C:\Program Files\NSIS\makensis.exe"
 set NSIS64="C:\Program Files (x86)\NSIS\makensisw.exe"
+set PYTHON="C:\python25\python.exe"
 set OUTDIR="dist"
 
+REM ----- SET FILEBASE -----
+%PYTHON% makevars.py > makevars.bat
+call makevars.bat
+del makevars.bat
 
 REM ----- DEPENDENCY CHECK ------
 
@@ -28,34 +32,34 @@ echo All Dependencies Found, continuing...
 REM ------- SOURCE CODE ---------
 echo Collecting source code...
 
-rmdir /s /q %BLDIR%/%DTDIR%
-del %BLDIR%/%DTDIR%.tar
-del %BLDIR%/%DTDIR%.tar.bz2
+rmdir /s /q %BLDIR%/%FILEBASE%
+del %BLDIR%/%FILEBASE%.tar
+del %BLDIR%/%FILEBASE%.tar.bz2
 
-mkdir %BLDIR%/%DTDIR%
-mkdir %BLDIR%/%DTDIR%/dtella
-mkdir %BLDIR%/%DTDIR%/dtella/client
-mkdir %BLDIR%/%DTDIR%/dtella/common
-mkdir %BLDIR%/%DTDIR%/dtella/modules
-mkdir %BLDIR%/%DTDIR%/docs
+mkdir %BLDIR%/%FILEBASE%
+mkdir %BLDIR%/%FILEBASE%/dtella
+mkdir %BLDIR%/%FILEBASE%/dtella/client
+mkdir %BLDIR%/%FILEBASE%/dtella/common
+mkdir %BLDIR%/%FILEBASE%/dtella/modules
+mkdir %BLDIR%/%FILEBASE%/docs
 
-copy dtella.py                %BLDIR%\%DTDIR%
-copy dtella\__init__.py       %BLDIR%\%DTDIR%\dtella
-copy dtella\local_config.py   %BLDIR%\%DTDIR%\dtella
-copy dtella\client\*.py       %BLDIR%\%DTDIR%\dtella\client
-copy dtella\common\*.py       %BLDIR%\%DTDIR%\dtella\common
-copy dtella\modules\*.py      %BLDIR%\%DTDIR%\dtella\modules
-copy docs\readme.txt          %BLDIR%\%DTDIR%\docs
-copy docs\changelog.txt       %BLDIR%\%DTDIR%\docs
-copy docs\requirements.txt    %BLDIR%\%DTDIR%\docs
-copy docs\gpl.txt             %BLDIR%\%DTDIR%\docs
+copy dtella.py                %BLDIR%\%FILEBASE%
+copy dtella\__init__.py       %BLDIR%\%FILEBASE%\dtella
+copy dtella\local_config.py   %BLDIR%\%FILEBASE%\dtella
+copy dtella\client\*.py       %BLDIR%\%FILEBASE%\dtella\client
+copy dtella\common\*.py       %BLDIR%\%FILEBASE%\dtella\common
+copy dtella\modules\*.py      %BLDIR%\%FILEBASE%\dtella\modules
+copy docs\readme.txt          %BLDIR%\%FILEBASE%\docs
+copy docs\changelog.txt       %BLDIR%\%FILEBASE%\docs
+copy docs\requirements.txt    %BLDIR%\%FILEBASE%\docs
+copy docs\gpl.txt             %BLDIR%\%FILEBASE%\docs
 
 pushd %BLDIR%
-%ARC% a -ttar %DTDIR%.tar %DTDIR%
-%ARC% a -tbzip2 %DTDIR%.tar.bz2 %DTDIR%.tar
+%ARC% a -ttar %FILEBASE%.tar %FILEBASE%
+%ARC% a -tbzip2 %FILEBASE%.tar.bz2 %FILEBASE%.tar
 
-del %DTDIR%.tar
-rmdir /s /q %DTDIR%
+del %FILEBASE%.tar
+rmdir /s /q %FILEBASE%
 popd
 
 REM ------- EXE -------------
@@ -88,8 +92,8 @@ REM -----CLEAN UP OUTPUT------
 
 mkdir %OUTDIR%
 
-move %BLDIR%\%DTDIR%.exe %OUTDIR%
-move %BLDIR%\%DTDIR%.tar.* %OUTDIR%
+move %BLDIR%\%FILEBASE%.exe %OUTDIR%
+move %BLDIR%\%FILEBASE%.tar.* %OUTDIR%
 
 
 del %BLDIR%\msvcr71.dll
