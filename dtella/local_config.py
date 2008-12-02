@@ -24,8 +24,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # These settings are specific to the Purdue network.  They should be
 # customized for each new network you create.
 
-# When building an exe or installer, use this prefix, followed by the
-# version number.
+# Use this prefix for filenames when building executables and installers.
+# It will be concatenated with the version number below.
 build_prefix = "dtella-purdue-"
 
 # Dtella version number.

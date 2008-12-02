@@ -1,5 +1,12 @@
 Dtella Changelog
 
+1.2.3 (2008-12-02):
+- Change the time base on Windows back to time.time(), because we seem to
+have observed cases where time.clock() runs faster or slower than UTC.
+- Add platform (/W /L /M etc.) to the "Something bad happened" output.
+- Build version configuration is centralized into dtella_local.py, instead
+of being scattered throughout the Windows/Mac build scripts.
+
 1.2.2 (2008-11-02):
 - Fix a nasty bug introduced in 1.2.1; I imported the twisted UDP module
 before applying the time source patch, so different parts of Twisted were
