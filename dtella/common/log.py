@@ -36,6 +36,21 @@ from dtella.common.util import get_user_path, CHECK
 # PACKET    5
 # NOTSET    0
 
+# Wrapper around an output stream, which ignores IO Errors.
+class IgnorantWriter(object):
+   def __init__(self, f):
+        self.f = f
+   def write(self, data):
+        try:
+            return self.f.write(data)
+        except IOError:
+            pass
+   def flush(self):
+        try:
+            return self.f.flush()
+        except IOError:
+            pass
+ 
 def initLogger(filename, max_size, max_archives):
     global LOG
     try:
@@ -52,7 +67,7 @@ def initLogger(filename, max_size, max_archives):
     LOG.setLevel(5)
 
     # Create console handler and set level to error
-    ch = logging.StreamHandler(sys.stdout)
+    ch = logging.StreamHandler(IgnorantWriter(sys.stdout))
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(logging.Formatter("%(levelname).1s - %(message)s"))
     LOG.addHandler(ch)
