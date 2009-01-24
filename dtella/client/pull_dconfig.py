@@ -93,7 +93,6 @@ class DynamicConfigPuller(object):
                 self.handleConfig(result)
                 self.cfg_lastUpdate = seconds()
                 self.cfg_busy = False
-                self.schedulePeriodicUpdates()
                 self.doCallback()
             except:
                 # Don't want errors propagating up the chain.
@@ -105,7 +104,6 @@ class DynamicConfigPuller(object):
                     self.main.showLoginStatus(
                         "Query failed!  Trying to proceed without it...")
                 self.cfg_busy = False
-                self.schedulePeriodicUpdates()
                 self.doCallback()
             except:
                 # Don't want errors propagating up the chain.
@@ -178,6 +176,7 @@ class DynamicConfigPuller(object):
         if self.belowMinimumVersion():
             return
 
+        self.schedulePeriodicUpdates()
         self.reportNewVersion()
 
         if self.cfg_cb:
@@ -196,6 +195,7 @@ class DynamicConfigPuller(object):
 
         if self.cfgRefresh_dcall:
             self.cfgRefresh_dcall.reset(when)
+            return
 
         def cb():
             self.cfgRefresh_dcall = None
