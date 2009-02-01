@@ -615,7 +615,7 @@ class DCHandler(BaseDCProtocol):
             n = osm.nkm.lookupNick(nick)
         except KeyError:
             if nick == self.bot.nick:
-                fail_cb("can't connect to yourself!")
+                fail_cb("can't get files from yourself!")
             else:
                 fail_cb("user doesn't seem to exist.")
             return
@@ -657,7 +657,7 @@ class DCHandler(BaseDCProtocol):
             n = osm.nkm.lookupNick(nick)
         except KeyError:
             if nick == self.bot.nick:
-                fail_cb("can't connect to yourself!")
+                fail_cb("can't get files from yourself!")
             else:
                 fail_cb("user doesn't seem to exist.")
             return

@@ -2071,10 +2071,10 @@ class MeNode(Node):
             fail_cb("I'm not online!")
 
     def event_ConnectToMe(self, main, port, fail_cb):
-        fail_cb("can't connect to yourself!")
+        fail_cb("can't get files from yourself!")
 
     def event_RevConnectToMe(self, main, fail_cb):
-        fail_cb("can't connect to yourself!")
+        fail_cb("can't get files from yourself!")
 
 verifyClass(IDtellaNickNode, MeNode)
 
