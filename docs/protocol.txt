@@ -95,6 +95,8 @@ packet_id = general packet number
 4-byte packet_id
 4-byte source nickhash
 4-byte dest nickhash
+1-byte flags (optional, version >=1.2.4)
+    bit 0 = SSL
 2-byte DC port
 
 * [CP] Connect Passive (revconnecttome)

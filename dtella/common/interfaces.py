@@ -45,7 +45,7 @@ class IDtellaNickNode(Interface):
         pass
     def event_PrivateMessage(main, text, fail_cb):
         pass
-    def event_ConnectToMe(main, port, fail_cb):
+    def event_ConnectToMe(main, port, use_ssl, fail_cb):
         pass
     def event_RevConnectToMe(main, fail_cb):
         pass

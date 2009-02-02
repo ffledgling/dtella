@@ -585,9 +585,17 @@ class DCHandler(BaseDCProtocol):
 
         err_visible = True
 
-        # Extract TCP port number from connect message
+        # Extract TCP port number from connect message.
         try:
-            port = int(addr[addr.rindex(':')+1:])
+            use_ssl = False
+            port_str = addr[addr.rindex(':')+1:]
+
+            # Some DC clients append an 'S' for SSL mode.
+            if port_str.endswith('S'):
+                use_ssl = True
+                port_str = port_str[:-1]
+
+            port = int(port_str)
             if not (1 <= port <= 65535):
                 raise ValueError
         except ValueError:
@@ -598,7 +606,8 @@ class DCHandler(BaseDCProtocol):
                 self.pushStatus(
                     "*** Connection to <%s> failed: %s" % (nick, detail))
 
-            if port:
+            # Don't try to abort SSL connections for now; too messy.
+            if port and not use_ssl:
                 reactor.connectTCP(
                     '127.0.0.1', port, AbortTransfer_Factory(nick))
 
@@ -630,7 +639,7 @@ class DCHandler(BaseDCProtocol):
             fail_cb(None)
             return
 
-        n.event_ConnectToMe(self.main, port, fail_cb)
+        n.event_ConnectToMe(self.main, port, use_ssl, fail_cb)
 
 
     def d_RevConnectToMe(self, _, nick):
@@ -781,8 +790,11 @@ class DCHandler(BaseDCProtocol):
         self.sendLine('$Quit %s' % nick)
 
 
-    def pushConnectToMe(self, ad):
-        self.sendLine("$ConnectToMe %s %s" % (self.nick, ad.getTextIPPort()))
+    def pushConnectToMe(self, ad, use_ssl):
+        line = "$ConnectToMe %s %s" % (self.nick, ad.getTextIPPort())
+        if use_ssl:
+            line += 'S'
+        self.sendLine(line)
 
 
     def pushRevConnectToMe(self, nick):

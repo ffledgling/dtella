@@ -104,7 +104,6 @@ setup(
             "excludes": excludes,
         },
 
-        # TODO: Find out how to make the mac build process easier.
         "py2app": {
             "optimize": 2,
             "argv_emulation": True,

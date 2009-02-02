@@ -280,6 +280,29 @@ def split_tag(desc):
     return desc, tag
 
 
+def clear_info_ssl_flag(info_str):
+    # SSLHACK: The 'speed' field contains a flags byte, of which bit 0x10
+    #          indicates SSL capability for some DC clients.  Older versions
+    #          of Dtella don't understand SSL requests, so this function
+    #          clears the bit.
+    try:
+        info = split_info(info_str)
+    except ValueError:
+        return info_str
+
+    try:
+        flags, = struct.unpack('!B', info[2][-1])
+    except (IndexError, struct.error):
+        return info_str
+
+    if flags & 0x10:
+        flags ^= 0x10
+        info[2] = info[2][:-1] + struct.pack('!B', flags)
+        return '$'.join(info)
+
+    return info_str
+
+
 def format_bytes(n):
     # Convert an integer into a Bytes representation
     n = float(n)

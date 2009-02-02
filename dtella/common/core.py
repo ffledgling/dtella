@@ -39,7 +39,8 @@ import dtella.common.crypto
 from dtella.common.util import (RandSet, dcall_discard, dcall_timeleft,
                                 randbytes, validateNick, word_wrap,
                                 parse_incoming_info, get_version_string,
-                                parse_dtella_tag, CHECK)
+                                parse_dtella_tag, CHECK, cmpify_version,
+                                clear_info_ssl_flag)
 from dtella.common.ipv4 import Ad, SubnetMatcher
 from dtella.common.log import LOG
 
@@ -118,6 +119,12 @@ TIMEDOUT_BIT = 0x1
 # Chat Flags
 SLASHME_BIT = 0x1
 NOTICE_BIT = 0x2
+
+# ConnectToMe Flags
+USE_SSL_BIT = 0x1
+
+# Minimum Dtella needed to retain the SSL MyINFO flag.
+SSLHACK_VERSION = cmpify_version("1.2.4")
 
 # ACK Modes
 ACK_PRIVATE = 1
@@ -1258,15 +1265,21 @@ class PeerHandler(DatagramProtocol):
         # Direct: ConnectToMe
 
         def cb(dch, n, rest):
-            port, = self.decodePacket('!H', rest)
+            # SSLHACK: newer Dtella versions have an extra flags byte, to allow
+            #          for SSL connection requests.  Try to decode both forms.
+            try:
+                flags, port = self.decodePacket('!BH', rest)
+            except BadPacketError:
+                flags = 0
+                port, = self.decodePacket('!H', rest)
 
             if port == 0:
                 raise BadPacketError("Zero port")
 
             ad = Ad().setRawIPPort(n.ipp)
             ad.port = port
-
-            dch.pushConnectToMe(ad)
+            use_ssl = bool(flags & USE_SSL_BIT)
+            dch.pushConnectToMe(ad, use_ssl)
 
         self.handlePrivMsg(ad, data, cb)
 
@@ -1993,17 +2006,23 @@ class Node(object):
         self.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
-    def event_ConnectToMe(self, main, port, fail_cb):
+    def event_ConnectToMe(self, main, port, use_ssl, fail_cb):
 
         osm = main.osm
 
         ack_key = self.getPMAckKey()
+        flags = (use_ssl and USE_SSL_BIT)
 
         packet = ['CA']
         packet.append(osm.me.ipp)
         packet.append(ack_key)
         packet.append(osm.me.nickHash())
         packet.append(self.nickHash())
+        if flags:
+            # SSLHACK: This packet can't be understood by older Dtella
+            #          versions, but stripping the SSL flag from MyINFO should
+            #          prevent it from happening very often.
+            packet.append(struct.pack('!B', flags))
         packet.append(struct.pack('!H', port))
         packet = ''.join(packet)
 
@@ -2070,7 +2089,7 @@ class MeNode(Node):
         else:
             fail_cb("I'm not online!")
 
-    def event_ConnectToMe(self, main, port, fail_cb):
+    def event_ConnectToMe(self, main, port, use_ssl, fail_cb):
         fail_cb("can't get files from yourself!")
 
     def event_RevConnectToMe(self, main, fail_cb):
@@ -2481,6 +2500,11 @@ class OnlineStateManager(object):
 
         # Save version info
         n.dttag = parse_dtella_tag(info)
+
+        # SSLHACK: for older Dtella versions, clear the magic SSL flag, so our
+        #          DC client won't attempt SSL connections to this node.
+        if cmpify_version(n.dttag[3:]) < SSLHACK_VERSION:
+            info = clear_info_ssl_flag(info)
 
         if nick == n.nick:
             # Nick hasn't changed, just update info

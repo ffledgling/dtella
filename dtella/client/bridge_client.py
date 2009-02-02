@@ -449,7 +449,7 @@ class NickNode(object):
         self.parent_n.sendPrivateMessage(main.ph, ack_key, packet, fail_cb)
 
 
-    def event_ConnectToMe(self, main, port, fail_cb):
+    def event_ConnectToMe(self, main, port, use_ssl, fail_cb):
         fail_cb("IRC users don't have any files.")
 
 
