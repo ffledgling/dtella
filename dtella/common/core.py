@@ -39,8 +39,7 @@ import dtella.common.crypto
 from dtella.common.util import (RandSet, dcall_discard, dcall_timeleft,
                                 randbytes, validateNick, word_wrap,
                                 parse_incoming_info, get_version_string,
-                                parse_dtella_tag, CHECK, cmpify_version,
-                                clear_info_ssl_flag)
+                                parse_dtella_tag, CHECK, SSLHACK_filter_flags)
 from dtella.common.ipv4 import Ad, SubnetMatcher
 from dtella.common.log import LOG
 
@@ -122,9 +121,6 @@ NOTICE_BIT = 0x2
 
 # ConnectToMe Flags
 USE_SSL_BIT = 0x1
-
-# Minimum Dtella needed to retain the SSL MyINFO flag.
-SSLHACK_VERSION = cmpify_version("1.2.4")
 
 # ACK Modes
 ACK_PRIVATE = 1
@@ -1890,7 +1886,8 @@ class Node(object):
     def setInfo(self, info):
 
         old_dcinfo = self.dcinfo
-        self.dcinfo, self.location, self.shared = parse_incoming_info(info)
+        self.dcinfo, self.location, self.shared = (
+            parse_incoming_info(SSLHACK_filter_flags(info)))
 
         if self.sesid is None:
             # Node is uninitialized
@@ -2500,11 +2497,6 @@ class OnlineStateManager(object):
 
         # Save version info
         n.dttag = parse_dtella_tag(info)
-
-        # SSLHACK: for older Dtella versions, clear the magic SSL flag, so our
-        #          DC client won't attempt SSL connections to this node.
-        if cmpify_version(n.dttag[3:]) < SSLHACK_VERSION:
-            info = clear_info_ssl_flag(info)
 
         if nick == n.nick:
             # Nick hasn't changed, just update info

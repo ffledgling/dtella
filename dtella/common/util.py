@@ -280,19 +280,29 @@ def split_tag(desc):
     return desc, tag
 
 
-def clear_info_ssl_flag(info_str):
+# Minimum Dtella needed to retain the SSL MyINFO flag.
+SSLHACK_VERSION = cmpify_version("1.2.4")
+
+def SSLHACK_filter_flags(info_str):
     # SSLHACK: The 'speed' field contains a flags byte, of which bit 0x10
-    #          indicates SSL capability for some DC clients.  Older versions
-    #          of Dtella don't understand SSL requests, so this function
-    #          clears the bit.
+    #          indicates SSL capability for some DC clients.  If this is an
+    #          older Dtella node which doesn't understand SSL requests, we
+    #          clear the bit, so our DC client won't try to initiate an
+    #          SSL connection with it.
+
+    # Ignore new-enough Dtella versions.
+    dttag = parse_dtella_tag(info_str)
+    if cmpify_version(dttag[3:]) >= SSLHACK_VERSION:
+        return info_str
+
     try:
         info = split_info(info_str)
     except ValueError:
         return info_str
 
     try:
-        flags, = struct.unpack('!B', info[2][-1])
-    except (IndexError, struct.error):
+        flags, = struct.unpack('!B', info[2][-1:])
+    except struct.error:
         return info_str
 
     if flags & 0x10:
