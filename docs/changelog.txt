@@ -1,5 +1,13 @@
 Dtella Changelog
 
+1.2.4 (2009-02-14):
+- Add support for the Strong/Apex secure connect extension.  This fixes
+the "Malformed Address" errors which end with an 'S'.
+- Fixed a bug which causes background config updates to turn off if a node
+connects twice in a 5-minute window.
+- Ignore I/O errors when the output terminal goes away.  This was affecting
+some people on Linux.
+
 1.2.3 (2008-12-02):
 - Change the time base on Windows back to time.time(), because we seem to
 have observed cases where time.clock() runs faster or slower than UTC.
