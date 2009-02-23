@@ -409,13 +409,13 @@ class PeerHandler(DatagramProtocol):
         return data[1:1+length], data[1+length:]
 
 
-    def decodeString2(self, data):
+    def decodeString2(self, data, max_len=1024):
         try:
             length, = struct.unpack('!H', data[:2])
         except struct.error:
             raise BadPacketError("Can't decode 2string")
 
-        if length > 1024 or len(data) < 2+length:
+        if length > max_len or len(data) < 2+length:
             raise BadPacketError("Bad 2string length")
 
         return data[2:2+length], data[2+length:]
