@@ -70,8 +70,8 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         # DNS Update Manager
         self.dum = push_dconfig.DynamicConfigUpdateManager(self)
 
-        # IRC Server
-        self.ircs = None
+        # IRC State Manager
+        self.ism = None
 
         self.startConnecting()
 
@@ -83,8 +83,8 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         self.state.saveState()
 
         # Cleanly close the IRC connection before terminating
-        if self.ircs:
-            return self.ircs.shutdown()
+        if self.ism:
+            return self.ism.shutdown()
 
 
     def startConnecting(self):
@@ -138,23 +138,23 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
         if not (self.osm and self.osm.syncd):
             return None
 
-        if self.ircs:
-            return self.ircs
+        if self.ism:
+            return self.ism
 
         return None
 
 
-    def addIRCServer(self, ircs):
-        CHECK(not self.ircs)
-        CHECK(ircs.syncd)
-        self.ircs = ircs
+    def addIRCStateManager(self, ism):
+        CHECK(not self.ism)
+        CHECK(ism.syncd)
+        self.ism = ism
         self.stateChange_ObserverUp()
 
 
-    def removeIRCServer(self, ircs):
-        CHECK(ircs and (self.ircs is ircs))
+    def removeIRCStateManager(self, ism):
+        CHECK(ism and (self.ism is ism))
 
-        self.ircs = None
+        self.ism = None
 
         # Send empty IRC state to Dtella.
         self.stateChange_ObserverDown()
