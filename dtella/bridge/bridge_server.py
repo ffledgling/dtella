@@ -1079,7 +1079,10 @@ class IRCStateManager(object):
         except NotOnline:
             return
 
-        action = "enabled" if on_off else "disabled"
+        if on_off:
+            action = "enabled"
+        else:
+            action = "disabled"
 
         chunks = []
         osm.bsm.addModeratedChunk(chunks, on_off)
@@ -1095,7 +1098,10 @@ class IRCStateManager(object):
         except NotOnline:
             return
 
-        action = "locked" if on_off else "unlocked"
+        if on_off:
+            action = "locked"
+        else:
+            action = "unlocked"
 
         chunks = []
         osm.bsm.addChatChunk(
