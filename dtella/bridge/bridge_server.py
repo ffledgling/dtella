@@ -166,7 +166,7 @@ def n_user(ipp):
 
 def wild_to_regex(in_str):
     # Build a regular expression from a string containing *'s
-    
+
     regex_badchars = r".^$+?{}\[]|():"
 
     out = '^'
@@ -250,7 +250,7 @@ def dc_from_irc(inick):
 
 def irc_to_dc(inick):
     # Encode an IRC nick, for use in Dtella
-    
+
     return cfg.irc_to_dc_prefix + inick.replace('|','!')
 
 
@@ -292,7 +292,7 @@ if not cfg.dc_to_irc_bot.startswith(cfg.dc_to_irc_prefix):
 class IRCServer(LineOnlyReceiver):
     implements(IDtellaStateObserver)
     showirc = False
-    
+
     def __init__(self, main):
         self.ism = IRCStateManager(main, self)
         self.server_name = None
@@ -301,24 +301,19 @@ class IRCServer(LineOnlyReceiver):
         self.ping_dcall = None
         self.ping_waiting = False
 
-
     def connectionMade(self):
         LOG.info("Connected to IRC server.")
         self.sendLine("PASS :%s" % (cfg.irc_password,))
         self.sendLine("SERVER %s 1 :%s" % (cfg.my_host, cfg.my_name))
 
-
     def sendLine(self, line):
         line = line.replace('\r', '').replace('\n', '')
-        
         if self.showirc:
             LOG.log(5, "<: %s" % line)
-            
         LineOnlyReceiver.sendLine(self, line)
 
 
     def lineReceived(self, line):
-
         if not line:
             return
 
@@ -348,7 +343,6 @@ class IRCServer(LineOnlyReceiver):
         else:
             f(prefix, args[1:])
 
-
     def handleCmd_PING(self, prefix, args):
         LOG.info("PING? PONG!")
         if len(args) == 1:
@@ -356,12 +350,10 @@ class IRCServer(LineOnlyReceiver):
         elif len(args) == 2:
             self.sendLine("PONG %s :%s" % (args[1], args[0]))
 
-
     def handleCmd_PONG(self, prefix, args):
         if self.ping_waiting:
             self.ping_waiting = False
             self.schedulePing()
-
 
     def handleCmd_NICK(self, prefix, args):
         oldnick = prefix
@@ -372,14 +364,12 @@ class IRCServer(LineOnlyReceiver):
         else:
             self.ism.addUser(newnick)
 
-
     def handleCmd_JOIN(self, prefix, args):
         nick = prefix
         chans = args[0].split(',')
 
         if cfg.irc_chan in chans:
             self.ism.joinChannel(self.ism.users[nick])
-
 
     def handleCmd_PART(self, prefix, args):
         nick = prefix
@@ -388,18 +378,16 @@ class IRCServer(LineOnlyReceiver):
         if cfg.irc_chan in chans:
             CHECK(self.ism.partChannel(self.ism.users[nick]))
 
-
     def handleCmd_QUIT(self, prefix, args):
         nick = prefix
         self.ism.removeUser(self.ism.users[nick])
-
 
     def handleCmd_KICK(self, prefix, args):
         chan = args[0]
         l33t = prefix
         n00b = args[1]
         reason = irc_strip(args[2])
- 
+
         if chan != cfg.irc_chan:
             return
 
@@ -417,9 +405,7 @@ class IRCServer(LineOnlyReceiver):
                 (irc_to_dc(l33t), irc_to_dc(n00b), reason))
             CHECK(self.ism.partChannel(self.ism.users[n00b], message))
 
-
     def handleCmd_KILL(self, prefix, args):
-
         # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
         l33t = prefix
         n00b = args[0]
@@ -439,10 +425,8 @@ class IRCServer(LineOnlyReceiver):
                 (irc_to_dc(l33t), irc_to_dc(n00b), reason))
             self.ism.removeUser(self.ism.users[n00b], message)
 
-
     # Treat SVSKILL the same as KILL.
     handleCmd_SVSKILL = handleCmd_KILL
-
 
     def handleCmd_TOPIC(self, prefix, args):
         # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
@@ -453,9 +437,7 @@ class IRCServer(LineOnlyReceiver):
         if chan == cfg.irc_chan:
             self.ism.setTopic(whoset, text)
 
-
     def handleCmd_MODE(self, prefix, args):
-
         # :Paul MODE #dtella +vv aaahhh Big_Guy
         whoset = prefix
         chan = args[0]
@@ -528,7 +510,6 @@ class IRCServer(LineOnlyReceiver):
         for u, changes in user_changes.iteritems():
             self.ism.setChannelUserModes(whoset, u, changes)
 
-
     def handleCmd_TKL(self, prefix, args):
         addrem = args[0]
         kind = args[1]
@@ -554,7 +535,6 @@ class IRCServer(LineOnlyReceiver):
                 self.ism.addQLine(nickmask, reason)
             else:
                 self.ism.removeQLine(nickmask)
-
 
     def handleCmd_SERVER(self, prefix, args):
         if prefix:
@@ -584,12 +564,9 @@ class IRCServer(LineOnlyReceiver):
                       (time.time(), cloak_checksum, cfg.irc_network_name))
         self.sendLine(":%s EOS" % cfg.my_host)
 
-
     def handleCmd_EOS(self, prefix, args):
-
         if prefix != self.server_name:
             return
-
         if self.ism.syncd:
             return
 
@@ -618,10 +595,8 @@ class IRCServer(LineOnlyReceiver):
         self.schedulePing()
         self.ism.addMeToMain()
 
-
     def handleCmd_WHOIS(self, prefix, args):
         # Somewhat simplistic handling of WHOIS requests
-        
         if not (prefix and len(args) >= 1):
             return
 
@@ -635,7 +610,6 @@ class IRCServer(LineOnlyReceiver):
                 312, src, who, cfg.my_host, cfg.my_name)
             self.pushWhoisReply(
                 319, src, who, cfg.irc_chan)
-
         else:
             n = self.ism.findDtellaNode(inick=who)
             if not (n and hasattr(n, 'hostmask')):
@@ -657,7 +631,6 @@ class IRCServer(LineOnlyReceiver):
         self.pushWhoisReply(
             318, src, who, "End of /WHOIS list.")
 
-
     def pushWhoisReply(self, code, target, who, *strings):
         line = ":%s %d %s %s " % (cfg.my_host, code, target, who)
         strings = list(strings)
@@ -665,13 +638,12 @@ class IRCServer(LineOnlyReceiver):
         line += ' '.join(strings)
         self.sendLine(line)
 
-
     def handleCmd_PRIVMSG(self, prefix, args):
         src_nick = prefix
         target = args[0]
         text = args[1]
         flags = 0
-        
+
         if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
             text = text[8:-1]
             flags |= core.SLASHME_BIT
@@ -692,7 +664,6 @@ class IRCServer(LineOnlyReceiver):
             if n:
                 self.ism.sendPrivateMessage(n, src_nick, text, flags)
 
-
     def handleCmd_NOTICE(self, prefix, args):
         src_nick = prefix
         target = args[0]
@@ -701,15 +672,12 @@ class IRCServer(LineOnlyReceiver):
 
         if target == cfg.irc_chan:
             self.ism.sendChannelMessage(src_nick, text, flags)
-
         else:
             n = self.ism.findDtellaNode(inick=target)
             if n:
                 self.ism.sendPrivateMessage(n, src_nick, text, flags)
 
-
     def pushNick(self, nick, user, host, modes, ip, name):
-
         # If an IP was provided, convert to a base64 parameter.
         if ip:
             ip = ' ' + binascii.b2a_base64(ip).rstrip()
@@ -720,36 +688,30 @@ class IRCServer(LineOnlyReceiver):
             "NICK %s 1 %d %s %s %s 1 %s *%s :%s" %
             (nick, time.time(), user, host, cfg.my_host, modes, ip, name))
 
-
     def pushJoin(self, nick):
         self.sendLine(":%s JOIN %s" % (nick, cfg.irc_chan))
-
 
     def pushTopic(self, nick, topic):
         self.sendLine(
             ":%s TOPIC %s %s %d :%s" %
             (nick, cfg.irc_chan, nick, int(time.time()), topic))
-        
 
     def pushQuit(self, nick, reason=""):
         self.sendLine(":%s QUIT :%s" % (nick, reason))
-        
 
     def pushPrivMsg(self, nick, text, target=None, action=False):
         if target is None:
             target = cfg.irc_chan
-            
+
         if action:
             text = "\001ACTION %s\001" % text
-        
+
         self.sendLine(":%s PRIVMSG %s :%s" % (nick, target, text))
-    
 
     def pushNotice(self, nick, text, target=None):
         if target is None:
             target = cfg.irc_chan
         self.sendLine(":%s NOTICE %s :%s" % (nick, target, text))
-
 
     def pushBotJoin(self, do_nick=False):
         if do_nick:
@@ -763,24 +725,20 @@ class IRCServer(LineOnlyReceiver):
             ":%s MODE %s +ao %s %s" %
             (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
 
-
     def pushKill(self, nick):
         LOG.info("Killing nick: " + nick)
         self.sendLine(":%s KILL %s :%s (nick reserved for Dtella)"
                       % (cfg.my_host, nick, cfg.my_host))
 
-
     def pushRemoveQLine(self, nickmask):
         LOG.info("Telling network to remove Q-line: %s" % nickmask)
         self.sendLine("TKL - Q * %s %s" % (nickmask, cfg.my_host))
 
-
     def schedulePing(self):
-
         if self.ping_dcall:
             self.ping_dcall.reset(60.0)
             return
-        
+
         def cb():
             self.ping_dcall = None
 
@@ -794,12 +752,10 @@ class IRCServer(LineOnlyReceiver):
 
         self.ping_dcall = reactor.callLater(60.0, cb)
 
-
     def shutdown(self):
-
         if self.shutdown_deferred:
             return self.shutdown_deferred
-        
+
         # Remove nick ban
         self.pushRemoveQLine(cfg.dc_to_irc_prefix + "*")
 
@@ -817,15 +773,13 @@ class IRCServer(LineOnlyReceiver):
         self.shutdown_deferred = defer.Deferred()
         return self.shutdown_deferred
 
-
     def connectionLost(self, result):
         LOG.info("Lost IRC connection.")
         if self.ism.syncd:
             self.ism.removeMeFromMain()
-        
+
         if self.shutdown_deferred:
             self.shutdown_deferred.callback("Bye!")
-
 
 ##############################################################################
 
@@ -936,7 +890,7 @@ class IRCStateManager(object):
                 return
 
             infoindex = chan_umodes.getUserInfoIndex(u)
-                
+
             chunks = []
             osm.bsm.addChatChunk(
                 chunks, cfg.irc_to_dc_bot,
@@ -1000,7 +954,7 @@ class IRCStateManager(object):
         try:
             osm = self.getOnlineStateManager()
             return osm.nkm.lookupNick(dnick)
-        except (NotOnline, KeyError):   
+        except (NotOnline, KeyError):
             return None
 
     def kickDtellaNode(self, n, l33t_inick, reason, is_kill=False):
@@ -1066,7 +1020,7 @@ class IRCStateManager(object):
             osm = self.getOnlineStateManager()
         except NotOnline:
             return
-        
+
         chunks = []
         osm.bsm.addTopicChunk(
             chunks, dnick, topic, changed=True)
@@ -1273,7 +1227,7 @@ class IRCStateManager(object):
     def isNodeChannelBanned(self, n):
         h1 = "%s!%s@%s" % (n.inick, n_user(n.ipp), n.hostname)
         h2 = "%s!%s@%s" % (n.inick, n_user(n.ipp), n.hostmask)
-        
+
         for ban_re in self.chanbans.itervalues():
             if ban_re.match(h1) or ban_re.match(h2):
                 return True
@@ -1437,16 +1391,13 @@ class IRCStateManager(object):
 
 verifyClass(IDtellaStateObserver, IRCStateManager)
 
-        
 ##############################################################################
 
-
 class IRCFactory(ReconnectingClientFactory):
-
     initialDelay = 10
     maxDelay = 60*20
     factor = 1.5
-    
+
     def __init__(self, main):
         self.main = main
 
@@ -1455,15 +1406,12 @@ class IRCFactory(ReconnectingClientFactory):
         p.factory = self
         return p
 
-
 ##############################################################################
-
 
 class BridgeServerProtocol(core.PeerHandler):
 
     def handlePacket_bP(self, ad, data):
         # Private message to IRC nick
-
         (kind, src_ipp, ack_key, src_nhash, rest
          ) = self.decodePacket('!2s6s8s4s+', data)
 
@@ -1488,7 +1436,6 @@ class BridgeServerProtocol(core.PeerHandler):
         osm.bsm.receivedPrivateMessage(src_ipp, ack_key, src_nhash,
                                        dst_nick, text)
 
-
     def handlePacket_bT(self, ad, data):
         # Topic change request
 
@@ -1509,7 +1456,6 @@ class BridgeServerProtocol(core.PeerHandler):
 
         osm.bsm.receivedTopicChange(src_ipp, ack_key, src_nhash, topic)
 
-
     def handlePacket_bQ(self, ad, data):
         # Requesting a full data block
 
@@ -1524,14 +1470,10 @@ class BridgeServerProtocol(core.PeerHandler):
 
         osm.bsm.receivedBlockRequest(src_ipp, bhash)
 
-
 ##############################################################################
 
-
 class BridgeServerManager(object):
-
     class CachedBlock(object):
-        
         def __init__(self, data):
             self.data = data
             self.expire_dcall = None
@@ -1546,11 +1488,8 @@ class BridgeServerManager(object):
 
             self.expire_dcall = reactor.callLater(60.0, cb, blks, key)
 
-
     def __init__(self, main):
-
         self.main = main
-
         self.rsa_obj = RSA.construct(cfg.private_key)
 
         # 64-bit value, stored as [8-bit pad] [32-bit time] [24-bit counter]
@@ -1560,23 +1499,18 @@ class BridgeServerManager(object):
 
         self.cached_blocks = {}  # hash -> CachedBlock()
 
-
     def isModerated(self):
         ism = self.main.ism
         return (ism and ism.moderated)
 
-
     def nextPktNum(self):
-
         t = long(time.time())
-
         if self.bridge_pktnum >> 24 == t:
             self.bridge_pktnum += 1
         else:
             self.bridge_pktnum = (t << 24L)
 
         return struct.pack("!Q", self.bridge_pktnum)
-
 
     def syncComplete(self):
         # This is called from OnlineStateManager after the Dtella network
@@ -1587,11 +1521,7 @@ class BridgeServerManager(object):
         osm.yqrm.sendSyncReply = self.sendSyncReply
         osm.makeExitPacket = self.makeExitPacket
 
-
     def signPacket(self, packet, broadcast):
-
-        import time
-
         data = ''.join(packet)
 
         if broadcast:
@@ -1600,13 +1530,12 @@ class BridgeServerManager(object):
             body = data
 
         data_hash = md5(body).digest()
-        
+
         t = time.time()
         sig, = self.rsa_obj.sign(data_hash, None)
         LOG.debug("Sign Time = %f sec" % (time.time() - t))
 
         packet.append(long_to_bytes(sig))
-
 
     def sendSyncReply(self, src_ipp, cont, uncont):
         # This gets spliced into the SyncRequestRoutingManager
@@ -1646,7 +1575,6 @@ class BridgeServerManager(object):
                 b = self.cached_blocks[bhash] = self.CachedBlock(data)
             b.scheduleExpire(self.cached_blocks, bhash)
 
-
     def makeExitPacket(self):
         osm = self.main.osm
         packet = osm.mrm.broadcastHeader('BX', osm.me.ipp)
@@ -1654,9 +1582,7 @@ class BridgeServerManager(object):
         self.signPacket(packet, broadcast=True)
         return ''.join(packet)
 
-
     def sendState(self):
-
         dcall_discard(self, 'sendState_dcall')
 
         def cb():
@@ -1693,7 +1619,6 @@ class BridgeServerManager(object):
 
         # The first time, send state immediately.
         cb()
-
 
     def getStateData(self, packet):
         # All the state info common between BS and Br packets
@@ -1757,10 +1682,8 @@ class BridgeServerManager(object):
         # Return hashes and blocks
         return block_hashes, blocks
 
-
     def sendBridgeChange(self, chunks):
         osm = self.main.osm
-
         CHECK(osm and osm.syncd)
 
         packet = osm.mrm.broadcastHeader('BC', osm.me.ipp)
@@ -1776,10 +1699,8 @@ class BridgeServerManager(object):
 
 
     def sendPrivateBridgeChange(self, n, chunks):
-
         osm = self.main.osm
         ph = self.main.ph
-
         CHECK(osm and osm.syncd)
 
         chunks = ''.join(chunks)
@@ -1800,12 +1721,10 @@ class BridgeServerManager(object):
 
         n.sendPrivateMessage(ph, ack_key, packet, fail_cb)
 
-
     def addNickChunk(self, chunks, nick, mode):
         chunks.append('N')
         chunks.append(struct.pack("!BB", mode, len(nick)))
         chunks.append(nick)
-
 
     def addInfoChunk(self, chunks):
         chunks.append('I')
@@ -1813,13 +1732,11 @@ class BridgeServerManager(object):
         chunks.append(struct.pack("!H", len(joined_info)))
         chunks.append(joined_info)
 
-
     def addKickChunk(self, chunks, n, l33t, reason, rejoin, silent):
-
         # Pick a packet number that's a little bit ahead of what the node
         # is using, so that any status messages sent out by the node at
         # the same time will be overriden by the kick.
-        
+
         n.status_pktnum = (n.status_pktnum + 3) % 0x100000000
 
         flags = (rejoin and core.REJOIN_BIT)
@@ -1834,24 +1751,20 @@ class BridgeServerManager(object):
             n00b = ''
         else:
             n00b = n.nick
-        
+
         chunks.append(struct.pack("!B", len(n00b)))
         chunks.append(n00b)
         chunks.append(struct.pack("!H", len(reason)))
         chunks.append(reason)
 
-
     def addBanChunk(self, chunks, ip, mask, enable):
-
         subnet = ipv4.MaskToCidrNum(mask)
         subnet |= (enable and 0x80)
 
         chunks.append('B')
         chunks.append(struct.pack('!Bi', subnet, ip))
 
-
     def addChatChunk(self, chunks, nick, text, flags=0):
-
         chat_pktnum = self.main.osm.mrm.getPacketNumber_chat()
 
         chunks.append('C')
@@ -1863,9 +1776,7 @@ class BridgeServerManager(object):
         chunks.append(struct.pack('!H', len(text)))
         chunks.append(text)
 
-
     def addTopicChunk(self, chunks, nick, topic, changed):
-
         flags = (changed and core.CHANGE_BIT)
 
         chunks.append('T')
@@ -1876,22 +1787,19 @@ class BridgeServerManager(object):
         chunks.append(struct.pack('!B', len(topic)))
         chunks.append(topic)
 
-
     def addMessageChunk(self, chunks, nick, text, flags=0):
         chunks.append('M')
         chunks.append(struct.pack('!BB', flags, len(nick)))
         chunks.append(nick)
-        
+
         text = text[:512]
         chunks.append(struct.pack('!H', len(text)))
         chunks.append(text)
-
 
     def addModeratedChunk(self, chunks, enable):
         flags = (enable and core.MODERATED_BIT)
         chunks.append('F')
         chunks.append(struct.pack('!B', flags))
-
 
     def receivedBlockRequest(self, src_ipp, bhash):
         try:
@@ -1910,9 +1818,7 @@ class BridgeServerManager(object):
         ad = Ad().setRawIPPort(src_ipp)
         self.main.ph.sendPacket(''.join(packet), ad.getAddrTuple())
 
-
     def nickRemoved(self, n):
-
         dels = ('dns_pending', 'hostname', 'hostmask', 'inick', 'jointime')
 
         for d in dels:
@@ -1921,10 +1827,8 @@ class BridgeServerManager(object):
             except AttributeError:
                 pass
 
-
     def receivedPrivateMessage(self, src_ipp, ack_key,
                                src_nhash, dst_nick, text):
-
         osm = self.main.osm
         ism = self.main.ism
 
@@ -1965,7 +1869,6 @@ class BridgeServerManager(object):
         self.main.ph.sendAckPacket(src_ipp, core.ACK_PRIVATE,
                                    ack_flags, ack_key)
 
-
     def receivedTopicChange(self, src_ipp, ack_key, src_nhash, topic):
         osm = self.main.osm
         ism = self.main.ism
@@ -2002,24 +1905,19 @@ class BridgeServerManager(object):
         self.main.ph.sendAckPacket(
             src_ipp, core.ACK_PRIVATE, ack_flags, ack_key)
 
-
     def shutdown(self):
         dcall_discard(self, 'sendState_dcall')
 
         for b in self.cached_blocks.itervalues():
             dcall_discard(b, 'expire_dcall')
 
-
 ##############################################################################
 
-
 class ReverseDNSManager(object):
-
     class Entry(object):
         def __init__(self):
             self.waiting_ipps = set()
             self.hostname = None
-
 
     def __init__(self, main):
         self.main = main
@@ -2030,7 +1928,6 @@ class ReverseDNSManager(object):
 
         # Number of simultaneous requests available
         self.limiter = 3
-
 
     def addRequest(self, n):
         ipp = n.ipp
@@ -2046,20 +1943,16 @@ class ReverseDNSManager(object):
         if ent.hostname:
             # Already have a hostname, sign on really soon
             reactor.callLater(0, self.signOn, ipp, ent.hostname)
-
         elif ent.waiting_ipps:
             # This hostname is already being queried.
             ent.waiting_ipps.add(ipp)
-
         else:
             # Start querying
             ent.waiting_ipps.add(ipp)
             self.dnsq.append((ip, ent))
             self.advanceQueue()
 
-
     def advanceQueue(self):
-
         # Only continue if we have a queue, and spare capacity
         if not (self.dnsq and self.limiter > 0):
             return
@@ -2068,7 +1961,7 @@ class ReverseDNSManager(object):
         ip, ent = self.dnsq.popleft()
 
         def cb(hostname):
-          
+
             for ipp in ent.waiting_ipps:
                 self.signOn(ipp, hostname)
 
@@ -2084,7 +1977,6 @@ class ReverseDNSManager(object):
 
         LOG.debug("Querying %s" % Ad().setRawIP(ip).getTextIP())
         ipToHostname(Ad().setRawIP(ip)).addCallback(cb)
-
 
     def signOn(self, ipp, hostname):
         osm = self.main.osm
