@@ -1124,7 +1124,6 @@ class IRCStateManager(object):
             return
 
         chunks = []
-        osm.bsm.addModeratedChunk(chunks, on_off)
         osm.bsm.addChatChunk(
             chunks, cfg.irc_to_dc_bot,
             "%s %s ban: %s" % (irc_to_dc(whoset), action, banmask))
