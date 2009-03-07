@@ -708,7 +708,7 @@ class DCHandler(BaseDCProtocol):
                 # If the bot produces output, inject our text input before
                 # the first line.
                 if flag[0]:
-                    self.pushChatMessage(self.nick, text)
+                    self.pushStatus("yoinked: %s" % text)
                     flag[0] = False
 
                 if out_text is not None:
