@@ -250,7 +250,6 @@ def dc_from_irc(inick):
 
 def irc_to_dc(inick):
     # Encode an IRC nick, for use in Dtella
-
     return cfg.irc_to_dc_prefix + inick.replace('|','!')
 
 
@@ -311,7 +310,6 @@ class IRCServer(LineOnlyReceiver):
         if self.showirc:
             LOG.log(5, "<: %s" % line)
         LineOnlyReceiver.sendLine(self, line)
-
 
     def lineReceived(self, line):
         if not line:
@@ -1696,7 +1694,6 @@ class BridgeServerManager(object):
         self.signPacket(packet, broadcast=True)
 
         osm.mrm.newMessage(''.join(packet), tries=4)
-
 
     def sendPrivateBridgeChange(self, n, chunks):
         osm = self.main.osm
