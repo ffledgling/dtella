@@ -2,28 +2,24 @@
 # It should be copied to ./dtella/bridge_config.py on the system running
 # the bridge, but otherwise kept as secret as possible.
 
-# Connection info for peering with an UnrealIRCd server.
-# Leave irc_server blank to run in DNS-only mode.
-# If your server supports SSL you can set the port to 
-# the ssl port and set irc_ssl to True.
-irc_server = ""
-irc_port = 6667
-irc_ssl = False
-irc_password = ""
-irc_network_name = ""
+# Service config.  Currently Unreal is the only option.
 
-# IRC Server Link parameters. The my_host parameter must match the link
-# block in your unrealircd.conf file. 
-my_host = "bridge1.somedomain.com"  # Hostname of this IRC server
-my_name = "Dtella IRC Bridge"
-irc_chan = "#dtella"
-
-# UnrealIRCd hostmasking parameters
-hostmask_prefix = "pre"
-
-hostmask_keys = ["key1",
-                 "key2",
-                 "key3"]
+# Peer with an UnrealIRCd server.  See dtella/bridge/unreal.py
+service_class = "dtella.bridge.unreal.UnrealConfig"
+service_args = dict(
+    host = "remote.example.com",
+    port = 6667,
+    ssl = False,
+    password = "hunter2",
+    network_name = "Awesome Network Name",
+    my_host = "myhost.example.com",
+    my_name = "Dtella IRC Bridge",
+    channel = "#dtella",
+    hostmask_prefix = "pre",
+    hostmask_keys = ["key1",
+                     "key2",
+                     "key3"]
+    )
 
 # DNS servers which will be used for doing IP->Hostname reverse lookups.
 # These should be set to your school's local DNS servers, for efficiency.

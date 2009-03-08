@@ -21,8 +21,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-from twisted.internet.protocol import ReconnectingClientFactory
-from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet import reactor, defer
 from twisted.python.runtime import seconds
 import twisted.internet.error
@@ -38,9 +36,6 @@ from collections import deque
 from hashlib import md5
 
 import dtella.common.core as core
-import dtella.common.state
-import dtella.local_config as local
-import dtella.bridge.hostmask
 from dtella.common.reverse_dns import ipToHostname
 from dtella.common.log import LOG
 
@@ -57,6 +52,7 @@ from zope.interface import implements
 from zope.interface.verify import verifyClass
 from dtella.common.interfaces import IDtellaStateObserver
 
+
 irc_nick_chars = (
     "-0123456789"
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
@@ -64,83 +60,6 @@ irc_nick_chars = (
 
 escape_chars = """!"#%&'()*+,./:;=?@`~"""
 base36_chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
-B_USER = "dtbridge"
-B_REALNAME = "Dtella Bridge"
-
-
-class ChannelUserModes(object):
-    def __init__(self, *data):
-        # *data is be a sequence of (mode, friendly_name, info),
-        # in order of decreasing awesomeness.
-        #
-        # mode is:
-        # - A single character, for normal user modes.
-        # - ":P", for plain users who have no modes assigned.
-        # - ":V" for virtual nicks, not present in the channel.
-        #
-        # friendly_name is a string used in mode-change messages.
-        # info is a DC-formatted info string.
-        #
-        # All modes must be unique. "" and None must be present.
-
-        # string of mode characters, decreasing in awesomeness.
-        self.modes = ""
-
-        # Mapping from 'mode' -> infoindex.
-        # Includes ":P" for plain, and ":V" for virtual.
-        self.mode_to_index = {}
-
-        self.friendly = []
-        self.info = []
-
-        for i, (mode, friendly, info) in enumerate(data):
-            if len(mode) == 1:
-                # Keep sorted string of normal modes.
-                self.modes += mode
-            elif mode in (":P", ":V"):
-                pass
-            else:
-                raise ValueError("Invalid mode: " + mode)
-
-            CHECK(mode not in self.mode_to_index)
-            self.mode_to_index[mode] = i
-
-            self.friendly.append(friendly)
-            self.info.append(info)
-
-        # Make sure plain and virtual were defined.
-        CHECK(":P" in self.mode_to_index)
-        CHECK(":V" in self.mode_to_index)
-
-    def getJoinedInfo(self):
-        return '|'.join(self.info)
-
-    def getUserInfoIndex(self, u):
-        # Find the awesomest available mode.
-        for m in self.modes:
-            if m in u.chanmodes:
-                return self.mode_to_index[m]
-        # Otherwise, use the plain mode.
-        return self.mode_to_index[":P"]
-
-    def getVirtualInfoIndex(self):
-        return self.mode_to_index[":V"]
-
-
-# TODO: it might make sense to move this somewhere non-global.
-chan_umodes = ChannelUserModes(
-    ("q",  "owner",    "[~] owner$ $IRC\x01$$0$"),
-    ("a",  "super-op", "[&] super-op$ $IRC\x01$$0$"),
-    ("o",  "op",       "[@] op$ $IRC\x01$$0$"),
-    ("h",  "half-op",  "[%] half-op$ $IRC\x01$$0$"),
-    ("v",  "voice",    "[+] voice$ $IRC\x01$$0$"),
-    (":P", "loser",    "[_]$ $IRC\x01$$0$"),
-    (":V", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
-
-
-class NotOnline(Exception):
-    pass
 
 
 def base_convert(chars, from_digits, to_digits, min_len=1):
@@ -288,498 +207,115 @@ if not cfg.dc_to_irc_bot.startswith(cfg.dc_to_irc_prefix):
 ##############################################################################
 
 
-class IRCServer(LineOnlyReceiver):
-    implements(IDtellaStateObserver)
-    showirc = False
+# Set up service config (IRC, etc.)
+def newServiceConfig():
+    try:
+        service_class = cfg.service_class
+        service_args = cfg.service_args
+    except AttributeError:
+        # For backwards compatibility, use Unreal by default.
+        service_class = "dtella.bridge.unreal.UnrealConfig"
+        service_args = dict(
+            host = cfg.irc_server,
+            port = cfg.irc_port,
+            ssl = cfg.irc_ssl,
+            password = cfg.irc_password,
+            network_name = cfg.irc_network_name,
+            my_host = cfg.my_host,
+            my_name = cfg.my_name,
+            channel = cfg.irc_chan,
+            hostmask_prefix = cfg.hostmask_prefix,
+            hostmask_keys = cfg.hostmask_keys,
+            )
+
+    # The class name is defined as a string in cfg, to prevent problems
+    # with import cycles.
+
+    # "foo.bar.Baz" -> ("foo.bar", "Baz")
+    try:
+        mod, cls = service_class.rsplit(".", 1)
+        ConfigClass = getattr(__import__(mod, fromlist=[cls]), cls)
+    except:
+        raise ImportError("Failed to locate cfg.service_class (%r)"
+                          % service_class)
+    return ConfigClass(**service_args)
+
+
+def getServiceConfig():
+    # Get the service config, creating it on first use.
+    global _scfg
+    try:
+        return _scfg
+    except NameError:
+        _scfg = newServiceConfig()
+        return _scfg
 
-    def __init__(self, main):
-        self.ism = IRCStateManager(main, self)
-        self.server_name = None
-        self.shutdown_deferred = None
-
-        self.ping_dcall = None
-        self.ping_waiting = False
-
-    def connectionMade(self):
-        LOG.info("Connected to IRC server.")
-        self.sendLine("PASS :%s" % (cfg.irc_password,))
-        self.sendLine("SERVER %s 1 :%s" % (cfg.my_host, cfg.my_name))
-
-    def sendLine(self, line):
-        line = line.replace('\r', '').replace('\n', '')
-        if self.showirc:
-            LOG.log(5, "<: %s" % line)
-        LineOnlyReceiver.sendLine(self, line)
-
-    def lineReceived(self, line):
-        if not line:
-            return
-
-        if self.showirc:
-            LOG.log(5, ">: %s" % line)
-
-        if line[0] == ':':
-            try:
-                prefix, line = line[1:].split(' ', 1)
-            except ValueError:
-                return
-        else:
-            prefix = ''
-
-        try:
-            line, trailing = line.split(' :', 1)
-        except ValueError:
-            args = line.split()
-        else:
-            args = line.split()
-            args.append(trailing)
-
-        try:
-            f = getattr(self, 'handleCmd_%s' % args[0].upper())
-        except AttributeError:
-            pass
-        else:
-            f(prefix, args[1:])
-
-    def handleCmd_PING(self, prefix, args):
-        LOG.info("PING? PONG!")
-        if len(args) == 1:
-            self.sendLine("PONG %s :%s" % (cfg.my_host, args[0]))
-        elif len(args) == 2:
-            self.sendLine("PONG %s :%s" % (args[1], args[0]))
-
-    def handleCmd_PONG(self, prefix, args):
-        if self.ping_waiting:
-            self.ping_waiting = False
-            self.schedulePing()
-
-    def handleCmd_NICK(self, prefix, args):
-        oldnick = prefix
-        newnick = args[0]
-
-        if oldnick:
-            self.ism.changeNick(oldnick, newnick)
-        else:
-            self.ism.addUser(newnick)
-
-    def handleCmd_JOIN(self, prefix, args):
-        nick = prefix
-        chans = args[0].split(',')
-
-        if cfg.irc_chan in chans:
-            self.ism.joinChannel(self.ism.users[nick])
-
-    def handleCmd_PART(self, prefix, args):
-        nick = prefix
-        chans = args[0].split(',')
-
-        if cfg.irc_chan in chans:
-            CHECK(self.ism.partChannel(self.ism.users[nick]))
-
-    def handleCmd_QUIT(self, prefix, args):
-        nick = prefix
-        self.ism.removeUser(self.ism.users[nick])
-
-    def handleCmd_KICK(self, prefix, args):
-        chan = args[0]
-        l33t = prefix
-        n00b = args[1]
-        reason = irc_strip(args[2])
-
-        if chan != cfg.irc_chan:
-            return
-
-        if n00b == cfg.dc_to_irc_bot:
-            if self.ism.syncd:
-                self.pushBotJoin()
-            return
-
-        n = self.ism.findDtellaNode(inick=n00b)
-        if n:
-            self.ism.kickDtellaNode(n, l33t, reason)
-        else:
-            message = (
-                "%s has kicked %s: %s" %
-                (irc_to_dc(l33t), irc_to_dc(n00b), reason))
-            CHECK(self.ism.partChannel(self.ism.users[n00b], message))
-
-    def handleCmd_KILL(self, prefix, args):
-        # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
-        l33t = prefix
-        n00b = args[0]
-        reason = irc_strip(args[1])
-
-        if n00b == cfg.dc_to_irc_bot:
-            if self.ism.syncd:
-                self.pushBotJoin(do_nick=True)
-            return
-
-        n = self.ism.findDtellaNode(inick=n00b)
-        if n:
-            self.ism.kickDtellaNode(n, l33t, reason, is_kill=True)
-        else:
-            message = (
-                "%s has KILL'd %s: %s" %
-                (irc_to_dc(l33t), irc_to_dc(n00b), reason))
-            self.ism.removeUser(self.ism.users[n00b], message)
-
-    # Treat SVSKILL the same as KILL.
-    handleCmd_SVSKILL = handleCmd_KILL
-
-    def handleCmd_TOPIC(self, prefix, args):
-        # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
-        chan = args[0]
-        whoset = args[1]
-        text = irc_strip(args[-1])
-
-        if chan == cfg.irc_chan:
-            self.ism.setTopic(whoset, text)
-
-    def handleCmd_MODE(self, prefix, args):
-        # :Paul MODE #dtella +vv aaahhh Big_Guy
-        whoset = prefix
-        chan = args[0]
-        change = args[1]
-        nicks = args[2:]
-
-        if chan != cfg.irc_chan:
-            return
-
-        on_off = True
-        i = 0
-
-        # User() -> {mode -> on_off}
-        user_changes = {}
-
-        # Dtella node modes that need unsetting.
-        unset_modes = []
-        unset_nicks = []
-
-        for c in change:
-            if c == '+':
-                on_off = True
-            elif c == '-':
-                on_off = False
-            elif c == 't':
-                self.ism.setTopicLocked(whoset, on_off)
-            elif c == 'm':
-                self.ism.setModerated(whoset, on_off)
-            elif c == 'k':
-                # Skip over channel key
-                i += 1
-            elif c == 'l':
-                # Skip over channel user limit
-                i += 1
-            elif c == 'b':
-                banmask = nicks[i]
-                i += 1
-                self.ism.setChannelBan(whoset, on_off, banmask)
-            elif c in chan_umodes.modes:
-                # Grab affected nick
-                nick = nicks[i]
-                i += 1
-
-                n = self.ism.findDtellaNode(inick=nick)
-                if n:
-                    # If someone set a mode for a Dt node, unset it.
-                    if on_off:
-                        unset_modes.append(c)
-                        unset_nicks.append(nick)
-                    continue
-
-                # Get the IRC user we're modifying.
-                try:
-                    u = self.ism.users[nick]
-                except KeyError:
-                    LOG.error("MODE: unknown nick: %s" % nick)
-                    continue
-
-                # Schedule a mode change for this user.
-                user_changes.setdefault(u, {})[c] = on_off
-
-        # Undo mode changes for Dtella nodes.
-        if unset_modes:
-            self.sendLine(
-                ":%s MODE %s -%s %s" % (
-                    cfg.dc_to_irc_bot, cfg.irc_chan,
-                    ''.join(unset_modes), ' '.join(unset_nicks)))
-
-        # Send IRC user mode changes to Dtella
-        for u, changes in user_changes.iteritems():
-            self.ism.setChannelUserModes(whoset, u, changes)
-
-    def handleCmd_TKL(self, prefix, args):
-        addrem = args[0]
-        kind = args[1]
-
-        if addrem == '+':
-            on_off = True
-        elif addrem == '-':
-            on_off = False
-        else:
-            LOG.error("TKL: invalid modifier: '%s'" % addrem)
-            return
-
-        # :irc1.dhirc.com TKL + Z * 128.10.12.0/24 darkhorse!admin@dhirc.com 0 1171427130 :no reason
-        if kind == 'Z' and args[2] == '*':
-            cidr = args[3]
-            self.ism.setNetworkBan(cidr, on_off)
-
-        # :%s TKL + Q * %s* %s 0 %d :Reserved for Dtella
-        elif kind == 'Q':
-            nickmask = args[3]
-            if on_off:
-                reason = args[-1]
-                self.ism.addQLine(nickmask, reason)
-            else:
-                self.ism.removeQLine(nickmask)
-
-    def handleCmd_SERVER(self, prefix, args):
-        if prefix:
-            # Not from our connected server
-            return
-
-        if self.server_name:
-            # Could be a dupe?  Ignore it.
-            return
-
-        # We got a reply from the our connected IRC server, so our password
-        # was just accepted.  Send the Dtella state information into IRC.
-
-        # Save server name
-        CHECK(args[0])
-        self.server_name = args[0]
-
-        LOG.info("IRC Server Name: %s" % self.server_name)
-
-        # Tell the ReconnectingClientFactory that we're cool
-        self.factory.resetDelay()
-
-        # This isn't very correct, because the Dtella nicks
-        # haven't been sent yet, but it's the best we can practically do.
-        cloak_checksum = dtella.bridge.hostmask.get_checksum()
-        self.sendLine("NETINFO 0 %d 0 %s 0 0 0 :%s" %
-                      (time.time(), cloak_checksum, cfg.irc_network_name))
-        self.sendLine(":%s EOS" % cfg.my_host)
-
-    def handleCmd_EOS(self, prefix, args):
-        if prefix != self.server_name:
-            return
-        if self.ism.syncd:
-            return
-
-        LOG.info("Finished receiving IRC sync data.")
-
-        self.showirc = True
-
-        # Check for conflicting bridges.
-        if self.ism.findConflictingBridge():
-            LOG.error("My nick prefix is in use! Terminating.")
-            self.transport.loseConnection()
-            reactor.stop()
-            return
-
-        # Set up nick reservation
-        self.sendLine(
-            "TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
-            (cfg.dc_to_irc_prefix, cfg.my_host, time.time()))
-        self.ism.killConflictingUsers()
-
-        # Send my own bridge nick
-        self.pushBotJoin(do_nick=True)
-
-        # When we enter the syncd state, register this instance with Dtella.
-        # This will eventually trigger event_DtellaUp, where we send our state.
-        self.schedulePing()
-        self.ism.addMeToMain()
-
-    def handleCmd_WHOIS(self, prefix, args):
-        # Somewhat simplistic handling of WHOIS requests
-        if not (prefix and len(args) >= 1):
-            return
-
-        src = prefix
-        who = args[-1]
-
-        if who == cfg.dc_to_irc_bot:
-            self.pushWhoisReply(
-                311, src, who, B_USER, cfg.my_host, '*', B_REALNAME)
-            self.pushWhoisReply(
-                312, src, who, cfg.my_host, cfg.my_name)
-            self.pushWhoisReply(
-                319, src, who, cfg.irc_chan)
-        else:
-            n = self.ism.findDtellaNode(inick=who)
-            if not (n and hasattr(n, 'hostmask')):
-                return
-
-            self.pushWhoisReply(
-                311, src, who, n_user(n.ipp), n.hostmask, '*',
-                "Dtella %s" % n.dttag[3:])
-            self.pushWhoisReply(
-                312, src, who, cfg.my_host, cfg.my_name)
-            self.pushWhoisReply(
-                319, src, who, cfg.irc_chan)
-
-            if local.use_locations:
-                self.pushWhoisReply(
-                    320, src, who, "Location: %s"
-                    % local.hostnameToLocation(n.hostname))
-
-        self.pushWhoisReply(
-            318, src, who, "End of /WHOIS list.")
-
-    def pushWhoisReply(self, code, target, who, *strings):
-        line = ":%s %d %s %s " % (cfg.my_host, code, target, who)
-        strings = list(strings)
-        strings[-1] = ":" + strings[-1]
-        line += ' '.join(strings)
-        self.sendLine(line)
-
-    def handleCmd_PRIVMSG(self, prefix, args):
-        src_nick = prefix
-        target = args[0]
-        text = args[1]
-        flags = 0
-
-        if (text[:8], text[-1:]) == ('\001ACTION ', '\001'):
-            text = text[8:-1]
-            flags |= core.SLASHME_BIT
-
-        text = irc_strip(text)
-
-        if target == cfg.irc_chan:
-            self.ism.sendChannelMessage(src_nick, text, flags)
-	
-        #Format> :Global PRIVMSG $irc3.dhirc.com :TESTING....
-        #Handle global messages delivered to the bridge.
-        elif target == "$" + cfg.my_host:
-            flags |= core.NOTICE_BIT
-            self.ism.sendChannelMessage(src_nick, text, flags)
-
-        else:
-            n = self.ism.findDtellaNode(inick=target)
-            if n:
-                self.ism.sendPrivateMessage(n, src_nick, text, flags)
-
-    def handleCmd_NOTICE(self, prefix, args):
-        src_nick = prefix
-        target = args[0]
-        text = irc_strip(args[1])
-        flags = core.NOTICE_BIT
-
-        if target == cfg.irc_chan:
-            self.ism.sendChannelMessage(src_nick, text, flags)
-        else:
-            n = self.ism.findDtellaNode(inick=target)
-            if n:
-                self.ism.sendPrivateMessage(n, src_nick, text, flags)
-
-    def pushNick(self, nick, user, host, modes, ip, name):
-        # If an IP was provided, convert to a base64 parameter.
-        if ip:
-            ip = ' ' + binascii.b2a_base64(ip).rstrip()
-        else:
-            ip = ''
-
-        self.sendLine(
-            "NICK %s 1 %d %s %s %s 1 %s *%s :%s" %
-            (nick, time.time(), user, host, cfg.my_host, modes, ip, name))
-
-    def pushJoin(self, nick):
-        self.sendLine(":%s JOIN %s" % (nick, cfg.irc_chan))
-
-    def pushTopic(self, nick, topic):
-        self.sendLine(
-            ":%s TOPIC %s %s %d :%s" %
-            (nick, cfg.irc_chan, nick, int(time.time()), topic))
-
-    def pushQuit(self, nick, reason=""):
-        self.sendLine(":%s QUIT :%s" % (nick, reason))
-
-    def pushPrivMsg(self, nick, text, target=None, action=False):
-        if target is None:
-            target = cfg.irc_chan
-
-        if action:
-            text = "\001ACTION %s\001" % text
-
-        self.sendLine(":%s PRIVMSG %s :%s" % (nick, target, text))
-
-    def pushNotice(self, nick, text, target=None):
-        if target is None:
-            target = cfg.irc_chan
-        self.sendLine(":%s NOTICE %s :%s" % (nick, target, text))
-
-    def pushBotJoin(self, do_nick=False):
-        if do_nick:
-            self.pushNick(
-                cfg.dc_to_irc_bot, B_USER, cfg.my_host, "+Sq", None,
-                B_REALNAME)
-
-        # Join channel, and grant ops.
-        self.pushJoin(cfg.dc_to_irc_bot)
-        self.sendLine(
-            ":%s MODE %s +ao %s %s" %
-            (cfg.my_host, cfg.irc_chan, cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
-
-    def pushKill(self, nick):
-        LOG.info("Killing nick: " + nick)
-        self.sendLine(":%s KILL %s :%s (nick reserved for Dtella)"
-                      % (cfg.my_host, nick, cfg.my_host))
-
-    def pushRemoveQLine(self, nickmask):
-        LOG.info("Telling network to remove Q-line: %s" % nickmask)
-        self.sendLine("TKL - Q * %s %s" % (nickmask, cfg.my_host))
-
-    def schedulePing(self):
-        if self.ping_dcall:
-            self.ping_dcall.reset(60.0)
-            return
-
-        def cb():
-            self.ping_dcall = None
-
-            if self.ping_waiting:
-                LOG.error("Ping timeout!")
-                self.transport.loseConnection()
-            else:
-                self.sendLine("PING :%s" % cfg.my_host)
-                self.ping_waiting = True
-                self.ping_dcall = reactor.callLater(60.0, cb)
-
-        self.ping_dcall = reactor.callLater(60.0, cb)
-
-    def shutdown(self):
-        if self.shutdown_deferred:
-            return self.shutdown_deferred
-
-        # Remove nick ban
-        self.pushRemoveQLine(cfg.dc_to_irc_prefix + "*")
-
-        # Scream
-        self.pushQuit(cfg.dc_to_irc_bot, "AIEEEEEEE!")
-
-        # Send SQUIT for completeness
-        self.sendLine(":%s SQUIT %s :Bridge Shutting Down"
-                      % (cfg.my_host, cfg.my_host))
-
-        # Close connection
-        self.transport.loseConnection()
-
-        # This will complete after loseConnection fires
-        self.shutdown_deferred = defer.Deferred()
-        return self.shutdown_deferred
-
-    def connectionLost(self, result):
-        LOG.info("Lost IRC connection.")
-        if self.ism.syncd:
-            self.ism.removeMeFromMain()
-
-        if self.shutdown_deferred:
-            self.shutdown_deferred.callback("Bye!")
 
 ##############################################################################
+
+
+class ChannelUserModes(object):
+    def __init__(self, *data):
+        # *data is be a sequence of (mode, friendly_name, info),
+        # in order of decreasing awesomeness.
+        #
+        # mode is:
+        # - A single character, for normal user modes.
+        # - ":P", for plain users who have no modes assigned.
+        # - ":V" for virtual nicks, not present in the channel.
+        #
+        # friendly_name is a string used in mode-change messages.
+        # info is a DC-formatted info string.
+        #
+        # All modes must be unique. "" and None must be present.
+
+        # string of mode characters, decreasing in awesomeness.
+        self.modes = ""
+
+        # Mapping from 'mode' -> infoindex.
+        # Includes ":P" for plain, and ":V" for virtual.
+        self.mode_to_index = {}
+
+        self.friendly = []
+        self.info = []
+
+        for i, (mode, friendly, info) in enumerate(data):
+            if len(mode) == 1:
+                # Keep sorted string of normal modes.
+                self.modes += mode
+            elif mode in (":P", ":V"):
+                pass
+            else:
+                raise ValueError("Invalid mode: " + mode)
+
+            CHECK(mode not in self.mode_to_index)
+            self.mode_to_index[mode] = i
+
+            self.friendly.append(friendly)
+            self.info.append(info)
+
+        # Make sure plain and virtual were defined.
+        CHECK(":P" in self.mode_to_index)
+        CHECK(":V" in self.mode_to_index)
+
+    def getJoinedInfo(self):
+        return '|'.join(self.info)
+
+    def getUserInfoIndex(self, u):
+        # Find the awesomest available mode.
+        for m in self.modes:
+            if m in u.chanmodes:
+                return self.mode_to_index[m]
+        # Otherwise, use the plain mode.
+        return self.mode_to_index[":P"]
+
+    def getVirtualInfoIndex(self):
+        return self.mode_to_index[":V"]
+
+
+class NotOnline(Exception):
+    pass
+
 
 class User(object):
     def __init__(self, inick):
@@ -814,7 +350,7 @@ class IRCStateManager(object):
 
         # string -> compiled regex
         self.chanbans = {}
-        # string -> compiled regex
+        # string -> (compiled regex, reason)
         self.qlines = {}
 
         # Network bans: (ip, mask), both ints.
@@ -880,6 +416,8 @@ class IRCStateManager(object):
         u.inick = new_inick
         self.users[new_inick] = u
 
+        scfg = getServiceConfig()
+
         # Report the change to Dtella.
         if u in self.chanusers:
             try:
@@ -887,7 +425,7 @@ class IRCStateManager(object):
             except NotOnline:
                 return
 
-            infoindex = chan_umodes.getUserInfoIndex(u)
+            infoindex = scfg.chan_umodes.getUserInfoIndex(u)
 
             chunks = []
             osm.bsm.addChatChunk(
@@ -914,7 +452,8 @@ class IRCStateManager(object):
         except NotOnline:
             return
 
-        infoindex = chan_umodes.getUserInfoIndex(u)
+        scfg = getServiceConfig()
+        infoindex = scfg.chan_umodes.getUserInfoIndex(u)
         chunks = []
         osm.bsm.addNickChunk(
             chunks, irc_to_dc(u.inick), infoindex)
@@ -1087,14 +626,16 @@ class IRCStateManager(object):
             LOG.error("setChannelUserModes: %r not in channel." % u)
             return
 
+        scfg = getServiceConfig()
+
         # Save old index, apply changes, and get new index.
-        old_infoindex = chan_umodes.getUserInfoIndex(u)
+        old_infoindex = scfg.chan_umodes.getUserInfoIndex(u)
         for mode, on_off in changes.iteritems():
             if on_off:
                 u.chanmodes.add(mode)
             else:
                 u.chanmodes.discard(mode)
-        new_infoindex = chan_umodes.getUserInfoIndex(u)
+        new_infoindex = scfg.chan_umodes.getUserInfoIndex(u)
 
         if new_infoindex == old_infoindex:
             # Change isn't relevant to Dtella; ignore.
@@ -1113,8 +654,8 @@ class IRCStateManager(object):
             "%s changed mode for %s: %s -> %s" % (
                 irc_to_dc(whoset),
                 irc_to_dc(u.inick),
-                chan_umodes.friendly[old_infoindex],
-                chan_umodes.friendly[new_infoindex]))
+                scfg.chan_umodes.friendly[old_infoindex],
+                scfg.chan_umodes.friendly[new_infoindex]))
         osm.bsm.sendBridgeChange(chunks)
 
     def addQLine(self, nickmask, reason):
@@ -1235,14 +776,15 @@ class IRCStateManager(object):
     def getNicksAndInfo(self):
         # Return (dnick, infoindex) for all users.
         nicks = []
+        scfg = getServiceConfig()
 
         for u in self.chanusers:
             nicks.append(
-                (irc_to_dc(u.inick), chan_umodes.getUserInfoIndex(u)))
+                (irc_to_dc(u.inick), scfg.chan_umodes.getUserInfoIndex(u)))
 
         for inick in cfg.virtual_nicks:
             nicks.append(
-                (irc_to_dc(inick), chan_umodes.getVirtualInfoIndex()))
+                (irc_to_dc(inick), scfg.chan_umodes.getVirtualInfoIndex()))
 
         nicks.sort()
         return nicks
@@ -1285,7 +827,55 @@ class IRCStateManager(object):
         # event_RemoveNick won't try to send a stale QUIT.
         n.inick = inick
 
+        # Call AddNickWithHostname after DNS succeeds (or fails)
         self.main.rdns.addRequest(n)
+
+    def bridgeevent_AddNickWithHostname(self, n, hostname):
+        # Set up hostname and hostmask.
+        scfg = getServiceConfig()
+
+        if hostname is None:
+            n.hostname = Ad().setRawIPPort(n.ipp).getTextIP()
+            try:
+                hm = scfg.hostmasker
+            except AttributeError:
+                n.hostmask = n.hostname
+            else:
+                n.hostmask = hm.maskIPv4(n.hostname)
+        else:
+            n.hostname = hostname
+            try:
+                hm = scfg.hostmasker
+            except AttributeError:
+                n.hostmask = n.hostname
+            else:
+                n.hostmask = hm.maskHostname(n.hostname)
+
+        osm = self.getOnlineStateManager()
+
+        # Check channel bans on-join.
+        if self.isNodeChannelBanned(n):
+            chunks = []
+            osm.bsm.addKickChunk(
+                chunks, n, cfg.irc_to_dc_bot, "Channel Ban",
+                rejoin=True, silent=True)
+            osm.bsm.sendBridgeChange(chunks)
+
+            # Remove from Dtella nick list
+            del n.inick
+            osm.nkm.removeNode(n, "ChanBanned")
+            n.setNoUser()
+            return
+
+        # Announce new user to IRC.
+        if self.ircs:
+            self.ircs.pushNick(
+                n.inick, n_user(n.ipp), n.hostname, "+iwx", n.ipp[:4],
+                "Dtella %s" % n.dttag[3:])
+            self.ircs.pushJoin(n.inick)
+
+        # Send queued chat messages
+        osm.cms.flushQueue(n)
 
     def event_RemoveNick(self, n, reason):
         try:
@@ -1389,22 +979,9 @@ class IRCStateManager(object):
 
 verifyClass(IDtellaStateObserver, IRCStateManager)
 
-##############################################################################
-
-class IRCFactory(ReconnectingClientFactory):
-    initialDelay = 10
-    maxDelay = 60*20
-    factor = 1.5
-
-    def __init__(self, main):
-        self.main = main
-
-    def buildProtocol(self, addr):
-        p = IRCServer(self.main)
-        p.factory = self
-        return p
 
 ##############################################################################
+
 
 class BridgeServerProtocol(core.PeerHandler):
 
@@ -1468,7 +1045,9 @@ class BridgeServerProtocol(core.PeerHandler):
 
         osm.bsm.receivedBlockRequest(src_ipp, bhash)
 
+
 ##############################################################################
+
 
 class BridgeServerManager(object):
     class CachedBlock(object):
@@ -1724,8 +1303,9 @@ class BridgeServerManager(object):
         chunks.append(nick)
 
     def addInfoChunk(self, chunks):
+        scfg = getServiceConfig()
         chunks.append('I')
-        joined_info = chan_umodes.getJoinedInfo()
+        joined_info = scfg.chan_umodes.getJoinedInfo()
         chunks.append(struct.pack("!H", len(joined_info)))
         chunks.append(joined_info)
 
@@ -1816,7 +1396,7 @@ class BridgeServerManager(object):
         self.main.ph.sendPacket(''.join(packet), ad.getAddrTuple())
 
     def nickRemoved(self, n):
-        dels = ('dns_pending', 'hostname', 'hostmask', 'inick', 'jointime')
+        dels = ('dns_pending', 'hostname', 'hostmask', 'inick')
 
         for d in dels:
             try:
@@ -1908,7 +1488,9 @@ class BridgeServerManager(object):
         for b in self.cached_blocks.itervalues():
             dcall_discard(b, 'expire_dcall')
 
+
 ##############################################################################
+
 
 class ReverseDNSManager(object):
     class Entry(object):
@@ -1927,11 +1509,16 @@ class ReverseDNSManager(object):
         self.limiter = 3
 
     def addRequest(self, n):
-        ipp = n.ipp
-        ip = ipp[:4]
-
         n.dns_pending = True
+        scfg = getServiceConfig()
 
+        # If reverse DNS is not needed, sign on really soon
+        if not scfg.use_rdns:
+            reactor.callLater(0, self.signOn, n.ipp, None)
+            return
+
+        # Try to find an existing RDNS entry for this IP.
+        ip = n.ipp[:4]
         try:
             ent = self.cache[ip]
         except KeyError:
@@ -1939,13 +1526,13 @@ class ReverseDNSManager(object):
 
         if ent.hostname:
             # Already have a hostname, sign on really soon
-            reactor.callLater(0, self.signOn, ipp, ent.hostname)
+            reactor.callLater(0, self.signOn, n.ipp, ent.hostname)
         elif ent.waiting_ipps:
             # This hostname is already being queried.
-            ent.waiting_ipps.add(ipp)
+            ent.waiting_ipps.add(n.ipp)
         else:
             # Start querying
-            ent.waiting_ipps.add(ipp)
+            ent.waiting_ipps.add(n.ipp)
             self.dnsq.append((ip, ent))
             self.advanceQueue()
 
@@ -1958,7 +1545,6 @@ class ReverseDNSManager(object):
         ip, ent = self.dnsq.popleft()
 
         def cb(hostname):
-
             for ipp in ent.waiting_ipps:
                 self.signOn(ipp, hostname)
 
@@ -1976,53 +1562,23 @@ class ReverseDNSManager(object):
         ipToHostname(Ad().setRawIP(ip)).addCallback(cb)
 
     def signOn(self, ipp, hostname):
+        # Try to find an online node corresponding to this ipp.
         osm = self.main.osm
-        ism = self.main.ism
-
         if not (osm and osm.syncd):
             return
-
         try:
             n = osm.lookup_ipp[ipp]
         except KeyError:
             return
 
+        # Check if this node is waiting for a DNS reply.
         try:
             del n.dns_pending
         except AttributeError:
             return
 
-        if not ism:
-            return
+        # Notify IRC State of the new node.
+        ism = self.main.ism
+        if ism:
+            ism.bridgeevent_AddNickWithHostname(n, hostname)
 
-        if hostname is None:
-            hostname = Ad().setRawIPPort(ipp).getTextIP()
-            hostmask = dtella.bridge.hostmask.mask_ipv4(hostname)
-        else:
-            hostmask = dtella.bridge.hostmask.mask_hostname(hostname)
-
-        n.hostname = hostname
-        n.hostmask = hostmask
-
-        # Check channel ban
-        if ism.isNodeChannelBanned(n):
-            chunks = []
-            osm.bsm.addKickChunk(
-                chunks, n, cfg.irc_to_dc_bot, "Channel Ban",
-                rejoin=True, silent=True)
-            osm.bsm.sendBridgeChange(chunks)
-
-            # Remove from Dtella nick list
-            del n.inick
-            osm.nkm.removeNode(n, "ChanBanned")
-            n.setNoUser()
-            return
-
-        if ism.ircs:
-            ism.ircs.pushNick(
-                n.inick, n_user(n.ipp), hostname, "+iwx", n.ipp[:4],
-                "Dtella %s" % n.dttag[3:])
-            ism.ircs.pushJoin(n.inick)
-
-        # Send queued chat messages
-        osm.cms.flushQueue(n)

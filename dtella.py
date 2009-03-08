@@ -44,7 +44,8 @@ import socket
 import time
 import getopt
 
-from dtella.common.log import initLogger
+from dtella.common.log import setLogFile
+from dtella.common.log import LOG
 
 
 def addTwistedErrorCatcher(handler):
@@ -61,33 +62,24 @@ def addTwistedErrorCatcher(handler):
 
 def runBridge():
     import dtella.bridge_config as cfg
-    LOG = initLogger(cfg.file_base + ".log", 4<<20, 4)
+    setLogFile(cfg.file_base + ".log", 4<<20, 4)
     LOG.debug("Bridge Logging Manager Initialized")
 
     addTwistedErrorCatcher(LOG.critical)
 
     from dtella.bridge.main import DtellaMain_Bridge
     dtMain = DtellaMain_Bridge()
-    
-    if cfg.irc_server:
-        from dtella.bridge.bridge_server import IRCFactory
-        ifactory = IRCFactory(dtMain)
-        if cfg.irc_ssl:
-            from twisted.internet import ssl
-            sslContext = ssl.ClientContextFactory()
-            reactor.connectSSL(cfg.irc_server, cfg.irc_port, ifactory,
-                               sslContext)
-        else:
-            reactor.connectTCP(cfg.irc_server, cfg.irc_port, ifactory)
-    else:
-        LOG.info("IRC is not enabled.")
+
+    from dtella.bridge.bridge_server import getServiceConfig
+    scfg = getServiceConfig()
+    scfg.startService(dtMain)
 
     reactor.run()
 
 
 def runDconfigPusher():
     import dtella.bridge_config as cfg
-    LOG = initLogger(cfg.file_base + ".log", 4<<20, 4)
+    setLogFile(cfg.file_base + ".log", 4<<20, 4)
     LOG.debug("Dconfig Pusher Logging Manager Initialized")
 
     addTwistedErrorCatcher(LOG.critical)
@@ -99,7 +91,7 @@ def runDconfigPusher():
 
 def runClient(dc_port):
     #Logging for Dtella Client
-    LOG = initLogger("dtella.log", 1<<20, 1)
+    setLogFile("dtella.log", 1<<20, 1)
     LOG.debug("Client Logging Manager Initialized")
 
     from dtella.client.main import DtellaMain_Client

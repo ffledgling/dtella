@@ -24,7 +24,7 @@ import sys
 import logging
 import logging.handlers
 
-from dtella.common.util import get_user_path, CHECK
+from dtella.common.util import get_user_path
 
 # Defined Logging Levels
 #
@@ -51,14 +51,7 @@ class IgnorantWriter(object):
         except IOError:
             pass
  
-def initLogger(filename, max_size, max_archives):
-    global LOG
-    try:
-        LOG
-        raise AssertionError("initLogger already called")
-    except NameError:
-        pass
-    
+def initLogger():
     # Add custom levels
     logging.addLevelName(5, "PACKET")
 
@@ -71,6 +64,17 @@ def initLogger(filename, max_size, max_archives):
     ch.setLevel(logging.DEBUG)
     ch.setFormatter(logging.Formatter("%(levelname).1s - %(message)s"))
     LOG.addHandler(ch)
+    return LOG
+
+LOG = initLogger()
+
+def setLogFile(filename, max_size, max_archives):
+    global log_file_defined
+    try:
+        log_file_defined
+        raise AssertionError("setLogFile already called")
+    except NameError:
+        log_file_defined = True
 
     # Create file handler and set level to debug (rotates logs)
     fh = logging.handlers.RotatingFileHandler(
@@ -79,6 +83,4 @@ def initLogger(filename, max_size, max_archives):
     fh.setFormatter(logging.Formatter(
         "%(asctime)s - %(levelname).1s - %(message)s"))
     LOG.addHandler(fh)
-
-    return LOG
 
