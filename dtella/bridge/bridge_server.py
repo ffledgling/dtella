@@ -234,10 +234,10 @@ def newServiceConfig():
     # "foo.bar.Baz" -> ("foo.bar", "Baz")
     try:
         mod, cls = service_class.rsplit(".", 1)
-        ConfigClass = getattr(__import__(mod, fromlist=[cls]), cls)
-    except:
-        raise ImportError("Failed to locate cfg.service_class (%r)"
-                          % service_class)
+        ConfigClass = getattr(__import__(mod, globals(), locals(), [cls]), cls)
+    except Exception, e:
+        raise ImportError("Failed to locate cfg.service_class (%r): %s"
+                          % (service_class, e))
     return ConfigClass(**service_args)
 
 
