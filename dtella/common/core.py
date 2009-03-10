@@ -3955,8 +3955,8 @@ class BanManager(object):
                             self.ban_matcher.addRange(b.ipmask)
 
             # If I'm a bridge, get bans from IRC.
-            if osm.bsm and self.main.ircs:
-                for ipmask in self.main.ircs.data.bans:
+            if osm.bsm and self.main.ism:
+                for ipmask in self.main.ism.bans:
                     self.ban_matcher.addRange(ipmask)
 
             self.enforceAllBans()
