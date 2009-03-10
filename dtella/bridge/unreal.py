@@ -189,8 +189,8 @@ class UnrealIRCServer(LineOnlyReceiver):
         # Is the source user a Dtella node?  Freak out.
         n = self.ism.findDtellaNode(inick=oldnick)
         if n:
-            message = "nick change to %s is impossible" % irc_to_dc(newnick)
-            self.ism.kickDtellaNode(n, prefix, message, is_kill=True)
+            message = "Nick change to %s is impossible" % irc_to_dc(newnick)
+            self.ism.kickDtellaNode(n, prefix, message)
 
     def handleCmd_JOIN(self, prefix, args):
         nick = prefix
