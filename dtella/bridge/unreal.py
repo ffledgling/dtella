@@ -185,7 +185,12 @@ class UnrealIRCServer(LineOnlyReceiver):
         # :services.dhirc.com SVSNICK |foo Guest33400 :1236660594
         oldnick = args[0]
         newnick = args[1]
-        self.ism.changeNick(oldnick, newnick)
+
+        # Is the source user a Dtella node?  Freak out.
+        n = self.ism.findDtellaNode(inick=oldnick)
+        if n:
+            message = "nick change to %s is impossible" % irc_to_dc(newnick)
+            self.ism.kickDtellaNode(n, prefix, message, is_kill=True)
 
     def handleCmd_JOIN(self, prefix, args):
         nick = prefix

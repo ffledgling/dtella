@@ -407,15 +407,6 @@ class IRCStateManager(object):
                       % (old_inick, new_inick))
             self.chanusers.discard(dest_u)
 
-        # Is the source user a Dtella node?  Freak out.
-        n = self.findDtellaNode(inick=old_inick)
-        if n:
-            if self.ircs:
-                self.ircs.pushKill(new_inick)
-            self.kickDtellaNode(
-                n, "", "Invalid nick change event.", is_kill=True)
-            return
-
         # Now find the source user.
         try:
             u = self.users.pop(old_inick.lower())
