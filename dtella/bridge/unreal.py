@@ -181,6 +181,12 @@ class UnrealIRCServer(LineOnlyReceiver):
         else:
             self.ism.addUser(newnick)
 
+    def handleCmd_SVSNICK(self, prefix, args):
+        # :services.dhirc.com SVSNICK |foo Guest33400 :1236660594
+        oldnick = args[0]
+        newnick = args[1]
+        self.ism.changeNick(oldnick, newnick)
+
     def handleCmd_JOIN(self, prefix, args):
         nick = prefix
         chans = args[0].split(',')

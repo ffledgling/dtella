@@ -363,6 +363,7 @@ class IRCStateManager(object):
         self.main.addIRCStateManager(self)
 
     def removeMeFromMain(self):
+        # After calling this, I'm basically a dead object.
         self.main.removeIRCStateManager(self)
 
     def addUser(self, inick):
@@ -405,6 +406,15 @@ class IRCStateManager(object):
             LOG.error("changeNick '%s'->'%s': Dest nick already exists."
                       % (old_inick, new_inick))
             self.chanusers.discard(dest_u)
+
+        # Is the source user a Dtella node?  Freak out.
+        n = self.findDtellaNode(inick=old_inick)
+        if n:
+            if self.ircs:
+                self.ircs.pushKill(new_inick)
+            self.kickDtellaNode(
+                n, "", "Invalid nick change event.", is_kill=True)
+            return
 
         # Now find the source user.
         try:
