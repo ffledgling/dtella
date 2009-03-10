@@ -336,7 +336,7 @@ class IRCStateManager(object):
         self.ircs = ircs
         self.syncd = False
 
-        # dnick -> User()
+        # inick.lower() -> User object
         self.users = {}
 
         # Set of all User()s in the Dtella channel.
@@ -367,7 +367,7 @@ class IRCStateManager(object):
 
     def addUser(self, inick):
         # Start tracking a new IRC user.
-        if inick in self.users:
+        if inick.lower() in self.users:
             LOG.error("addUser: '%s' already exists." % inick)
             return
 
@@ -377,20 +377,28 @@ class IRCStateManager(object):
                 self.ircs.pushKill(inick)
             return
 
-        self.users[inick] = u = User(inick)
+        self.users[inick.lower()] = u = User(inick)
 
     def removeUser(self, u, message=None):
         self.partChannel(u, message)
-        if self.users.pop(u.inick, None) != u:
+        if self.users.pop(u.inick.lower(), None) != u:
             LOG.error("removeUser: %r not found" % u)
             return
 
+    def findUser(self, inick):
+        return self.users[inick.lower()]
+
     def changeNick(self, old_inick, new_inick):
+        if old_inick.lower() == new_inick.lower():
+            LOG.error("changeNick '%s'->'%s': Nicks are equivalent."
+                      % (old_inick, new_inick))
+            return
+
         # If the destination nick already exists, then our state must be
         # somehow corrupted.  Oh well, just assume the server knows what
         # it's talking about, and throw away the existing user.
         try:
-            dest_u = self.users.pop(new_inick)
+            dest_u = self.users.pop(new_inick.lower())
         except KeyError:
             pass
         else:
@@ -400,7 +408,7 @@ class IRCStateManager(object):
 
         # Now find the source user.
         try:
-            u = self.users.pop(old_inick)
+            u = self.users.pop(old_inick.lower())
         except KeyError:
             LOG.error("changeNick '%s'->'%s': Source nick not found."
                       % (old_inick, new_inick))
@@ -414,7 +422,7 @@ class IRCStateManager(object):
             return
 
         u.inick = new_inick
-        self.users[new_inick] = u
+        self.users[new_inick.lower()] = u
 
         scfg = getServiceConfig()
 
@@ -736,9 +744,9 @@ class IRCStateManager(object):
             LOG.info("Found a conflicting Q-line: %s" % nickmask)
 
             # If any nicks exist under that Q-line, we'll need to abort.
-            for nick in self.users:
-                if q.match(nick):
-                    LOG.info("... and a nick to go with it: %s" % nick)
+            for u in self.users.iteritems():
+                if q.match(u.inick):
+                    LOG.info("... and a nick to go with it: %s" % u.inick)
                     return True
 
             stale_qlines.append(nickmask)
@@ -809,12 +817,12 @@ class IRCStateManager(object):
         CHECK(self.syncd)
 
         try:
-            u = self.users[dst_inick]
+            u = self.findUser(dst_inick)
         except KeyError:
             return False
 
         if self.ircs:
-            self.ircs.pushPrivMsg(n.inick, text, dst_inick)
+            self.ircs.pushPrivMsg(n.inick, text, u.inick)
             return True
 
         return False

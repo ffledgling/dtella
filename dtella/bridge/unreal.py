@@ -187,7 +187,7 @@ class UnrealIRCServer(LineOnlyReceiver):
 
         scfg = getServiceConfig()
         if scfg.channel in chans:
-            self.ism.joinChannel(self.ism.users[nick])
+            self.ism.joinChannel(self.ism.findUser(nick))
 
     def handleCmd_PART(self, prefix, args):
         nick = prefix
@@ -195,11 +195,11 @@ class UnrealIRCServer(LineOnlyReceiver):
 
         scfg = getServiceConfig()
         if scfg.channel in chans:
-            CHECK(self.ism.partChannel(self.ism.users[nick]))
+            CHECK(self.ism.partChannel(self.ism.findUser(nick)))
 
     def handleCmd_QUIT(self, prefix, args):
         nick = prefix
-        self.ism.removeUser(self.ism.users[nick])
+        self.ism.removeUser(self.ism.findUser(nick))
 
     def handleCmd_KICK(self, prefix, args):
         chan = args[0]
@@ -223,7 +223,7 @@ class UnrealIRCServer(LineOnlyReceiver):
             message = (
                 "%s has kicked %s: %s" %
                 (irc_to_dc(l33t), irc_to_dc(n00b), reason))
-            CHECK(self.ism.partChannel(self.ism.users[n00b], message))
+            CHECK(self.ism.partChannel(self.ism.findUser(n00b), message))
 
     def handleCmd_KILL(self, prefix, args):
         # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
@@ -243,7 +243,7 @@ class UnrealIRCServer(LineOnlyReceiver):
             message = (
                 "%s has KILL'd %s: %s" %
                 (irc_to_dc(l33t), irc_to_dc(n00b), reason))
-            self.ism.removeUser(self.ism.users[n00b], message)
+            self.ism.removeUser(self.ism.findUser(n00b), message)
 
     # Treat SVSKILL the same as KILL.
     handleCmd_SVSKILL = handleCmd_KILL
@@ -313,7 +313,7 @@ class UnrealIRCServer(LineOnlyReceiver):
 
                 # Get the IRC user we're modifying.
                 try:
-                    u = self.ism.users[nick]
+                    u = self.ism.findUser(nick)
                 except KeyError:
                     LOG.error("MODE: unknown nick: %s" % nick)
                     continue
