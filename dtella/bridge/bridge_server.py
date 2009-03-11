@@ -646,25 +646,29 @@ class IRCStateManager(object):
                 u.chanmodes.discard(mode)
         new_infoindex = scfg.chan_umodes.getUserInfoIndex(u)
 
-        if new_infoindex == old_infoindex:
-            # Change isn't relevant to Dtella; ignore.
-            return
-
         try:
             osm = self.getOnlineStateManager()
         except NotOnline:
             return
 
         chunks = []
-        osm.bsm.addNickChunk(
-            chunks, irc_to_dc(u.inick), new_infoindex)
+        if new_infoindex == old_infoindex:
+            friendly_change = "well that was pointless"
+        else:
+            friendly_change = "%s -> %s" % (
+                scfg.chan_umodes.friendly[old_infoindex],
+                scfg.chan_umodes.friendly[new_infoindex])
+            osm.bsm.addNickChunk(
+                chunks, irc_to_dc(u.inick), new_infoindex)
+
         osm.bsm.addChatChunk(
             chunks, cfg.irc_to_dc_bot,
-            "%s changed mode for %s: %s -> %s" % (
+            "%s set mode %s for %s: %s" % (
                 irc_to_dc(whoset),
+                self.formatChannelUserModes(changes),
                 irc_to_dc(u.inick),
-                scfg.chan_umodes.friendly[old_infoindex],
-                scfg.chan_umodes.friendly[new_infoindex]))
+                friendly_change))
+
         osm.bsm.sendBridgeChange(chunks)
 
     def addQLine(self, nickmask, reason):
@@ -745,7 +749,7 @@ class IRCStateManager(object):
             LOG.info("Found a conflicting Q-line: %s" % nickmask)
 
             # If any nicks exist under that Q-line, we'll need to abort.
-            for u in self.users.iteritems():
+            for u in self.users.itervalues():
                 if q.match(u.inick):
                     LOG.info("... and a nick to go with it: %s" % u.inick)
                     return True
@@ -985,6 +989,25 @@ class IRCStateManager(object):
             raise
 
         return inick
+
+    def formatChannelUserModes(self, changes):
+        # changes: dict of {mode -> on_off}
+        # Construct an IRC mode string, like "+qo-v"
+        on_modes = "+"
+        off_modes = "-"
+
+        scfg = getServiceConfig()
+        for m in scfg.chan_umodes.modes:
+            try:
+                on_off = changes[m]
+            except KeyError:
+                continue
+            if on_off:
+                on_modes += m
+            else:
+                off_modes += m
+
+        return ''.join(s for s in (on_modes, off_modes) if len(s) > 1)
 
 verifyClass(IDtellaStateObserver, IRCStateManager)
 
