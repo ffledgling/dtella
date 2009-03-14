@@ -191,7 +191,7 @@ def irc_from_dc(dnick):
 
 # Regex for color codes and other IRC stuff.
 ircstrip_re = re.compile(
-    "\x03[0-9]{1,2}(,[0-9]{1,2})?|[\x00-\x1F\x80-\xFF]")
+    "\x03[0-9]{1,2}(,[0-9]{1,2})?|[\x00-\x1F]")
 
 def irc_strip(text):
     return ircstrip_re.sub('', text)
