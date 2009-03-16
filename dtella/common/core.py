@@ -3952,7 +3952,7 @@ class BanManager(object):
         osm = self.main.osm
 
         # Check all the online nodes.
-        for n in list(nodes):
+        for n in list(osm.nodes):
             int_ip = Ad().setRawIPPort(n.ipp).getIntIP()
             if self.isBanned(int_ip):
                 osm.nodeExited(n, "Node Banned")
