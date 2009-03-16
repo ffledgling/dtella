@@ -30,8 +30,9 @@ from binascii import hexlify
 from hashlib import md5
 
 from twisted.internet.protocol import DatagramProtocol
-from twisted.internet import reactor
+from twisted.internet import reactor, defer
 from twisted.python.runtime import seconds
+import twisted.internet.error
 
 import dtella.local_config as local
 import dtella.common.crypto
@@ -1017,7 +1018,7 @@ class PeerHandler(DatagramProtocol):
                 if src_ipp == osm.me.ipp and sesid == osm.me.sesid:
                     # Yikes! Make me a new session id and rebroadcast it.
                     osm.me.sesid = randbytes(4)
-                    self.reorderNodesList()
+                    osm.reorderNodesList()
 
                     osm.sendMyStatus()
                     osm.pgm.scheduleMakeNewLinks()
@@ -1468,19 +1469,9 @@ class InitialContactManager(DatagramProtocol):
             self.bad_code = False
 
 
-    def __init__(self, main, cb):
+    def __init__(self, main):
         self.main = main
-        self.done_callback = cb
-
-        self.main.showLoginStatus("Scanning For Online Nodes...", counter=1)
-
-        # Listen on an arbitrary UDP port
-        try:
-            reactor.listenUDP(0, self)
-        except twisted.internet.error.BindError:
-            self.main.showLoginStatus("Failed to bind alt UDP port!")
-            self.done_callback('no_nodes', None)
-            return
+        self.deferred = None
 
         self.peers = {}  # {IPPort -> PeerInfo object}
 
@@ -1500,7 +1491,23 @@ class InitialContactManager(DatagramProtocol):
         self.counters = {
             'good':0, 'foreign_ip':0, 'banned_ip':0, 'dead_port':0}
 
-        self.scheduleInitRequest()
+
+    def start(self):
+        CHECK(self.deferred is None)
+        self.deferred = defer.Deferred()
+
+        self.main.showLoginStatus("Scanning For Online Nodes...", counter=1)
+
+        # Listen on an arbitrary UDP port
+        try:
+            reactor.listenUDP(0, self)
+        except twisted.internet.error.BindError:
+            self.main.showLoginStatus("Failed to bind alt UDP port!")
+            self.deferred.callback(('no_nodes', None))
+        else:
+            self.scheduleInitRequest()
+
+        return self.deferred
 
 
     def newPeer(self, ipp, seen):
@@ -1523,7 +1530,8 @@ class InitialContactManager(DatagramProtocol):
 
 
     def scheduleInitRequest(self):
-
+        if not self.deferred:
+            return
         if self.initrequest_dcall:
             return
 
@@ -1719,7 +1727,7 @@ class InitialContactManager(DatagramProtocol):
         self.shutdown()
 
         if good:
-            self.done_callback('good', self.node_ipps)
+            self.deferred.callback(('good', self.node_ipps))
 
         else:
             # In a tie, prefer 'banned_ip' over 'foreign_ip', etc.
@@ -1734,11 +1742,11 @@ class InitialContactManager(DatagramProtocol):
 
             if rank[0][0] == 0:
                 # Nobody replied
-                self.done_callback('no_nodes', None)
+                self.deferred.callback(('no_nodes', None))
 
             else:
                 # Return the name of the failure which occurred most
-                self.done_callback(rank[0][2], None)
+                self.deferred.callback((rank[0][2], None))
 
 
     def datagramReceived(self, data, addr):
@@ -4137,8 +4145,9 @@ class DtellaMain_Base(object):
 
         dcall_discard(self, 'reconnect_dcall')
 
-        def cb(result, node_ipps):
+        def cb(result):
             self.icm = None
+            result, node_ipps = result
 
             if result == 'good':
                 self.startNodeSync(node_ipps)
@@ -4171,7 +4180,8 @@ class DtellaMain_Base(object):
                 CHECK(False)
 
         self.ph.remap_ip = None
-        self.icm = InitialContactManager(self, cb)
+        self.icm = InitialContactManager(self)
+        self.icm.start().addCallback(cb)
 
 
     def needPortForward(self):

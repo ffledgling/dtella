@@ -32,6 +32,7 @@ import os
 import os.path
 
 from twisted.python.runtime import seconds
+import twisted.python.log
 
 
 def randbytes(n):
