@@ -1571,7 +1571,7 @@ class InitialContactManager(DatagramProtocol):
 
         self.waitreply.add(p)
 
-        def cb(p):
+        def cb():
             p.timeout_dcall = None
             self.waitreply.remove(p)
 
@@ -1580,7 +1580,7 @@ class InitialContactManager(DatagramProtocol):
 
             self.checkStatus()
 
-        p.timeout_dcall = reactor.callLater(5.0, cb, p)
+        p.timeout_dcall = reactor.callLater(5.0, cb)
 
 
     def cancelPeerContactTimeout(self, p):
@@ -1918,7 +1918,7 @@ class Node(object):
     def sendPrivateMessage(self, ph, ack_key, packet, fail_cb):
         # Send an ACK-able direct message to this node
 
-        def cb(fail_cb, tries):
+        def cb(tries):
 
             if tries == 0:
                 del self.msgkeys_out[ack_key]
@@ -1930,11 +1930,10 @@ class Node(object):
 
             # Set timeout for outbound message
             # This will be cancelled if we receive an AK in time.
-            self.msgkeys_out[ack_key] = reactor.callLater(
-                1.0, cb, fail_cb, tries-1)
+            self.msgkeys_out[ack_key] = reactor.callLater(1.0, cb, tries-1)
 
         # Send it 3 times, then fail.
-        cb(fail_cb, 3)
+        cb(3)
 
 
     def receivedPrivateMessageAck(self, ack_key, reject):
@@ -2136,8 +2135,17 @@ class SyncManager(object):
         # Notify the user of the sync stats, if they've changed.
 
         MAX = 20
+        done = self.stats_done
+        total = self.stats_total
 
-        def cb(bar, done, total):
+        if total == 0:
+            bar = MAX
+        else:
+            bar = (MAX * done) // total
+
+        dcall_discard(self, 'showProgress_dcall')
+
+        def cb():
             self.showProgress_dcall = None
 
             if bar == self.stats_lastbar:
@@ -2149,20 +2157,12 @@ class SyncManager(object):
             self.main.showLoginStatus(
                 "[%s] (%d/%d)" % (progress, done, total))
 
-        if self.stats_total == 0:
-            bar = MAX
-        else:
-            bar = (MAX * self.stats_done) // self.stats_total
-
-        dcall_discard(self, 'showProgress_dcall')
-
         if bar == MAX:
             # The final update should draw immediately
-            cb(bar, self.stats_done, self.stats_total)
+            cb()
         else:
             # Otherwise, only draw once per reactor loop
-            self.showProgress_dcall = reactor.callLater(
-                0, cb, bar, self.stats_done, self.stats_total)
+            self.showProgress_dcall = reactor.callLater(0, cb)
 
 
     def advanceQueue(self):
@@ -2286,7 +2286,7 @@ class SyncManager(object):
         if s.timeout_dcall:
             return
 
-        def cb(s):
+        def cb():
             s.timeout_dcall = None
             self.waitcount -= 1
 
@@ -2305,7 +2305,7 @@ class SyncManager(object):
             s.proxy_request = True
 
         self.waitcount += 1
-        s.timeout_dcall = reactor.callLater(2.0, cb, s)
+        s.timeout_dcall = reactor.callLater(2.0, cb)
 
 
     def cancelSyncTimeout(self, s):
@@ -2573,11 +2573,11 @@ class OnlineStateManager(object):
             n.expire_dcall.reset(when)
             return
 
-        def cb(n):
+        def cb():
             n.expire_dcall = None
             self.nodeExited(n, "Node Timeout")
 
-        n.expire_dcall = reactor.callLater(when, cb, n)
+        n.expire_dcall = reactor.callLater(when, cb)
 
 
     def getStatus(self):
@@ -3379,12 +3379,12 @@ class MessageRoutingManager(object):
                 self.expire_dcall.reset(60.0)
                 return
 
-            def cb(msgs, ack_key):
+            def cb():
                 self.expire_dcall = None
                 self.forgetTimeouts()
                 del msgs[ack_key]
 
-            self.expire_dcall = reactor.callLater(60.0, cb, msgs, ack_key)
+            self.expire_dcall = reactor.callLater(60.0, cb)
 
 
         def sendToNeighbor(self, nb_ipp, ph):
@@ -3394,7 +3394,15 @@ class MessageRoutingManager(object):
                 # This neighbor has already seen our message
                 return
 
-            def cb(data, tries):
+            data = self.data
+            tries = self.tries
+
+            # If we're passing an NF to the node who's dying, then up the
+            # number of retries to 8, because it's rather important.
+            if data[0:2] == 'NF' and data[10:16] == nb_ipp:
+                tries = 8
+
+            def cb(tries):
                 # Ack timeout callback
 
                 # Make an attempt now
@@ -3405,20 +3413,11 @@ class MessageRoutingManager(object):
                 # Reschedule another attempt
                 if tries-1 > 0:
                     when = random.uniform(1.0, 2.0)
-                    self.nbs[nb_ipp] = reactor.callLater(
-                        when, cb, data, tries-1)
+                    self.nbs[nb_ipp] = reactor.callLater(when, cb, tries-1)
                 else:
                     self.nbs[nb_ipp] = None
 
-            data = self.data
-            tries = self.tries
-
-            # If we're passing an NF to the node who's dying, then up the
-            # number of retries to 8, because it's rather important.
-            if data[0:2] == 'NF' and data[10:16] == nb_ipp:
-                tries = 8
-
-            cb(data, tries)
+            cb(tries)
 
 
         def forgetTimeouts(self):
@@ -3646,10 +3645,10 @@ class SyncRequestRoutingManager(object):
                 self.expire_dcall.reset(180.0)
                 return
 
-            def cb(msgs, key):
+            def cb():
                 del msgs[key]
 
-            self.expire_dcall = reactor.callLater(180.0, cb, msgs, key)
+            self.expire_dcall = reactor.callLater(180.0, cb)
 
 
     def __init__(self, main):
@@ -3871,7 +3870,7 @@ class ChatMessageSequencer(object):
         if not n.chatq:
             return
 
-        def cb(n):
+        def cb():
             n.chatq_dcall = None
 
             # Forget any missing messages at the beginning
@@ -3885,7 +3884,7 @@ class ChatMessageSequencer(object):
         # The first queue entry contains a timestamp.
         # Let the gap survive for 2 seconds total.
         when = max(0, n.chatq[0] + 2.0 - seconds())
-        n.chatq_dcall = reactor.callLater(when, cb, n)
+        n.chatq_dcall = reactor.callLater(when, cb)
 
 
     def flushQueue(self, n):
