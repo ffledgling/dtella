@@ -1452,9 +1452,6 @@ class BridgeServerManager(object):
             except KeyError:
                 raise Reject("Unknown source node")
 
-            if not n.expire_dcall:
-                raise Reject("Source node not online")
-
             if src_nhash != n.nickHash():
                 raise Reject("Source nickhash mismatch")
 
@@ -1492,9 +1489,6 @@ class BridgeServerManager(object):
                 n = osm.lookup_ipp[src_ipp]
             except KeyError:
                 raise Reject("Unknown node")
-
-            if not n.expire_dcall:
-                raise Reject("Node isn't online")
 
             if src_nhash != n.nickHash():
                 raise Reject("Source nickhash mismatch")

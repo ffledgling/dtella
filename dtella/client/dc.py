@@ -1681,30 +1681,29 @@ class DtellaBot(object):
 
         out("Neighbor Nodes: {direction, ipp, ping, nick}")
 
-        nbs = list(osm.pgm.inbound | osm.pgm.outbound)
-
-        for n in nbs:
-            iwant = (n in osm.pgm.outbound)
-            uwant = (n in osm.pgm.inbound)
-
+        for pn in osm.pgm.pnbs.itervalues():
             info = []
 
-            if iwant and uwant:
+            if pn.outbound and pn.inbound:
                 info.append("<->")
-            elif iwant:
+            elif pn.outbound:
                 info.append("-->")
-            elif uwant:
+            elif pn.inbound:
                 info.append("<--")
 
-            info.append(binascii.hexlify(n.ipp).upper())
+            info.append(binascii.hexlify(pn.ipp).upper())
 
-            if n.avg_ping is not None:
-                delay = n.avg_ping * 1000.0
+            if pn.avg_ping is not None:
+                delay = pn.avg_ping * 1000.0
             else:
                 delay = 0.0
             info.append("%7.1fms" % delay)
 
-            info.append("(%s)" % n.nick)
+            try:
+                nick = osm.lookup_ipp[pn.ipp].nick
+            except KeyError:
+                nick = ""
+            info.append("(%s)" % nick)
 
             out(' '.join(info))
 
@@ -1728,7 +1727,7 @@ class DtellaBot(object):
             info = []
             info.append(binascii.hexlify(n.ipp).upper())
 
-            if n.is_ping_nb:
+            if n.ipp in osm.pgm.pnbs:
                 info.append("Y")
             else:
                 info.append("N")
