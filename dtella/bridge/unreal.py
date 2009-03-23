@@ -50,13 +50,13 @@ B_REALNAME = "Dtella Bridge"
 
 class UnrealConfig(object):
     chan_umodes = ChannelUserModes(
-        ("q",  "owner",    "[~] owner$ $IRC\x01$$0$"),
-        ("a",  "super-op", "[&] super-op$ $IRC\x01$$0$"),
-        ("o",  "op",       "[@] op$ $IRC\x01$$0$"),
-        ("h",  "half-op",  "[%] half-op$ $IRC\x01$$0$"),
-        ("v",  "voice",    "[+] voice$ $IRC\x01$$0$"),
-        (":P", "loser",    "[_]$ $IRC\x01$$0$"),
-        (":V", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
+        ("q", "~", "owner",    "[~] owner$ $IRC\x01$$0$"),
+        ("a", "&", "super-op", "[&] super-op$ $IRC\x01$$0$"),
+        ("o", "@", "op",       "[@] op$ $IRC\x01$$0$"),
+        ("h", "%", "half-op",  "[%] half-op$ $IRC\x01$$0$"),
+        ("v", "+", "voice",    "[+] voice$ $IRC\x01$$0$"),
+        (":P", "", "loser",    "[_]$ $IRC\x01$$0$"),
+        (":V", "", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
 
     use_rdns = True
 

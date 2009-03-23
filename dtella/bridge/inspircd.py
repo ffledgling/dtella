@@ -36,7 +36,7 @@ from hashlib import md5, sha256
 import dtella.common.core as core
 import dtella.local_config as local
 from dtella.common.log import LOG
-from dtella.common.util import CHECK
+from dtella.common.util import CHECK, Ad
 import dtella.bridge_config as cfg
 from zope.interface import implements
 from zope.interface.verify import verifyClass
@@ -53,13 +53,13 @@ B_REALNAME = "Dtella Bridge"
 
 class InspIRCdConfig(object):
     chan_umodes = ChannelUserModes(
-        ("q",  "owner",    "[~] owner$ $IRC\x01$$0$"),
-        ("a",  "super-op", "[&] super-op$ $IRC\x01$$0$"),
-        ("o",  "op",       "[@] op$ $IRC\x01$$0$"),
-        ("h",  "half-op",  "[%] half-op$ $IRC\x01$$0$"),
-        ("v",  "voice",    "[+] voice$ $IRC\x01$$0$"),
-        (":P", "loser",    "[_]$ $IRC\x01$$0$"),
-        (":V", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
+        ("q", "~", "owner",    "[~] owner$ $IRC\x01$$0$"),
+        ("a", "&", "super-op", "[&] super-op$ $IRC\x01$$0$"),
+        ("o", "@", "op",       "[@] op$ $IRC\x01$$0$"),
+        ("h", "%", "half-op",  "[%] half-op$ $IRC\x01$$0$"),
+        ("v", "+", "voice",    "[+] voice$ $IRC\x01$$0$"),
+        (":P", "", "loser",    "[_]$ $IRC\x01$$0$"),
+        (":V", "", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
 
     use_rdns = True
 
@@ -226,7 +226,8 @@ class InspIRCdServer(LineOnlyReceiver):
         LOG.info("PING? PONG!")
         scfg = getServiceConfig()
         if len(args) == 1:
-            self.sendLine("PONG %s :%s" % (scfg.my_host, args[0]))
+            # TODO: should the second parameter be server_name ?
+            self.sendLine(":%s PONG :%s" % (scfg.my_host, args[0]))
         elif len(args) == 2:
             self.sendLine("PONG %s :%s" % (args[1], args[0]))
 
@@ -236,14 +237,16 @@ class InspIRCdServer(LineOnlyReceiver):
             self.schedulePing()
 
     def handleCmd_NICK(self, prefix, args):
-        oldnick = prefix
-        newnick = args[0]
-
-        if oldnick:
+        # :irc1.dhirc.com NICK 1237793865 Paul <hostname> <hostname> paul + 0::ffff:1.2.3.4 :Unknown
+        if len(args) == 1:
+            oldnick = prefix
+            newnick = args[0]
             self.ism.changeNick(oldnick, newnick)
         else:
-            self.ism.addUser(newnick)
+            nick = args[1]
+            self.ism.addUser(nick)
 
+    """
     def handleCmd_SVSNICK(self, prefix, args):
         # :services.dhirc.com SVSNICK |foo Guest33400 :1236660594
         oldnick = args[0]
@@ -254,14 +257,40 @@ class InspIRCdServer(LineOnlyReceiver):
         if n:
             message = "Nick change to %s is impossible" % irc_to_dc(newnick)
             self.ism.kickDtellaNode(n, prefix, message)
+    """
 
     def handleCmd_JOIN(self, prefix, args):
+        # :Paul JOIN #dtella 1237797449
         nick = prefix
         chans = args[0].split(',')
 
         scfg = getServiceConfig()
         if scfg.channel in chans:
             self.ism.joinChannel(self.ism.findUser(nick))
+
+    def handleCmd_FJOIN(self, prefix, args):
+        # :irc1.dhirc.com FJOIN #opers 1237785045 :@%+,darkhorse ,Paul
+        scfg = getServiceConfig()
+        chan = args[0]
+        if chan != scfg.channel:
+            return
+
+        for uinfo in args[-1].split():
+            syms, nick = uinfo.split(",", 1)
+
+            u = self.ism.findUser(nick)
+            self.ism.joinChannel(u)
+
+            changes = {}
+            for sym in syms:
+                try:
+                    mode = scfg.chan_umodes.symbol_to_mode[sym]
+                except KeyError:
+                    continue
+                changes[mode] = True
+
+            if changes:
+                self.ism.setChannelUserModes("", u, changes)
 
     def handleCmd_PART(self, prefix, args):
         nick = prefix
@@ -323,21 +352,31 @@ class InspIRCdServer(LineOnlyReceiver):
     handleCmd_SVSKILL = handleCmd_KILL
 
     def handleCmd_TOPIC(self, prefix, args):
-        # :Paul TOPIC #dtella Paul 1169420711 :Dtella :: Development Stage
+        # :Paul TOPIC #dtella :the topic?
         chan = args[0]
-        whoset = args[1]
+        whoset = prefix
         text = irc_strip(args[-1])
 
         scfg = getServiceConfig()
         if chan == scfg.channel:
             self.ism.setTopic(whoset, text)
 
-    def handleCmd_MODE(self, prefix, args):
-        # :Paul MODE #dtella +vv aaahhh Big_Guy
+    def handleCmd_FTOPIC(self, prefix, args):
+        # :irc1.dhirc.com FTOPIC #dtella 1237796893 nick!host :hello
+        chan = args[0]
+        whoset = args[2].split('!', 1)[0]
+        text = irc_strip(args[-1])
+
+        scfg = getServiceConfig()
+        if chan == scfg.channel:
+            self.ism.setTopic(whoset, text)
+
+    def handleCmd_FMODE(self, prefix, args):
+        # :Paul FMODE #dtella 1237791593 +hv-t Paul Paul
         whoset = prefix
         chan = args[0]
-        change = args[1]
-        nicks = args[2:]
+        change = args[2]
+        nicks = args[3:]
 
         scfg = getServiceConfig()
         if chan != scfg.channel:
@@ -406,6 +445,7 @@ class InspIRCdServer(LineOnlyReceiver):
         for u, changes in user_changes.iteritems():
             self.ism.setChannelUserModes(whoset, u, changes)
 
+    """
     def handleCmd_TKL(self, prefix, args):
         addrem = args[0]
         kind = args[1]
@@ -431,6 +471,7 @@ class InspIRCdServer(LineOnlyReceiver):
                 self.ism.addQLine(nickmask, reason)
             else:
                 self.ism.removeQLine(nickmask)
+    """
 
     def handleCmd_SERVER(self, prefix, args):
         if prefix:
@@ -444,12 +485,13 @@ class InspIRCdServer(LineOnlyReceiver):
         # We got a reply from the our connected IRC server, so our password
         # was just accepted.  Send the Dtella state information into IRC.
 
+        scfg = getServiceConfig()
+
         # Save server name
         CHECK(args[0])
         self.server_name = args[0]
 
         # Verify challenge response.
-        scfg = getServiceConfig()
         if scfg.recvpass is None:
             LOG.info("Skipping validation of recvpass")
         else:
@@ -463,37 +505,32 @@ class InspIRCdServer(LineOnlyReceiver):
         # Tell the ReconnectingClientFactory that we're cool
         self.factory.resetDelay()
 
-        # This isn't very correct, because the Dtella nicks
-        # haven't been sent yet, but it's the best we can practically do.
-        scfg = getServiceConfig()
-        cloak_checksum = scfg.hostmasker.getChecksum()
-        self.sendLine("NETINFO 0 %d 0 %s 0 0 0 :%s" %
-                      (time.time(), cloak_checksum, scfg.network_name))
-        self.sendLine(":%s EOS" % scfg.my_host)
+        self.sendLine("BURST %d" % time.time())
+        self.sendLine("ENDBURST")
 
-    def handleCmd_EOS(self, prefix, args):
-        if prefix != self.server_name:
-            return
-        if self.ism.syncd:
-            return
-
+    def handleCmd_ENDBURST(self, prefix, args):
         LOG.info("Finished receiving IRC sync data.")
 
         self.showirc = True
 
+        """
         # Check for conflicting bridges.
         if self.ism.findConflictingBridge():
             LOG.error("My nick prefix is in use! Terminating.")
             self.transport.loseConnection()
             reactor.stop()
             return
+        """
 
         # Set up nick reservation
         scfg = getServiceConfig()
+
+        """
         self.sendLine(
             "TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
             (cfg.dc_to_irc_prefix, scfg.my_host, time.time()))
         self.ism.killConflictingUsers()
+        """
 
         # Send my own bridge nick
         self.pushBotJoin(do_nick=True)
@@ -592,14 +629,15 @@ class InspIRCdServer(LineOnlyReceiver):
     def pushNick(self, nick, user, host, modes, ip, name):
         # If an IP was provided, convert to a base64 parameter.
         if ip:
-            ip = ' ' + binascii.b2a_base64(ip).rstrip()
+            ip = Ad().setRawIP(ip).getTextIP()
         else:
-            ip = ''
+            ip = '0.0.0.0'
 
         scfg = getServiceConfig()
         self.sendLine(
-            "NICK %s 1 %d %s %s %s 1 %s *%s :%s" %
-            (nick, time.time(), user, host, scfg.my_host, modes, ip, name))
+            ":%s NICK %d %s %s %s %s %s %s :%s" %
+            (scfg.my_host, time.time(), nick, host, host, user,
+             modes, ip, name))
 
     def pushJoin(self, nick):
         scfg = getServiceConfig()
@@ -608,8 +646,8 @@ class InspIRCdServer(LineOnlyReceiver):
     def pushTopic(self, nick, topic):
         scfg = getServiceConfig()
         self.sendLine(
-            ":%s TOPIC %s %s %d :%s" %
-            (nick, scfg.channel, nick, int(time.time()), topic))
+            ":%s TOPIC %s :%s" %
+            (nick, scfg.channel, topic))
 
     def pushQuit(self, nick, reason=""):
         self.sendLine(":%s QUIT :%s" % (nick, reason))
@@ -634,15 +672,17 @@ class InspIRCdServer(LineOnlyReceiver):
         scfg = getServiceConfig()
         if do_nick:
             self.pushNick(
+                # TODO: are these modes valid?
                 cfg.dc_to_irc_bot, B_USER, scfg.my_host, "+Sq", None,
                 B_REALNAME)
 
         # Join channel, and grant ops.
         self.pushJoin(cfg.dc_to_irc_bot)
+
+        # Why doesn't FMODE work here?
         self.sendLine(
-            ":%s MODE %s +ao %s %s" %
-            (scfg.my_host, scfg.channel,
-             cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
+            ":%s MODE %s +o %s" %
+            (scfg.my_host, scfg.channel, cfg.dc_to_irc_bot))
 
     def pushKill(self, nick):
         scfg = getServiceConfig()
@@ -656,6 +696,7 @@ class InspIRCdServer(LineOnlyReceiver):
         self.sendLine("TKL - Q * %s %s" % (nickmask, scfg.my_host))
 
     def schedulePing(self):
+        # FIXME
         if self.ping_dcall:
             self.ping_dcall.reset(60.0)
             return

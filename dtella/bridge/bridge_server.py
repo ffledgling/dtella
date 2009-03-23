@@ -256,7 +256,7 @@ def getServiceConfig():
 
 class ChannelUserModes(object):
     def __init__(self, *data):
-        # *data is be a sequence of (mode, friendly_name, info),
+        # *data is a sequence of (mode, symbol, friendly_name, info),
         # in order of decreasing awesomeness.
         #
         # mode is:
@@ -276,20 +276,26 @@ class ChannelUserModes(object):
         # Includes ":P" for plain, and ":V" for virtual.
         self.mode_to_index = {}
 
+        # Mapping from @%+-ish symbol to "ohv" mode.
+        self.symbol_to_mode = {}
+
         self.friendly = []
         self.info = []
 
-        for i, (mode, friendly, info) in enumerate(data):
+        for i, (mode, symbol, friendly, info) in enumerate(data):
             if len(mode) == 1:
                 # Keep sorted string of normal modes.
                 self.modes += mode
             elif mode in (":P", ":V"):
-                pass
+                CHECK(not symbol)
             else:
                 raise ValueError("Invalid mode: " + mode)
 
             CHECK(mode not in self.mode_to_index)
             self.mode_to_index[mode] = i
+
+            if symbol:
+                self.symbol_to_mode[symbol] = mode
 
             self.friendly.append(friendly)
             self.info.append(info)
