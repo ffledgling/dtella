@@ -1938,7 +1938,9 @@ class Node(object):
 
             # Set timeout for outbound message
             # This will be cancelled if we receive an AK in time.
-            self.msgkeys_out[ack_key] = reactor.callLater(1.0, cb, tries-1)
+            dcall = reactor.callLater(1.0, cb, tries-1)
+            dcall.pm_fail_cb = fail_cb
+            self.msgkeys_out[ack_key] = dcall
 
         # Send it 3 times, then fail.
         cb(3)
@@ -1953,7 +1955,7 @@ class Node(object):
             return
 
         if reject:
-            dcall.args[0]("Rejected")  # Call fail_cb
+            dcall.pm_fail_cb("Rejected")
 
         dcall.cancel()
 
