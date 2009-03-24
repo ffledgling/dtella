@@ -141,6 +141,9 @@ class InspIRCdServer(LineOnlyReceiver):
         self.ping_waiting = False
         self.capabs = {}
 
+        # Create a nick who controls the Q-lines.  Assume it never conflicts.
+        self.qline_setter = "Q_%s" % binascii.hexlify(os.urandom(8))
+
     def connectionMade(self):
         scfg = getServiceConfig()
         LOG.info("Connected to IRC server.")
@@ -226,7 +229,6 @@ class InspIRCdServer(LineOnlyReceiver):
         LOG.info("PING? PONG!")
         scfg = getServiceConfig()
         if len(args) == 1:
-            # TODO: should the second parameter be server_name ?
             self.sendLine(":%s PONG :%s" % (scfg.my_host, args[0]))
         elif len(args) == 2:
             self.sendLine("PONG %s :%s" % (args[1], args[0]))
@@ -348,8 +350,10 @@ class InspIRCdServer(LineOnlyReceiver):
                 (irc_to_dc(l33t), irc_to_dc(n00b), reason))
             self.ism.removeUser(self.ism.findUser(n00b), message)
 
+    """
     # Treat SVSKILL the same as KILL.
     handleCmd_SVSKILL = handleCmd_KILL
+    """
 
     def handleCmd_TOPIC(self, prefix, args):
         # :Paul TOPIC #dtella :the topic?
@@ -445,33 +449,39 @@ class InspIRCdServer(LineOnlyReceiver):
         for u, changes in user_changes.iteritems():
             self.ism.setChannelUserModes(whoset, u, changes)
 
-    """
-    def handleCmd_TKL(self, prefix, args):
-        addrem = args[0]
-        kind = args[1]
+    def handleCmd_ADDLINE(self, prefix, args):
+        # This is used during BURST.
+        kind = args[0]
 
-        if addrem == '+':
-            on_off = True
-        elif addrem == '-':
-            on_off = False
-        else:
-            LOG.error("TKL: invalid modifier: '%s'" % addrem)
-            return
+        # :irc1.dhirc.com ADDLINE Z 69.69.69.69 <Config> 1237785035 0 :hello
+        if kind == 'Z':
+            cidr = args[1]
+            self.ism.setNetworkBan(cidr, True)
 
-        # :irc1.dhirc.com TKL + Z * 128.10.12.0/24 darkhorse!admin@dhirc.com 0 1171427130 :no reason
-        if kind == 'Z' and args[2] == '*':
-            cidr = args[3]
-            self.ism.setNetworkBan(cidr, on_off)
-
-        # :%s TKL + Q * %s* %s 0 %d :Reserved for Dtella
+        # :irc1.dhirc.com ADDLINE Q ChanServ <Config> 1237785035 0 :Reserved
         elif kind == 'Q':
-            nickmask = args[3]
-            if on_off:
-                reason = args[-1]
-                self.ism.addQLine(nickmask, reason)
-            else:
-                self.ism.removeQLine(nickmask)
-    """
+            nickmask = args[1]
+            reason = args[-1]
+            self.ism.addQLine(nickmask, reason)
+
+    def handleCmd_ZLINE(self, prefix, args):
+        # :Paul ZLINE 192.168.1.3/32 3600 :reason
+        # :Paul ZLINE 192.168.1.3/32
+        cidr = args[0]
+        if len(args) == 1:
+            self.ism.setNetworkBan(cidr, False)
+        else:
+            self.ism.setNetworkBan(cidr, True)
+
+    def handleCmd_QLINE(self, prefix, args):
+        # :Paul QLINE |name 0 :reason
+        # :Paul QLINE |name
+        nickmask = args[0]
+        if len(args) == 1:
+            self.ism.removeQLine(nickmask)
+        else:
+            reason = args[-1]
+            self.ism.addQLine(nickmask, reason)
 
     def handleCmd_SERVER(self, prefix, args):
         if prefix:
@@ -506,31 +516,31 @@ class InspIRCdServer(LineOnlyReceiver):
         self.factory.resetDelay()
 
         self.sendLine("BURST %d" % time.time())
+        self.pushNick(
+            self.qline_setter, "qliner", scfg.my_host, "+", None,
+            "I set Dtella's qline.  Don't bother me.")
         self.sendLine("ENDBURST")
 
     def handleCmd_ENDBURST(self, prefix, args):
+        CHECK(self.server_name)
         LOG.info("Finished receiving IRC sync data.")
 
         self.showirc = True
 
-        """
         # Check for conflicting bridges.
         if self.ism.findConflictingBridge():
             LOG.error("My nick prefix is in use! Terminating.")
             self.transport.loseConnection()
             reactor.stop()
             return
-        """
 
         # Set up nick reservation
         scfg = getServiceConfig()
 
-        """
         self.sendLine(
-            "TKL + Q * %s* %s 0 %d :Reserved for Dtella" %
-            (cfg.dc_to_irc_prefix, scfg.my_host, time.time()))
+            ":%s QLINE %s* 0 :Reserved for Dtella" %
+            (self.qline_setter, cfg.dc_to_irc_prefix))
         self.ism.killConflictingUsers()
-        """
 
         # Send my own bridge nick
         self.pushBotJoin(do_nick=True)
@@ -693,10 +703,9 @@ class InspIRCdServer(LineOnlyReceiver):
     def pushRemoveQLine(self, nickmask):
         scfg = getServiceConfig()
         LOG.info("Telling network to remove Q-line: %s" % nickmask)
-        self.sendLine("TKL - Q * %s %s" % (nickmask, scfg.my_host))
+        self.sendLine(":%s QLINE %s" % (self.qline_setter, nickmask))
 
     def schedulePing(self):
-        # FIXME
         if self.ping_dcall:
             self.ping_dcall.reset(60.0)
             return
@@ -709,7 +718,8 @@ class InspIRCdServer(LineOnlyReceiver):
                 self.transport.loseConnection()
             else:
                 scfg = getServiceConfig()
-                self.sendLine("PING :%s" % scfg.my_host)
+                self.sendLine(
+                    ":%s PING %s" % (scfg.my_host, self.server_name))
                 self.ping_waiting = True
                 self.ping_dcall = reactor.callLater(60.0, cb)
 
