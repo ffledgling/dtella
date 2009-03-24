@@ -21,8 +21,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
-# !!! DO NOT USE THIS MODULE YET !!!
-
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.protocols.basic import LineOnlyReceiver
 from twisted.internet import reactor, defer
@@ -66,8 +64,6 @@ class InspIRCdConfig(object):
     def __init__(self, host, port, ssl, sendpass, recvpass,
                  network_name, my_host, my_name, channel,
                  hostmask_prefix, hostmask_keys):
-        LOG.error("InspIRCd support DOES NOT WORK yet!")
-
         # Connection parameters for remote IRC server
         self.host = host                  # ip/hostname
         self.port = port                  # integer
@@ -85,6 +81,7 @@ class InspIRCdConfig(object):
         self.channel = channel
 
         # Host masking parameters.
+        # TODO: figure out InspIRCd hostmasking.
         self.hostmasker = HostMasker(hostmask_prefix, hostmask_keys)
 
     def startService(self, main):
@@ -304,7 +301,12 @@ class InspIRCdServer(LineOnlyReceiver):
 
     def handleCmd_QUIT(self, prefix, args):
         nick = prefix
-        self.ism.removeUser(self.ism.findUser(nick))
+        try:
+            u = self.ism.findUser(nick)
+        except KeyError:
+            LOG.error("Can't quit nick: %s" % nick)
+        else:
+            self.ism.removeUser(u)
 
     def handleCmd_KICK(self, prefix, args):
         chan = args[0]
@@ -683,7 +685,7 @@ class InspIRCdServer(LineOnlyReceiver):
         if do_nick:
             self.pushNick(
                 # TODO: are these modes valid?
-                cfg.dc_to_irc_bot, B_USER, scfg.my_host, "+Sq", None,
+                cfg.dc_to_irc_bot, B_USER, scfg.my_host, "+B", None,
                 B_REALNAME)
 
         # Join channel, and grant ops.
