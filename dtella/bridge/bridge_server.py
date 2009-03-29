@@ -256,7 +256,7 @@ def getServiceConfig():
 
 class ChannelUserModes(object):
     def __init__(self, *data):
-        # *data is a sequence of (mode, symbol, friendly_name, info),
+        # *data is a sequence of (mode, friendly_name, info),
         # in order of decreasing awesomeness.
         #
         # mode is:
@@ -276,26 +276,20 @@ class ChannelUserModes(object):
         # Includes ":P" for plain, and ":V" for virtual.
         self.mode_to_index = {}
 
-        # Mapping from @%+-ish symbol to "ohv" mode.
-        self.symbol_to_mode = {}
-
         self.friendly = []
         self.info = []
 
-        for i, (mode, symbol, friendly, info) in enumerate(data):
+        for i, (mode, friendly, info) in enumerate(data):
             if len(mode) == 1:
                 # Keep sorted string of normal modes.
                 self.modes += mode
             elif mode in (":P", ":V"):
-                CHECK(not symbol)
+                pass
             else:
                 raise ValueError("Invalid mode: " + mode)
 
             CHECK(mode not in self.mode_to_index)
             self.mode_to_index[mode] = i
-
-            if symbol:
-                self.symbol_to_mode[symbol] = mode
 
             self.friendly.append(friendly)
             self.info.append(info)
@@ -324,8 +318,11 @@ class NotOnline(Exception):
 
 
 class User(object):
-    def __init__(self, inick):
+    uuid = None
+    def __init__(self, inick, uuid):
         self.inick = inick
+        if uuid:
+            self.uuid = uuid
 
         # This user's single-character channel modes.
         self.chanmodes = set()
@@ -337,13 +334,22 @@ class User(object):
 class IRCStateManager(object):
     implements(IDtellaStateObserver)
 
-    def __init__(self, main, ircs=None):
+    def __init__(self, main, ircs=None, uuid_generator=None):
         self.main = main
         self.ircs = ircs
         self.syncd = False
 
+        self.uuid_generator = uuid_generator
+
         # inick.lower() -> User object
         self.users = {}
+
+        # If we're using UUIDs, create dicts to keep track of them.
+        if self.uuid_generator:
+            # uuid -> Node()
+            self.dt_uuids = {}
+            # uuid -> User()
+            self.irc_uuids = {}
 
         # Set of all User()s in the Dtella channel.
         self.chanusers = set()
@@ -362,6 +368,13 @@ class IRCStateManager(object):
         # Network bans: (ip, mask), both ints.
         self.bans = set()
 
+        # Set up the dc->irc bot.
+        if self.uuid_generator:
+            bot_uuid = self.uuid_generator()
+        else:
+            bot_uuid = None
+        self.bot_user = User(cfg.dc_to_irc_bot, bot_uuid)
+
     # --- These methods are called from the IRC server ---
     def addMeToMain(self):
         CHECK(not self.syncd)
@@ -372,64 +385,68 @@ class IRCStateManager(object):
         # After calling this, I'm basically a dead object.
         self.main.removeIRCStateManager(self)
 
-    def addUser(self, inick):
+    def addUser(self, inick, uuid=None):
         # Start tracking a new IRC user.
-        if inick.lower() in self.users:
-            LOG.error("addUser: '%s' already exists." % inick)
-            return
+        CHECK(inick.lower() not in self.users)
+
+        if self.uuid_generator:
+            CHECK(uuid)
+            CHECK(uuid not in self.irc_uuids)
+
+        u = User(inick, uuid)
 
         # Don't allow nicks which match my prefix.
-        if self.syncd and matches_dc_to_irc_prefix(inick):
+        if self.syncd and matches_dc_to_irc_prefix(u.inick):
             if self.ircs:
-                self.ircs.pushKill(inick)
+                self.ircs.event_KillUser(u)
             return
 
-        self.users[inick.lower()] = u = User(inick)
+        self.users[inick.lower()] = u
+        self.irc_uuids[uuid] = u
+        return u
 
     def removeUser(self, u, message=None):
         self.partChannel(u, message)
-        if self.users.pop(u.inick.lower(), None) != u:
-            LOG.error("removeUser: %r not found" % u)
-            return
+        CHECK(self.users.pop(u.inick.lower()) is u)
+        if self.uuid_generator:
+            CHECK(self.irc_uuids.pop(u.uuid) is u)
 
-    def findUser(self, inick):
-        return self.users[inick.lower()]
-
-    def changeNick(self, old_inick, new_inick):
-        if old_inick.lower() == new_inick.lower():
-            LOG.error("changeNick '%s'->'%s': Nicks are equivalent."
-                      % (old_inick, new_inick))
-            return
-
-        # If the destination nick already exists, then our state must be
-        # somehow corrupted.  Oh well, just assume the server knows what
-        # it's talking about, and throw away the existing user.
-        try:
-            dest_u = self.users.pop(new_inick.lower())
-        except KeyError:
-            pass
+    def findUser(self, inick=None, uuid=None):
+        if uuid:
+            return self.irc_uuids[uuid]
         else:
-            LOG.error("changeNick '%s'->'%s': Dest nick already exists."
-                      % (old_inick, new_inick))
-            self.chanusers.discard(dest_u)
+            return self.users[inick.lower()]
 
-        # Now find the source user.
-        try:
-            u = self.users.pop(old_inick.lower())
-        except KeyError:
-            LOG.error("changeNick '%s'->'%s': Source nick not found."
-                      % (old_inick, new_inick))
+    def changeNick(self, u, new_inick):
+        old_inick = u.inick
+        if old_inick.lower() == new_inick.lower():
+            # TODO: report case changes to Dtella?
+            u.inick = new_inick
             return
+
+        # The destination nick should never collide.
+        CHECK(new_inick.lower() not in self.users)
+
+        # Remove the source user, check validity.
+        CHECK(self.users.pop(u.inick.lower()) is u)
 
         # Don't allow IRC nicks which match my prefix.
-        if self.syncd and matches_dc_to_irc_prefix(new_inick):
-            if self.ircs:
-                self.ircs.pushKill(new_inick)
-            self.partChannel(u)
-            return
+        conflicted = (self.syncd and matches_dc_to_irc_prefix(new_inick))
 
+        if conflicted:
+            # Report exit from Dtella before updating nick.
+            self.partChannel(u)
+
+        # Update nick.  Note that UUID is unchanged.
         u.inick = new_inick
         self.users[new_inick.lower()] = u
+
+        if conflicted:
+            # Nick matches my prefix, diediedie!
+            if self.ircs:
+                self.ircs.event_KillUser(u)
+            self.removeUser(u)
+            return
 
         scfg = getServiceConfig()
 
@@ -493,8 +510,20 @@ class IRCStateManager(object):
         osm.bsm.sendBridgeChange(chunks)
         return True
 
-    def findDtellaNode(self, inick=None, dnick=None):
+    def findDtellaNode(self, inick=None, dnick=None, uuid=None):
         # Try to find a user on Dtella.
+        try:
+            osm = self.getOnlineStateManager()
+        except NotOnline:
+            return None
+
+        if uuid:
+            CHECK(self.uuid_generator)
+            try:
+                return self.dt_uuids[uuid]
+            except KeyError:
+                return None
+
         if inick:
             try:
                 dnick = dc_from_irc(inick)
@@ -504,9 +533,8 @@ class IRCStateManager(object):
             return None
 
         try:
-            osm = self.getOnlineStateManager()
             return osm.nkm.lookupNick(dnick)
-        except (NotOnline, KeyError):
+        except KeyError:
             return None
 
     def kickDtellaNode(self, n, l33t_inick, reason, is_kill=False):
@@ -778,7 +806,7 @@ class IRCStateManager(object):
                      if matches_dc_to_irc_prefix(u.inick)]
         LOG.info("Conflicting users: %r" % bad_users)
         for u in bad_users:
-            self.ircs.pushKill(u.inick)
+            self.ircs.event_KillUser(u)
             self.removeUser(u)
 
     # --- These methods are used by the rest of Dtella ---
@@ -817,7 +845,7 @@ class IRCStateManager(object):
             return False
 
         if self.ircs:
-            self.ircs.pushTopic(n.inick, topic)
+            self.ircs.event_NodeSetTopic(n, topic)
 
         self.setTopic(n.inick, topic)
         return True
@@ -833,7 +861,7 @@ class IRCStateManager(object):
             return False
 
         if self.ircs:
-            self.ircs.pushPrivMsg(n.inick, text, u.inick)
+            self.ircs.event_Message(n, u, text)
             return True
 
         return False
@@ -845,6 +873,11 @@ class IRCStateManager(object):
         # The inick attribute gets dropped during a KILL, so
         # event_RemoveNick won't try to send a stale QUIT.
         n.inick = inick
+
+        # Keep track of UUIDs for the Dtella nodes, if needed.
+        if self.uuid_generator:
+            n.uuid = self.uuid_generator()
+            self.dt_uuids[n.uuid] = n
 
         # Call AddNickWithHostname after DNS succeeds (or fails)
         self.main.rdns.addRequest(n)
@@ -888,19 +921,16 @@ class IRCStateManager(object):
 
         # Announce new user to IRC.
         if self.ircs:
-            self.ircs.pushNick(
-                n.inick, n_user(n.ipp), n.hostname, "+iwx", n.ipp[:4],
-                "Dtella %s" % n.dttag[3:])
-            self.ircs.pushJoin(n.inick)
+            self.ircs.event_AddDtNode(n, n_user(n.ipp))
 
         # Send queued chat messages
         osm.cms.flushQueue(n)
 
     def event_RemoveNick(self, n, reason):
-        try:
-            inick = n.inick
-            del n.inick
-        except AttributeError:
+        if self.uuid_generator:
+            del self.dt_uuids[n.uuid]
+
+        if not hasattr(n, 'inick'):
             # Node has already been dropped from IRC.
             return
 
@@ -909,7 +939,9 @@ class IRCStateManager(object):
             return
 
         if self.ircs:
-            self.ircs.pushQuit(inick, reason)
+            self.ircs.event_RemoveDtNode(n, reason)
+
+        del n.inick
 
     def event_UpdateInfo(self, n):
         pass
@@ -921,11 +953,11 @@ class IRCStateManager(object):
             return
 
         if flags & core.NOTICE_BIT:
-            self.ircs.pushNotice(n.inick, text)
+            self.ircs.event_Notice(n, None, text)
         elif flags & core.SLASHME_BIT:
-            self.ircs.pushPrivMsg(n.inick, text, action=True)
+            self.ircs.event_Message(n, None, text, action=True)
         else:
-            self.ircs.pushPrivMsg(n.inick, text)
+            self.ircs.event_Message(n, None, text)
 
     def event_DtellaUp(self):
         osm = self.getOnlineStateManager()
@@ -937,19 +969,16 @@ class IRCStateManager(object):
 
         for n in nicks:
             try:
-                inick = self.checkIncomingNick(n)
+                # This event does everything we need.
+                self.event_AddNick(n)
             except NickError:
                 osm.nkm.removeNode(n, "Bad Nick")
                 n.setNoUser()
-            else:
-                # Ok, get ready to send to IRC
-                n.inick = inick
-                self.main.rdns.addRequest(n)
 
     def event_DtellaDown(self):
         if self.ircs:
-            self.ircs.pushPrivMsg(
-                cfg.dc_to_irc_bot, "Bridge lost connection to Dtella")
+            self.ircs.event_Message(
+                self.bot_user, None, "Bridge lost connection to Dtella")
 
     def event_KickMe(self, lines, rejoin_time):
         raise NotImplemented("Bridge can't be kicked.")
@@ -974,7 +1003,7 @@ class IRCStateManager(object):
         try:
             inick = dc_to_irc(n.nick)
 
-            if inick.lower() == cfg.dc_to_irc_bot.lower():
+            if inick.lower() == self.bot_user.inick.lower():
                 raise NickError("Nick '%s' conflicts with IRC bot." % inick)
 
             for q, reason in self.qlines.itervalues():
@@ -1434,7 +1463,7 @@ class BridgeServerManager(object):
         self.main.ph.sendPacket(''.join(packet), ad.getAddrTuple())
 
     def nickRemoved(self, n):
-        dels = ('dns_pending', 'hostname', 'hostmask', 'inick')
+        dels = ('dns_pending', 'hostname', 'hostmask', 'inick', 'uuid')
 
         for d in dels:
             try:

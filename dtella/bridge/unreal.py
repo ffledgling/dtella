@@ -50,13 +50,13 @@ B_REALNAME = "Dtella Bridge"
 
 class UnrealConfig(object):
     chan_umodes = ChannelUserModes(
-        ("q", "~", "owner",    "[~] owner$ $IRC\x01$$0$"),
-        ("a", "&", "super-op", "[&] super-op$ $IRC\x01$$0$"),
-        ("o", "@", "op",       "[@] op$ $IRC\x01$$0$"),
-        ("h", "%", "half-op",  "[%] half-op$ $IRC\x01$$0$"),
-        ("v", "+", "voice",    "[+] voice$ $IRC\x01$$0$"),
-        (":P", "", "loser",    "[_]$ $IRC\x01$$0$"),
-        (":V", "", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
+        ("q",  "owner",    "[~] owner$ $IRC\x01$$0$"),
+        ("a",  "super-op", "[&] super-op$ $IRC\x01$$0$"),
+        ("o",  "op",       "[@] op$ $IRC\x01$$0$"),
+        ("h",  "half-op",  "[%] half-op$ $IRC\x01$$0$"),
+        ("v",  "voice",    "[+] voice$ $IRC\x01$$0$"),
+        (":P", "loser",    "[_]$ $IRC\x01$$0$"),
+        (":V", "virtual",  "[>] virtual$ $IRC\x01$$0$"))
 
     use_rdns = True
 
@@ -177,7 +177,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         newnick = args[0]
 
         if oldnick:
-            self.ism.changeNick(oldnick, newnick)
+            self.ism.changeNick(self.ism.findUser(oldnick), newnick)
         else:
             self.ism.addUser(newnick)
 
@@ -222,7 +222,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         if chan != scfg.channel:
             return
 
-        if n00b == cfg.dc_to_irc_bot:
+        if n00b.lower() == self.ism.bot_user.inick.lower():
             if self.ism.syncd:
                 self.pushBotJoin()
             return
@@ -242,7 +242,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         n00b = args[0]
         reason = irc_strip(args[1])
 
-        if n00b == cfg.dc_to_irc_bot:
+        if n00b.lower() == self.ism.bot_user.inick.lower():
             if self.ism.syncd:
                 self.pushBotJoin(do_nick=True)
             return
@@ -336,7 +336,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         if unset_modes:
             self.sendLine(
                 ":%s MODE %s -%s %s" % (
-                    cfg.dc_to_irc_bot, scfg.channel,
+                    self.ism.bot_user.inick, scfg.channel,
                     ''.join(unset_modes), ' '.join(unset_nicks)))
 
         # Send IRC user mode changes to Dtella
@@ -439,7 +439,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         who = args[-1]
         scfg = getServiceConfig()
 
-        if who == cfg.dc_to_irc_bot:
+        if who.lower() == self.ism.bot_user.inick.lower():
             self.pushWhoisReply(
                 311, src, who, B_USER, scfg.my_host, '*', B_REALNAME)
             self.pushWhoisReply(
@@ -516,7 +516,7 @@ class UnrealIRCServer(LineOnlyReceiver):
             if n:
                 self.ism.sendPrivateMessage(n, src_nick, text, flags)
 
-    def pushNick(self, nick, user, host, modes, ip, name):
+    def pushNick(self, nick, ident, host, modes, ip, name):
         # If an IP was provided, convert to a base64 parameter.
         if ip:
             ip = ' ' + binascii.b2a_base64(ip).rstrip()
@@ -525,57 +525,29 @@ class UnrealIRCServer(LineOnlyReceiver):
 
         scfg = getServiceConfig()
         self.sendLine(
-            "NICK %s 1 %d %s %s %s 1 %s *%s :%s" %
-            (nick, time.time(), user, host, scfg.my_host, modes, ip, name))
+            "NICK %s 1 %d %s %s %s 1 +%s *%s :%s" %
+            (nick, time.time(), ident, host, scfg.my_host, modes, ip, name))
 
     def pushJoin(self, nick):
         scfg = getServiceConfig()
         self.sendLine(":%s JOIN %s" % (nick, scfg.channel))
 
-    def pushTopic(self, nick, topic):
-        scfg = getServiceConfig()
-        self.sendLine(
-            ":%s TOPIC %s %s %d :%s" %
-            (nick, scfg.channel, nick, int(time.time()), topic))
-
     def pushQuit(self, nick, reason=""):
         self.sendLine(":%s QUIT :%s" % (nick, reason))
-
-    def pushPrivMsg(self, nick, text, target=None, action=False):
-        scfg = getServiceConfig()
-        if target is None:
-            target = scfg.channel
-
-        if action:
-            text = "\001ACTION %s\001" % text
-
-        self.sendLine(":%s PRIVMSG %s :%s" % (nick, target, text))
-
-    def pushNotice(self, nick, text, target=None):
-        scfg = getServiceConfig()
-        if target is None:
-            target = scfg.channel
-        self.sendLine(":%s NOTICE %s :%s" % (nick, target, text))
 
     def pushBotJoin(self, do_nick=False):
         scfg = getServiceConfig()
         if do_nick:
             self.pushNick(
-                cfg.dc_to_irc_bot, B_USER, scfg.my_host, "+Sq", None,
+                self.ism.bot_user.inick, B_USER, scfg.my_host, "Sq", None,
                 B_REALNAME)
 
         # Join channel, and grant ops.
-        self.pushJoin(cfg.dc_to_irc_bot)
+        self.pushJoin(self.ism.bot_user.inick)
         self.sendLine(
             ":%s MODE %s +ao %s %s" %
             (scfg.my_host, scfg.channel,
-             cfg.dc_to_irc_bot, cfg.dc_to_irc_bot))
-
-    def pushKill(self, nick):
-        scfg = getServiceConfig()
-        LOG.info("Killing nick: " + nick)
-        self.sendLine(":%s KILL %s :%s (nick reserved for Dtella)"
-                      % (scfg.my_host, nick, scfg.my_host))
+             self.ism.bot_user.inick, self.ism.bot_user.inick))
 
     def pushRemoveQLine(self, nickmask):
         scfg = getServiceConfig()
@@ -601,6 +573,48 @@ class UnrealIRCServer(LineOnlyReceiver):
 
         self.ping_dcall = reactor.callLater(60.0, cb)
 
+    def event_AddDtNode(self, n, ident):
+        self.pushNick(
+            n.inick, ident, n.hostname, "iwx", n.ipp[:4],
+            "Dtella %s" % n.dttag[3:])
+        self.pushJoin(n.inick)
+
+    def event_RemoveDtNode(self, n, reason):
+        self.pushQuit(n.inick, reason)
+
+    def event_KillUser(self, u):
+        scfg = getServiceConfig()
+        LOG.info("Killing nick: " + u.inick)
+        self.sendLine(":%s KILL %s :%s (nick reserved for Dtella)"
+                      % (scfg.my_host, u.inick, scfg.my_host))
+
+    def event_NodeSetTopic(self, n, topic):
+        scfg = getServiceConfig()
+        self.sendLine(
+            ":%s TOPIC %s %s %d :%s" %
+            (n.inick, scfg.channel, n.inick, time.time(), topic))
+
+    def event_Message(self, src_n, dst_u, text, action=False):
+        scfg = getServiceConfig()
+        if dst_u is None:
+            target = scfg.channel
+        else:
+            target = dst_u.inick
+
+        if action:
+            text = "\001ACTION %s\001" % text
+
+        self.sendLine(":%s PRIVMSG %s :%s" % (src_n.inick, target, text))
+
+    def event_Notice(self, src_n, dst_u, text):
+        scfg = getServiceConfig()
+        if dst_u is None:
+            target = scfg.channel
+        else:
+            target = dst_u.inick
+
+        self.sendLine(":%s NOTICE %s :%s" % (src_n.nick, target, text))
+
     def shutdown(self):
         if self.shutdown_deferred:
             return self.shutdown_deferred
@@ -609,7 +623,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         self.pushRemoveQLine(cfg.dc_to_irc_prefix + "*")
 
         # Scream
-        self.pushQuit(cfg.dc_to_irc_bot, "AIEEEEEEE!")
+        self.pushQuit(self.ism.bot_user.inick, "AIEEEEEEE!")
 
         # Send SQUIT for completeness
         scfg = getServiceConfig()
