@@ -402,7 +402,8 @@ class IRCStateManager(object):
             return
 
         self.users[inick.lower()] = u
-        self.irc_uuids[uuid] = u
+        if self.uuid_generator:
+            self.irc_uuids[uuid] = u
         return u
 
     def removeUser(self, u, message=None):
