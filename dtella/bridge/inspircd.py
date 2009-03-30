@@ -151,6 +151,9 @@ class InspIRCdServer(LineOnlyReceiver):
         self.qline_reason = (
             "Reserved for Dtella (%08X)" % random.randint(0, 0xFFFFFFFF))
 
+        # Hostname -> SID map.  Used by _SQUIT.
+        self.servers = {}
+
     def setupSID(self):
         scfg = getServiceConfig()
         if scfg.sid:
@@ -566,7 +569,11 @@ class InspIRCdServer(LineOnlyReceiver):
 
     def handleCmd_SERVER(self, prefix, args):
         if prefix:
-            # Not from our connected server
+            # :foo.dhirc.com SERVER s.dhirc.com * 1 00A :Services
+            hostname = args[0]
+            sid = args[3]
+            LOG.info("Recording server: hostname=%s sid=%s" % (hostname, sid))
+            self.servers[hostname] = sid
             return
 
         if self.server_name:
@@ -599,12 +606,36 @@ class InspIRCdServer(LineOnlyReceiver):
         self.sendLine("BURST %d" % time.time())
         self.sendLine("ENDBURST")
 
+    def handleCmd_SQUIT(self, prefix, args):
+        # :n.dhirc.com SQUIT remote.dtella.org :Remote host closed
+        hostname = args[0]
+        try:
+            sid = self.servers.pop(hostname)
+        except KeyError:
+            LOG.error("SQUIT: unknown server: %s" % hostname)
+            return
+
+        # Find all the users belonging to this server.
+        remove_uuids = [uuid for uuid in self.ism.irc_uuids
+                        if uuid.startswith(sid)]
+
+        # Drop them off the network.
+        for uuid in remove_uuids:
+            LOG.info("SQUIT: removing user: %s" % uuid)
+            self.ism.removeUser(self.ism.findUser(uuid=uuid))
+
     def handleCmd_BURST(self, prefix, args):
+        return #FIXME
         if self.ism.syncd:
             LOG.error("Can't handle BURST after sync. Restarting.")
             self.transport.loseConnection()
 
     def handleCmd_ENDBURST(self, prefix, args):
+        if self.ism.syncd:
+            # FIXME
+            LOG.warning("Ignoring ENDBURST")
+            return
+
         CHECK(self.server_name)
         LOG.info("Finished receiving IRC sync data.")
 
@@ -841,7 +872,6 @@ class InspIRCdServer(LineOnlyReceiver):
         self.pushQuit(self.ism.bot_user.uuid, "AIEEEEEEE!")
 
         # Send SQUIT for completeness
-        # TODO: are incoming SQUITs handled correctly?
         scfg = getServiceConfig()
         self.sendLine(":%s SQUIT %s :Bridge Shutting Down"
                       % (self.sid, scfg.my_host))
