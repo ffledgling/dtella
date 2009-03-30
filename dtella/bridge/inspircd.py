@@ -151,9 +151,6 @@ class InspIRCdServer(LineOnlyReceiver):
         self.qline_reason = (
             "Reserved for Dtella (%08X)" % random.randint(0, 0xFFFFFFFF))
 
-        # Hostname -> SID map.  Used by _SQUIT.
-        self.servers = {}
-
     def setupSID(self):
         scfg = getServiceConfig()
         if scfg.sid:
@@ -568,12 +565,17 @@ class InspIRCdServer(LineOnlyReceiver):
             self.ism.removeQLine(nickmask)
 
     def handleCmd_SERVER(self, prefix, args):
+        # :foo.dhirc.com SERVER s.dhirc.com * 1 00A :Services
+        hostname = args[0]
+        password = args[1]
+        sid = args[3]
+
+        # Register each server as a user, because it's easier.
+        LOG.info("Recording server: hostname=%s sid=%s" % (hostname, sid))
+        self.ism.addUser(hostname, sid)
+
         if prefix:
-            # :foo.dhirc.com SERVER s.dhirc.com * 1 00A :Services
-            hostname = args[0]
-            sid = args[3]
-            LOG.info("Recording server: hostname=%s sid=%s" % (hostname, sid))
-            self.servers[hostname] = sid
+            # Not my directly-connected server.
             return
 
         if self.server_name:
@@ -610,7 +612,10 @@ class InspIRCdServer(LineOnlyReceiver):
         # :n.dhirc.com SQUIT remote.dtella.org :Remote host closed
         hostname = args[0]
         try:
-            sid = self.servers.pop(hostname)
+            # All servers have been registered as users.
+            sid = self.ism.findUser(inick=hostname).uuid
+            if len(sid) != 3:
+                raise KeyError
         except KeyError:
             LOG.error("SQUIT: unknown server: %s" % hostname)
             return
