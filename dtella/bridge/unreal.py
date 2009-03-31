@@ -240,7 +240,7 @@ class UnrealIRCServer(LineOnlyReceiver):
         # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
         l33t = prefix
         n00b = args[0]
-        reason = irc_strip(args[1])
+        reason = "KILL: " + irc_strip(args[1])
 
         if n00b.lower() == self.ism.bot_user.inick.lower():
             if self.ism.syncd:
@@ -249,7 +249,7 @@ class UnrealIRCServer(LineOnlyReceiver):
 
         n = self.ism.findDtellaNode(inick=n00b)
         if n:
-            self.ism.kickDtellaNode(n, l33t, reason, is_kill=True)
+            self.ism.kickDtellaNode(n, l33t, reason, send_quit=False)
         else:
             message = (
                 "%s has KILL'd %s: %s" %

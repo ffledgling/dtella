@@ -388,32 +388,26 @@ class InspIRCdServer(LineOnlyReceiver):
             CHECK(self.ism.partChannel(n00b_u, message))
 
     def handleCmd_KILL(self, prefix, args):
-        # :darkhorse KILL }darkhorse :dhirc.com!darkhorse (TEST!!!)
+        # KILL is just a request.  A QUIT will be sent in response.
         l33t_uuid = prefix
         n00b = args[0]
-        reason = irc_strip(args[1])
+        reason = "KILL: " + irc_strip(args[1])
 
         # In most cases, n00b is a UUID, but Anope seems to still use a nick.
         # Thus, we have to try both everywhere :-/
 
-        bot_user = self.ism.bot_user
-        if n00b == bot_user.uuid or n00b.lower() == bot_user.inick:
-            if self.ism.syncd:
-                self.pushBotJoin(do_nick=True)
-            return
+        # Let's ignore KILLs for the bot, and see what happens.
+        #bot_user = self.ism.bot_user
+        #if n00b == bot_user.uuid or n00b.lower() == bot_user.inick:
+        #    if self.ism.syncd:
+        #        self.pushBotJoin(do_nick=True)
+        #    return
 
-        l33t = self.ism.findUser(uuid=l33t_uuid).inick
         n = (self.ism.findDtellaNode(uuid=n00b) or
              self.ism.findDtellaNode(inick=n00b))
         if n:
-            self.ism.kickDtellaNode(n, l33t, reason, is_kill=True)
-        else:
-            n00b_u = (self.ism.findUser(uuid=n00b) or
-                      self.ism.findUser(inick=n00b))
-            message = (
-                "%s has KILL'd %s: %s" %
-                (irc_to_dc(l33t), irc_to_dc(n00b_u.inick), reason))
-            self.ism.removeUser(n00b_u, message)
+            l33t = self.ism.findUser(uuid=l33t_uuid).inick
+            self.ism.kickDtellaNode(n, l33t, reason)
 
     """
     # Treat SVSKILL the same as KILL.

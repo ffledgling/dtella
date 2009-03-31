@@ -538,15 +538,12 @@ class IRCStateManager(object):
         except KeyError:
             return None
 
-    def kickDtellaNode(self, n, l33t_inick, reason, is_kill=False):
+    def kickDtellaNode(self, n, l33t_inick, reason, send_quit=True):
         # Handler for KICK/KILL of an existing Dtella user.
         # Caller should get 'n' from findDtellaNode()
 
         # Exception shouldn't happen here; don't catch.
         osm = self.getOnlineStateManager()
-
-        if is_kill:
-            reason = "KILL: " + reason
 
         # Send a kick message.
         chunks = []
@@ -557,7 +554,7 @@ class IRCStateManager(object):
         osm.bsm.sendBridgeChange(chunks)
 
         # Forget this nick.
-        if is_kill:
+        if not send_quit:
             del n.inick
         osm.nkm.removeNode(n, "Kicked")
         n.setNoUser()
