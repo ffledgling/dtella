@@ -342,14 +342,13 @@ class IRCStateManager(object):
         self.uuid_generator = uuid_generator
 
         # inick.lower() -> User object
+        # *also* indexed by uuid.lower(), if those are enabled.
         self.users = {}
 
         # If we're using UUIDs, create dicts to keep track of them.
         if self.uuid_generator:
-            # uuid -> Node()
+            # uuid.lower() -> Node()
             self.dt_uuids = {}
-            # uuid -> User()
-            self.irc_uuids = {}
 
         # Set of all User()s in the Dtella channel.
         self.chanusers = set()
@@ -390,8 +389,9 @@ class IRCStateManager(object):
         CHECK(inick.lower() not in self.users)
 
         if self.uuid_generator:
-            CHECK(uuid)
-            CHECK(uuid not in self.irc_uuids)
+            CHECK(not ("0" <= inick[0] <= "9"))
+            CHECK("0" <= uuid[0] <= "9")
+            CHECK(uuid.lower() not in self.users)
 
         u = User(inick, uuid)
 
@@ -403,20 +403,18 @@ class IRCStateManager(object):
 
         self.users[inick.lower()] = u
         if self.uuid_generator:
-            self.irc_uuids[uuid] = u
+            self.users[uuid.lower()] = u
         return u
 
     def removeUser(self, u, message=None):
         self.partChannel(u, message)
         CHECK(self.users.pop(u.inick.lower()) is u)
         if self.uuid_generator:
-            CHECK(self.irc_uuids.pop(u.uuid) is u)
+            CHECK(self.users.pop(u.uuid.lower()) is u)
 
-    def findUser(self, inick=None, uuid=None):
-        if uuid:
-            return self.irc_uuids[uuid]
-        else:
-            return self.users[inick.lower()]
+    def findUser(self, inick):
+        # Note: inick may also be a uuid.
+        return self.users[inick.lower()]
 
     def changeNick(self, u, new_inick):
         old_inick = u.inick
@@ -424,6 +422,10 @@ class IRCStateManager(object):
             # TODO: report case changes to Dtella?
             u.inick = new_inick
             return
+
+        # Don't allow nicks to look like a UUID.
+        if self.uuid_generator:
+            CHECK(not ("0" <= new_inick[0] <= "9"))
 
         # The destination nick should never collide.
         CHECK(new_inick.lower() not in self.users)
@@ -472,6 +474,11 @@ class IRCStateManager(object):
                 chunks, irc_to_dc(new_inick), infoindex)
             osm.bsm.sendBridgeChange(chunks)
 
+    def isMyBot(self, inick):
+        # Identify the dc_to_irc_bot, by either nick or uuid.
+        return (inick.lower() == self.bot_user.inick.lower() or
+                inick.lower() == self.bot_user.uuid.lower())
+
     def joinChannel(self, u):
         if u in self.chanusers:
             LOG.error("joinChannel: %r already in channel." % u)
@@ -511,21 +518,21 @@ class IRCStateManager(object):
         osm.bsm.sendBridgeChange(chunks)
         return True
 
-    def findDtellaNode(self, inick=None, dnick=None, uuid=None):
+    def findDtellaNode(self, inick=None, dnick=None):
         # Try to find a user on Dtella.
+        # note: inick may also be a UUID.
         try:
             osm = self.getOnlineStateManager()
         except NotOnline:
             return None
 
-        if uuid:
-            CHECK(self.uuid_generator)
-            try:
-                return self.dt_uuids[uuid]
-            except KeyError:
-                return None
-
         if inick:
+            # First, try parsing inick as a UUID.
+            if self.uuid_generator:
+                try:
+                    return self.dt_uuids[inick.lower()]
+                except KeyError:
+                    pass
             try:
                 dnick = dc_from_irc(inick)
             except NickError:
@@ -875,7 +882,7 @@ class IRCStateManager(object):
         # Keep track of UUIDs for the Dtella nodes, if needed.
         if self.uuid_generator:
             n.uuid = self.uuid_generator()
-            self.dt_uuids[n.uuid] = n
+            self.dt_uuids[n.uuid.lower()] = n
 
         # Call AddNickWithHostname after DNS succeeds (or fails)
         self.main.rdns.addRequest(n)
@@ -926,7 +933,7 @@ class IRCStateManager(object):
 
     def event_RemoveNick(self, n, reason):
         if self.uuid_generator:
-            del self.dt_uuids[n.uuid]
+            del self.dt_uuids[n.uuid.lower()]
 
         if not hasattr(n, 'inick'):
             # Node has already been dropped from IRC.

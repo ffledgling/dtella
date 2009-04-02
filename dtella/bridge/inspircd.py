@@ -279,7 +279,7 @@ class InspIRCdServer(LineOnlyReceiver):
         old_uuid = prefix
         new_nick = args[0]
         try:
-            u = self.ism.findUser(uuid=old_uuid)
+            u = self.ism.findUser(old_uuid)
         except KeyError:
             # This might be an echo from our KICK.
             LOG.warning("NICK: can't find source: %s" % old_uuid)
@@ -333,7 +333,7 @@ class InspIRCdServer(LineOnlyReceiver):
         for uinfo in args[-1].split():
             modes, uuid = uinfo.split(",", 1)
 
-            u = self.ism.findUser(uuid=uuid)
+            u = self.ism.findUser(uuid)
             self.ism.joinChannel(u)
 
             changes = {}
@@ -350,12 +350,12 @@ class InspIRCdServer(LineOnlyReceiver):
 
         scfg = getServiceConfig()
         if scfg.channel in chans:
-            CHECK(self.ism.partChannel(self.ism.findUser(uuid=uuid)))
+            CHECK(self.ism.partChannel(self.ism.findUser(uuid)))
 
     def handleCmd_QUIT(self, prefix, args):
         uuid = prefix
         try:
-            u = self.ism.findUser(uuid=uuid)
+            u = self.ism.findUser(uuid)
         except KeyError:
             LOG.warning("Can't quit user: %s" % uuid)
         else:
@@ -363,51 +363,64 @@ class InspIRCdServer(LineOnlyReceiver):
 
     def handleCmd_KICK(self, prefix, args):
         chan = args[0]
-        l33t_uuid = prefix
-        n00b_uuid = args[1]
+        l33t = prefix
+        n00b = args[1]
         reason = irc_strip(args[2])
 
         scfg = getServiceConfig()
         if chan != scfg.channel:
             return
 
-        if n00b_uuid == self.ism.bot_user.uuid:
+        # Rejoin the bot if it's killed.
+        if self.ism.isMyBot(n00b):
             if self.ism.syncd:
                 self.pushBotJoin()
             return
 
-        l33t = self.ism.findUser(uuid=l33t_uuid).inick
-        n = self.ism.findDtellaNode(uuid=n00b_uuid)
+        l33t = self.ism.findUser(l33t).inick
+        n = self.ism.findDtellaNode(inick=n00b)
         if n:
             self.ism.kickDtellaNode(n, l33t, reason)
         else:
-            n00b_u = self.ism.findUser(uuid=n00b_uuid)
+            n00b_u = self.ism.findUser(n00b)
             message = (
                 "%s has kicked %s: %s" %
                 (irc_to_dc(l33t), irc_to_dc(n00b_u.inick), reason))
             CHECK(self.ism.partChannel(n00b_u, message))
 
     def handleCmd_KILL(self, prefix, args):
-        # KILL is just a request.  A QUIT will be sent in response.
-        l33t_uuid = prefix
+        l33t = prefix
         n00b = args[0]
-        reason = "KILL: " + irc_strip(args[1])
+        reason = irc_strip(args[1])
 
         # In most cases, n00b is a UUID, but Anope seems to still use a nick.
         # Thus, we have to try both everywhere :-/
 
-        # Let's ignore KILLs for the bot, and see what happens.
-        #bot_user = self.ism.bot_user
-        #if n00b == bot_user.uuid or n00b.lower() == bot_user.inick:
-        #    if self.ism.syncd:
-        #        self.pushBotJoin(do_nick=True)
-        #    return
+        # Reconnect the bot if it's killed.
+        if self.ism.isMyBot(n00b):
+            if self.ism.syncd:
+                self.pushBotJoin(do_nick=True)
+            return
 
-        n = (self.ism.findDtellaNode(uuid=n00b) or
-             self.ism.findDtellaNode(inick=n00b))
+        l33t = self.ism.findUser(l33t).inick
+
+        # If n00b is a Dtella node, kick 'em.
+        n = self.ism.findDtellaNode(inick=n00b)
         if n:
-            l33t = self.ism.findUser(uuid=l33t_uuid).inick
-            self.ism.kickDtellaNode(n, l33t, reason)
+            self.ism.kickDtellaNode(
+                n, l33t, "KILL: " + reason, send_quit=False)
+            return
+
+        # If n00b is an IRC user, treat it like a QUIT.
+        try:
+            n00b_u = self.ism.findUser(n00b)
+        except KeyError:
+            LOG.warning("Tried to KILL unknown user: %s" % n00b)
+            return
+        message = (
+            "%s has KILL'd %s: %s" %
+            (irc_to_dc(l33t), irc_to_dc(n00b_u.inick), reason))
+        self.ism.removeUser(n00b_u, message)
 
     """
     # Treat SVSKILL the same as KILL.
@@ -422,7 +435,7 @@ class InspIRCdServer(LineOnlyReceiver):
 
         scfg = getServiceConfig()
         if chan == scfg.channel:
-            whoset = self.ism.findUser(uuid=whoset_uuid).inick
+            whoset = self.ism.findUser(whoset_uuid).inick
             self.ism.setTopic(whoset, text)
 
     def handleCmd_FTOPIC(self, prefix, args):
@@ -447,7 +460,7 @@ class InspIRCdServer(LineOnlyReceiver):
             return
 
         try:
-            whoset = self.ism.findUser(uuid=whoset_uuid).inick
+            whoset = self.ism.findUser(whoset_uuid).inick
         except KeyError:
             # Could be a server?
             whoset = ""
@@ -486,7 +499,7 @@ class InspIRCdServer(LineOnlyReceiver):
                 uuid = margs[i]
                 i += 1
 
-                n = self.ism.findDtellaNode(uuid=uuid)
+                n = self.ism.findDtellaNode(inick=uuid)
                 if n:
                     # If someone set a mode for a Dt node, unset it.
                     if on_off:
@@ -496,7 +509,7 @@ class InspIRCdServer(LineOnlyReceiver):
 
                 # Get the IRC user we're modifying.
                 try:
-                    u = self.ism.findUser(uuid=uuid)
+                    u = self.ism.findUser(uuid)
                 except KeyError:
                     LOG.error("MODE: unknown user: %s" % uuid)
                     continue
@@ -607,21 +620,22 @@ class InspIRCdServer(LineOnlyReceiver):
         hostname = args[0]
         try:
             # All servers have been registered as users.
-            sid = self.ism.findUser(inick=hostname).uuid
+            sid = self.ism.findUser(hostname).uuid.lower()
             if len(sid) != 3:
                 raise KeyError
         except KeyError:
             LOG.error("SQUIT: unknown server: %s" % hostname)
             return
 
-        # Find all the users belonging to this server.
-        remove_uuids = [uuid for uuid in self.ism.irc_uuids
+        # Find all the users belonging to this server.  This should
+        # never match nicks, because only UUIDs start with a number.
+        remove_uuids = [uuid for uuid in self.ism.users
                         if uuid.startswith(sid)]
 
         # Drop them off the network.
         for uuid in remove_uuids:
             LOG.info("SQUIT: removing user: %s" % uuid)
-            self.ism.removeUser(self.ism.findUser(uuid=uuid))
+            self.ism.removeUser(self.ism.findUser(uuid))
 
     def handleCmd_BURST(self, prefix, args):
         return #FIXME
@@ -724,7 +738,7 @@ class InspIRCdServer(LineOnlyReceiver):
 
         text = irc_strip(text)
 
-        src_nick = self.ism.findUser(uuid=src_uuid).inick
+        src_nick = self.ism.findUser(src_uuid).inick
 
         scfg = getServiceConfig()
         if target == scfg.channel:
@@ -738,7 +752,7 @@ class InspIRCdServer(LineOnlyReceiver):
             self.ism.sendChannelMessage(src_nick, text, flags)
 
         else:
-            n = self.ism.findDtellaNode(uuid=target)
+            n = self.ism.findDtellaNode(inick=target)
             if n:
                 self.ism.sendPrivateMessage(n, src_nick, text, flags)
 
@@ -748,26 +762,29 @@ class InspIRCdServer(LineOnlyReceiver):
         text = irc_strip(args[1])
         flags = core.NOTICE_BIT
 
-        src_nick = self.ism.findUser(uuid=src_uuid).inick
+        src_nick = self.ism.findUser(src_uuid).inick
 
         scfg = getServiceConfig()
         if target == scfg.channel:
             self.ism.sendChannelMessage(src_nick, text, flags)
         else:
-            n = self.ism.findDtellaNode(uuid=target)
+            n = self.ism.findDtellaNode(inick=target)
             if n:
                 self.ism.sendPrivateMessage(n, src_nick, text, flags)
 
-    def pushUID(self, uuid, nick, ident, host, modes, ip, gecos):
+    def pushUID(self, uuid, nick, ident, host, cloak_host, modes, ip, gecos):
         # If an IP was provided, convert to a base64 parameter.
         if not ip:
             ip = '0.0.0.0'
+
+        if not cloak_host:
+            cloak_host = host
 
         scfg = getServiceConfig()
         now = time.time()
         self.sendLine(
             ":%s UID %s %d %s %s %s %s %s %d +%s :%s" %
-            (self.sid, uuid, now, nick, host, host, ident,
+            (self.sid, uuid, now, nick, host, cloak_host, ident,
              ip, now, modes, gecos))
 
     def pushJoin(self, uuid, modes=""):
@@ -786,7 +803,7 @@ class InspIRCdServer(LineOnlyReceiver):
         if do_nick:
             self.pushUID(
                 uuid, self.ism.bot_user.inick,
-                B_USER, scfg.my_host, "", None, B_REALNAME)
+                B_USER, scfg.my_host, None, "", None, B_REALNAME)
 
         # Join channel, and grant ops.
         self.pushJoin(uuid, "o")
@@ -817,9 +834,8 @@ class InspIRCdServer(LineOnlyReceiver):
         self.ping_dcall = reactor.callLater(60.0, cb)
 
     def event_AddDtNode(self, n, ident):
-        # TODO: add mode "x" for masking.
         self.pushUID(
-            n.uuid, n.inick, ident, n.hostname, "iw",
+            n.uuid, n.inick, ident, n.hostname, n.hostmask, "iwx",
             Ad().setRawIPPort(n.ipp).getTextIP(),
             "Dtella %s" % n.dttag[3:])
         self.pushJoin(n.uuid)
