@@ -105,6 +105,10 @@ def matches_dc_to_irc_prefix(nick):
     return nick.lower().startswith(cfg.dc_to_irc_prefix.lower())
 
 
+def number_prefix(s):
+    return "0" <= s[0] <= "9"
+
+
 def dc_to_irc(dnick):
     # Encode a DC nick, for use in IRC.
 
@@ -389,9 +393,14 @@ class IRCStateManager(object):
         CHECK(inick.lower() not in self.users)
 
         if self.uuid_generator:
-            CHECK(not ("0" <= inick[0] <= "9"))
-            CHECK("0" <= uuid[0] <= "9")
+            CHECK(number_prefix(uuid))
             CHECK(uuid.lower() not in self.users)
+
+            # If the nick is a uuid, it must be its own uuid.
+            if number_prefix(inick):
+                CHECK(inick.lower() == uuid.lower())
+        else:
+            CHECK(uuid is None)
 
         u = User(inick, uuid)
 
@@ -408,7 +417,12 @@ class IRCStateManager(object):
 
     def removeUser(self, u, message=None):
         self.partChannel(u, message)
-        CHECK(self.users.pop(u.inick.lower()) is u)
+
+        # If inick is not a uuid, remove from index.
+        if not (self.uuid_generator and number_prefix(u.inick)):
+            CHECK(self.users.pop(u.inick.lower()) is u)
+
+        # If a uuid is defined, remove from index.
         if self.uuid_generator:
             CHECK(self.users.pop(u.uuid.lower()) is u)
 
@@ -423,15 +437,16 @@ class IRCStateManager(object):
             u.inick = new_inick
             return
 
-        # Don't allow nicks to look like a UUID.
-        if self.uuid_generator:
-            CHECK(not ("0" <= new_inick[0] <= "9"))
+        if self.uuid_generator and number_prefix(new_inick):
+            # If nick is changing to a uuid, it must be its own uuid.
+            CHECK(new_inick.lower() == u.uuid.lower())
+        else:
+            # Otherwise, the nick must not already exist.
+            CHECK(new_inick.lower() not in self.users)
 
-        # The destination nick should never collide.
-        CHECK(new_inick.lower() not in self.users)
-
-        # Remove the source user, check validity.
-        CHECK(self.users.pop(u.inick.lower()) is u)
+        if not (self.uuid_generator and number_prefix(u.inick)):
+            # If old nick is not a uuid, remove it from the index.
+            CHECK(self.users.pop(u.inick.lower()) is u)
 
         # Don't allow IRC nicks which match my prefix.
         conflicted = (self.syncd and matches_dc_to_irc_prefix(new_inick))
