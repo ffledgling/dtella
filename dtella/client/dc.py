@@ -1345,15 +1345,18 @@ class DtellaBot(object):
         if len(args) == 0:
             osm = self.main.osm
             if osm:
-                out("Tell your friend to enter the following into their client "
-                    "to join the network:")
-                out("")
-                out("  !addpeer %s"
-                    % Ad().setRawIPPort(osm.me.ipp).getTextIPPort())
-                out("")
+                ad = Ad().setRawIPPort(osm.me.ipp)
+                extra_msg = ""
             else:
-                out("You cannot invite someone until you are connected to the "
-                    "network yourself.")
+                # If I don't know my own IP, at least fill in a dummy one.
+                ad = Ad().setAddrTuple(("0.0.0.0", self.main.state.udp_port))
+                extra_msg = " (replace 0.0.0.0 with your real IP address)"
+
+            out("Tell your friend to enter the following into their client "
+                "to join the network%s:" % extra_msg)
+            out("")
+            out("  !addpeer %s" % ad.getTextIPPort())
+            out("")
             return
         
         self.syntaxHelp(out, 'INVITE', prefix)
