@@ -22,7 +22,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import binascii
 import random
-from hashlib import md5
 
 from twisted.internet import reactor
 from twisted.python.runtime import seconds
@@ -34,6 +33,7 @@ import dtella.bridge_config as cfg
 from dtella.common.log import LOG
 
 from dtella.common.ipv4 import Ad
+from dtella.common.util import md5
 
 
 class DynamicConfigUpdateManager(object):

@@ -26,14 +26,13 @@ import dtella.common.core as core
 from dtella.common.core import (BadTimingError, BadPacketError, BadBroadcast,
                                 Reject, NickError)
 
-from dtella.common.util import RandSet, dcall_discard, parse_incoming_info
+from dtella.common.util import RandSet, dcall_discard, parse_incoming_info, md5
 
 import dtella.common.ipv4 as ipv4
 from dtella.common.ipv4 import Ad
 
 from Crypto.Util.number import long_to_bytes, bytes_to_long
 from Crypto.PublicKey import RSA
-from hashlib import md5
 import struct
 import random
 

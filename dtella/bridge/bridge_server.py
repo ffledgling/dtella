@@ -33,14 +33,13 @@ import struct
 import re
 import binascii
 from collections import deque
-from hashlib import md5
 
 import dtella.common.core as core
 from dtella.common.reverse_dns import ipToHostname
 from dtella.common.log import LOG
 
 from dtella.common.util import (dcall_discard, dcall_timeleft,
-                                validateNick, CHECK)
+                                validateNick, CHECK, md5)
 from dtella.common.core import (Reject, BadPacketError, BadTimingError,
                                 NickError)
 from dtella.common.ipv4 import Ad

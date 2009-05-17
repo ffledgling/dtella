@@ -24,7 +24,11 @@ from Crypto.PublicKey import RSA
 from Crypto.Util.randpool import RandomPool
 from Crypto.Util.number import long_to_bytes
 import binascii
-from hashlib import md5
+
+try:
+    from hashlib import md5
+except ImportError:
+    from md5 import md5
 
 
 def makePrivateKey():

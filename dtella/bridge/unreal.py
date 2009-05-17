@@ -28,12 +28,12 @@ from twisted.internet import reactor, defer
 import time
 import binascii
 import array
-from hashlib import md5
 
 import dtella.common.core as core
 import dtella.local_config as local
 from dtella.common.log import LOG
 from dtella.common.util import CHECK
+from dtella.common.util import md5
 import dtella.bridge_config as cfg
 from zope.interface import implements
 from zope.interface.verify import verifyClass

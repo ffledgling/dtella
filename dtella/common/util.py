@@ -34,6 +34,12 @@ import os.path
 from twisted.python.runtime import seconds
 import twisted.python.log
 
+# Import md5 for everyone, Python 2.4+
+try:
+    from hashlib import md5
+except ImportError:
+    from md5 import md5
+
 
 def randbytes(n):
     return ''.join([chr(random.randint(0,255)) for i in range(n)])

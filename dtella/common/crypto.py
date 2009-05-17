@@ -21,7 +21,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
 
 from Crypto.Cipher import AES
-from hashlib import md5
+from dtella.common.util import md5
 
 class PacketEncoder(object):
 
