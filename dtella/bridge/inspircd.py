@@ -75,7 +75,7 @@ class InspIRCdConfig(object):
         self.network_name = network_name  # string
 
         # IRC Server Link parameters. The my_host parameter must match
-        # the link block in your unrealircd.conf file. 
+        # the link block in your InspIRCd links.conf file. 
         self.my_host = my_host
         self.my_name = my_name
         self.sid = sid                    # 3-char string (or None)

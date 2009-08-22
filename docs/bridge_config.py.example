@@ -2,19 +2,26 @@
 # It should be copied to ./dtella/bridge_config.py on the system running
 # the bridge, but otherwise kept as secret as possible.
 
-# Service config.  Currently Unreal is the only option.
+# Service config. Supported servers are InspIRCd and UnrealIRCd
+# Currently InspIRCd is the only option. 
 
-# Peer with an UnrealIRCd server.  See dtella/bridge/unreal.py
-service_class = "dtella.bridge.unreal.UnrealConfig"
+# Peer with an InspIRCd server.  See dtella/bridge/inspircd.py
+service_class = "dtella.bridge.inspircd.InspIRCdConfig"
+
+# Peer with an UnrealIRCd server. See dtella/bridge/unreal.py
+# service_class = "dtella.bridge.inspircd.UnrealConfig"
+
 service_args = dict(
     host = "remote.example.com",
     port = 6667,
     ssl = False,
-    password = "hunter2",
+    sendpass = "hunter2",
+    recvpass = "hunder2",
     network_name = "Awesome Network Name",
     my_host = "myhost.example.com",
     my_name = "Dtella IRC Bridge",
     channel = "#dtella",
+    sid = None
     hostmask_prefix = "pre",
     hostmask_keys = ["key1",
                      "key2",

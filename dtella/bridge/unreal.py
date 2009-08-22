@@ -60,14 +60,14 @@ class UnrealConfig(object):
 
     use_rdns = True
 
-    def __init__(self, host, port, ssl, password,
+    def __init__(self, host, port, ssl, sendpass,
                  network_name, my_host, my_name, channel,
                  hostmask_prefix, hostmask_keys):
         # Connection parameters for remote IRC server
         self.host = host                  # ip/hostname
         self.port = port                  # integer
         self.ssl = ssl                    # True/False
-        self.password = password          # string
+        self.sendpass = sendpass          # string
         self.network_name = network_name  # string
 
         # IRC Server Link parameters. The my_host parameter must match
@@ -119,7 +119,7 @@ class UnrealIRCServer(LineOnlyReceiver):
     def connectionMade(self):
         scfg = getServiceConfig()
         LOG.info("Connected to IRC server.")
-        self.sendLine("PASS :%s" % (scfg.password,))
+        self.sendLine("PASS :%s" % (scfg.sendpass,))
         self.sendLine(
             "SERVER %s 1 :%s" % (scfg.my_host, scfg.my_name))
 

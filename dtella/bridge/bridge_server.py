@@ -222,7 +222,7 @@ def newServiceConfig():
             host = cfg.irc_server,
             port = cfg.irc_port,
             ssl = cfg.irc_ssl,
-            password = cfg.irc_password,
+            sendpass = cfg.irc_password,
             network_name = cfg.irc_network_name,
             my_host = cfg.my_host,
             my_name = cfg.my_name,
