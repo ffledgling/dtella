@@ -86,18 +86,24 @@ dconfig_push_interval = 60*60
 # object.  You can choose one of these provided config pushers,
 # or write your own custom one.
 
+# We currently recommend the Google Spreadsheets method as it is the most
+# resiliant and least prone to failure.
+
 # -- Write to a plain text file, for testing. --
 import dtella.modules.push_textfile
 dconfig_push_func = dtella.modules.push_textfile.TextFileUpdater(
     fname="test-dns.txt"
     ).update
-
-# -- Use yi.org --
-##import dtella.modules.push_yi
-##dconfig_push_func = dtella.modules.push_yi.YiUpdater(
-##    username = "username",
-##    password = "password",
-##    host_id = 12345,
+    
+# -- Use Google Spreadsheets --
+# To use this method, sign into a Gmail or Apps account, create an empty
+# spreadsheet, and publish it.  The sheet key is the random string of
+# characters from the page URL.  (Be careful to never delete the sheet!)
+##import dtella.modules.push_gdata
+##dconfig_push_func = dtella.modules.push_gdata.GDataUpdater(
+##    email = "foo@gmail.com",
+##    password = "...",
+##    sheet_key = "pJPozIo..."
 ##    ).update
 
 # -- Use Dynamic DNS UPDATE --
@@ -110,14 +116,10 @@ dconfig_push_func = dtella.modules.push_textfile.TextFileUpdater(
 ##    dns_ip = '1.2.3.4'
 ##    ).update
 
-# -- Use Google Spreadsheets --
-# To use this method, sign into a Gmail or Apps account, create an empty
-# spreadsheet, and publish it.  The sheet key is the random string of
-# characters from the page URL.  (Be careful to never delete the sheet!)
-##import dtella.modules.push_gdata
-##dconfig_push_func = dtella.modules.push_gdata.GDataUpdater(
-##    email = "foo@gmail.com",
-##    password = "...",
-##    sheet_key = "pJPozIo..."
+# -- Use yi.org --
+##import dtella.modules.push_yi
+##dconfig_push_func = dtella.modules.push_yi.YiUpdater(
+##    username = "username",
+##    password = "password",
+##    host_id = 12345,
 ##    ).update
-
