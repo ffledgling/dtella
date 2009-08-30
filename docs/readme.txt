@@ -6,6 +6,9 @@
 If you run into any roadblocks, you can go to http://dtella.org and
 click [IRC] to chat with all the Dtella users from your browser.
 
+Additionally there are many resources at: http://wiki.dtella.org
+
+
 = Step 1: Get a Client =
 
 When you start Dtella, it just runs invisibly in the background.
