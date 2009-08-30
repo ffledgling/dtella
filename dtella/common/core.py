@@ -4198,6 +4198,9 @@ class DtellaMain_Base(object):
             "firewall or router to allow UDP traffic through on this "
             "port.  You may tell Dtella to use a different port from "
             "now on by typing !UDP followed by a number."
+            " "
+            "Note: You will also need to unblock or forward a TCP port "
+            "for your DC++ client to be able to transfer files."
             % self.state.udp_port
             )
 
