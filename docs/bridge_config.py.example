@@ -21,7 +21,7 @@ service_args = dict(
     my_host = "myhost.example.com",
     my_name = "Dtella IRC Bridge",
     channel = "#dtella",
-    sid = None
+    sid = None,
     hostmask_prefix = "pre",
     hostmask_keys = ["key1",
                      "key2",
