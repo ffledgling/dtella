@@ -12,6 +12,12 @@ In order to run dtella you will need the following:
 * PyCrypto 2.0.1+
   -> http://www.voidspace.org.uk/python/modules.shtml#pycrypto
 
+If you are running or building on Windows you will also need:
+
+* Python for Windows Extensions
+  -> http://sourceforge.net/projects/pywin32/
+  
+
 The bridge server will require the following additional modules, depending on
 which config update method you use:
 - Dynamic DNS:
