@@ -89,8 +89,8 @@ rdns_servers = ['128.210.11.5','128.210.11.57','128.10.2.5','128.46.154.76']
 
 # Customized data for our implementation of hostnameToLocation
 import re
-suffix_re = re.compile(r".*\.([^.]+)\.purdue\.edu")
-prefix_re = re.compile(r"^([a-z]{1,6}).*\.purdue\.edu")
+suffix_re = re.compile(r".*\.([^.]+)\.purdue\.edu$")
+prefix_re = re.compile(r"^([a-z]{1,6}).*\.purdue\.edu$")
 
 pre_table = {
     'erht':'Earhart', 'cary':'Cary', 'hill':'Hillenbrand',

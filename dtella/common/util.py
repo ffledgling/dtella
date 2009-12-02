@@ -48,7 +48,7 @@ def randbytes(n):
 def cmpify_version(ver):
     # Given a version string, turn it into something comparable.
 
-    ver_re = re.compile("([0-9]*)(.*)")
+    ver_re = re.compile("([0-9]*)(.*)$")
 
     ver_parts = []
     
