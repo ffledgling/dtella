@@ -1637,6 +1637,10 @@ class InitialContactManager(DatagramProtocol):
                 ad = Ad().setRawIPPort(ipp)
                 self.main.state.refreshPeer(ad, age)
 
+        # Add my own IP to the list, even if it's banned.
+        src_ad = Ad().setRawIPPort(src_ipp)
+        self.main.addMyIPReport(src_ad, my_ad)
+
         if code != CODE_IP_OK:
             if not p.bad_code:
                 p.bad_code = True
@@ -1650,10 +1654,6 @@ class InitialContactManager(DatagramProtocol):
                 self.cancelPeerContactTimeout(p)
                 self.checkStatus()
             return
-
-        # Add my own IP to the list
-        src_ad = Ad().setRawIPPort(src_ipp)
-        self.main.addMyIPReport(src_ad, my_ad)
 
         # Add the node who sent this packet to the cache
         self.main.state.refreshPeer(src_ad, 0)
@@ -4175,8 +4175,14 @@ class DtellaMain_Base(object):
                 self.shutdown(reconnect='max')
 
             elif result == 'foreign_ip':
+                try:
+                    my_ip = Ad().setRawIPPort(self.selectMyIP()).getTextIP()
+                except ValueError:
+                    my_ip = "?"
+                
                 self.showLoginStatus(
-                    "Your IP address is not authorized to use this network.")
+                    "Your IP address (%s) is not authorized to use "
+                    "this network." % my_ip)
                 self.shutdown(reconnect='max')
 
             elif result == 'dead_port':
