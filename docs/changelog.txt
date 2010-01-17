@@ -1,14 +1,15 @@
 Dtella Changelog
 
-1.2.5 (2010-01-16):
+1.2.5 (2010-01-17):
+- Try to fix the "chat spoofing" problem by decreasing a packet's hop
+count when it sits in the buffer for multiple seconds.
 - Change the bot command echo response to "<*Dtella> You commanded: foo"
 - Various cleanups in PingManager.
 - Fix an inconsistency when the alternate UDP port fails to bind.
 - Fix "'int' is not callable" bug in receivedPrivateMessageAck.
 - Make !INVITE produce useful output even when the IP address is unknown.
 - Add a note about TCP to the UDP port forward message.
-- Try to fix the "chat spoofing" problem by decreasing a packet's hop
-count when it sits in the buffer for multiple seconds.
+- Include the IP address when showing a "not authorized" message.
 
 1.2.4 (2009-02-14):
 - Add support for the Strong/Apex secure connect extension.  This fixes
