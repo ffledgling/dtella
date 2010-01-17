@@ -27,7 +27,7 @@ Packet numbers are kept for different kinds of messages:
 Header:
 2-byte type = __
 6-byte forwarder's IPPort
-1-byte hop limit
+1-byte hop limit - floor(seconds waiting in buffer)
 1-byte flags (bit 0 = src has been notified)
 6-byte source IPPort
 4-byte packet_id (contents depend on type)

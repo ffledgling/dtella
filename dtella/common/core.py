@@ -3379,6 +3379,7 @@ class MessageRoutingManager(object):
             self.tries = tries
 
             self.status_pktnum = None
+            self.create_time = seconds()
 
             # {neighbor ipp -> ack-timeout dcall}
             self.nbs = {}
@@ -3415,10 +3416,24 @@ class MessageRoutingManager(object):
             def cb(tries):
                 # Ack timeout callback
 
+                send_data = data
+
+                # Decrease the hop count by the number of seconds the packet
+                # has been buffered.
+                buffered_time = int(seconds() - self.create_time)
+                if buffered_time > 0:
+                    hops = ord(data[8]) - buffered_time
+                    if hops >= 0:
+                        # Splice in the reduced hop count.
+                        send_data = "%s%c%s" % (data[:8], hops, data[9:])
+                    else:
+                        # Drop packet.
+                        tries = 0
+
                 # Make an attempt now
                 if tries > 0:
                     addr = Ad().setRawIPPort(nb_ipp).getAddrTuple()
-                    ph.sendPacket(data, addr, broadcast=True)
+                    ph.sendPacket(send_data, addr, broadcast=True)
 
                 # Reschedule another attempt
                 if tries-1 > 0:
@@ -3606,7 +3621,7 @@ class MessageRoutingManager(object):
         return me.status_pktnum
 
 
-    def broadcastHeader(self, kind, src_ipp, hops=64, flags=0):
+    def broadcastHeader(self, kind, src_ipp, hops=32, flags=0):
         # Build the header used for all broadcast packets
         packet = [kind]
         packet.append(self.main.osm.me.ipp)
