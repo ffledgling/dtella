@@ -54,12 +54,19 @@ def doWarnings():
         LOG.warning("You should get Twisted 8 or later.  Previous versions "
                     "have some bugs that affect Dtella.")
 
-    import Crypto.PublicKey
     try:
-        import Crypto.PublicKey._fastmath
+        import dtella.bridge
     except ImportError:
-        LOG.warning("Your version of PyCrypto was compiled without "
-                    "GMP (fastmath).  Some stuff will be slower.")
+        # Don't warn about GMP for clients, because verifying a signature
+        # is fast enough without it (~1ms on a Core2)
+        pass
+    else:
+        import Crypto.PublicKey
+        try:
+            import Crypto.PublicKey._fastmath
+        except ImportError:
+            LOG.warning("Your version of PyCrypto was compiled without "
+                        "GMP (fastmath).  Signing messages will be slower.")
 doWarnings()
 
 # Miscellaneous Exceptions

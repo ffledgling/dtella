@@ -5,18 +5,14 @@ RUNNING DTELLA
 
 In order to run dtella you will need the following:
 
-* Python 2.5+
+* Python 2.5.x
   -> http://www.python.org/
+  (2.6 needs msvcr90.dll, which seems like more trouble than it's worth.)
 * Twisted 8.2+
   -> http://twistedmatrix.com/
 * PyCrypto 2.0.1+
   -> http://www.voidspace.org.uk/python/modules.shtml#pycrypto
 
-If you are running or building on Windows you will also need:
-
-* Python for Windows Extensions
-  -> http://sourceforge.net/projects/pywin32/
-  
 
 The bridge server will require the following additional modules, depending on
 which config update method you use:
