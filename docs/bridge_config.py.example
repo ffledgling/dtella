@@ -52,10 +52,13 @@ max_irc_nick_len = 30
 # Change this if you want to run multiple bridges simultaneously.
 file_base = "dtella_bridge"
 
+# Optional: If you have multiple IP addresses, specify which one to bind to.
+bind_ip = ''
+
 # UDP Port used by this Dtella node.
 udp_port = 41236
 
-# Optionally provide an initial hint for my own IP.  If this is an offsite
+# Optionally provide an initial hint for my public IP.  If this is an offsite
 # IP, it will be exempted from IP filtering for bridge/cache purposes.
 myip_hint = ''
 

@@ -43,6 +43,7 @@ from dtella.bridge.bridge_server import n_user
 from dtella.bridge.bridge_server import irc_to_dc
 from dtella.bridge.bridge_server import irc_strip
 from dtella.bridge.bridge_server import getServiceConfig
+from dtella.bridge.bridge_server import getBindIP
 
 B_USER = "dtbridge"
 B_REALNAME = "Dtella Bridge"
@@ -83,12 +84,14 @@ class UnrealConfig(object):
 
     def startService(self, main):
         ifactory = IRCFactory(main)
+        bind = (getBindIP(), 0)
         if self.ssl:
             from twisted.internet import ssl
             sslContext = ssl.ClientContextFactory()
-            reactor.connectSSL(self.host, self.port, ifactory, sslContext)
+            reactor.connectSSL(
+                self.host, self.port, ifactory, sslContext, bindAddress=bind)
         else:
-            reactor.connectTCP(self.host, self.port, ifactory)
+            reactor.connectTCP(self.host, self.port, ifactory, bindAddress=bind)
 
 
 class IRCFactory(ReconnectingClientFactory):

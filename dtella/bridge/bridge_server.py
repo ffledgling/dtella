@@ -207,6 +207,16 @@ if not cfg.dc_to_irc_bot.startswith(cfg.dc_to_irc_prefix):
     cfg.dc_to_irc_bot = cfg.dc_to_irc_prefix + cfg.dc_to_irc_bot
 
 
+# Get the bind address, or default to ''
+def getBindIP():
+    try:
+        if cfg.bind_ip:
+            return cfg.bind_ip
+    except AttributeError:
+        pass
+    return ''
+
+
 ##############################################################################
 
 

@@ -90,8 +90,9 @@ class DtellaMain_Bridge(core.DtellaMain_Base):
     def startConnecting(self):
         udp_state = self.ph.getSocketState()
         if udp_state == 'dead':
+            bind_ip = bridge_server.getBindIP()
             try:
-                reactor.listenUDP(cfg.udp_port, self.ph)
+                reactor.listenUDP(cfg.udp_port, self.ph, interface=bind_ip)
             except twisted.internet.error.BindError:
                 LOG.error("Failed to bind UDP port!")
                 raise SystemExit
