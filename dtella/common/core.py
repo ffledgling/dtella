@@ -3379,41 +3379,28 @@ class PingManager(object):
 class MessageRoutingManager(object):
 
     class Message(object):
+        # This is set for my own status messages only.
+        status_pktnum = None
 
-        def __init__(self, data, tries):
-            self.data = data
+        def __init__(self, data, tries, sendto, ph):
+            # Message expiration timer.
             self.expire_dcall = None
-            self.tries = tries
 
-            self.status_pktnum = None
-            self.create_time = seconds()
-
-            # {neighbor ipp -> ack-timeout dcall}
-            self.nbs = {}
-
-
-        def scheduleExpire(self, msgs, ack_key):
-            if self.expire_dcall:
-                self.expire_dcall.reset(60.0)
+            # If no tries remain, don't try to send anything.
+            if not tries > 0:
                 return
 
-            def cb():
-                self.expire_dcall = None
-                self.forgetTimeouts()
-                del msgs[ack_key]
+            # {neighbor ipp -> retry dcall}
+            self.sending = {}
 
-            self.expire_dcall = reactor.callLater(60.0, cb)
+            create_time = seconds()
+            for nb_ipp in sendto:
+                self.scheduleSend(data, tries, nb_ipp, create_time, ph)
 
+            self.cleanupIfDoneSending()
 
-        def sendToNeighbor(self, nb_ipp, ph):
-            # Pass this current message to the given neighbor
-
-            if nb_ipp in self.nbs:
-                # This neighbor has already seen our message
-                return
-
-            data = self.data
-            tries = self.tries
+        def scheduleSend(self, data, tries, nb_ipp, create_time, ph):
+            # Get ready to pass this message to a neighbor.
 
             # If we're passing an NF to the node who's dying, then up the
             # number of retries to 8, because it's rather important.
@@ -3421,13 +3408,12 @@ class MessageRoutingManager(object):
                 tries = 8
 
             def cb(tries):
-                # Ack timeout callback
-
+                # Ack timeout/retransmit callback
                 send_data = data
 
                 # Decrease the hop count by the number of seconds the packet
                 # has been buffered.
-                buffered_time = int(seconds() - self.create_time)
+                buffered_time = int(seconds() - create_time)
                 if buffered_time > 0:
                     hops = ord(data[8]) - buffered_time
                     if hops >= 0:
@@ -3445,27 +3431,54 @@ class MessageRoutingManager(object):
                 # Reschedule another attempt
                 if tries-1 > 0:
                     when = random.uniform(1.0, 2.0)
-                    self.nbs[nb_ipp] = reactor.callLater(when, cb, tries-1)
+                    self.sending[nb_ipp] = reactor.callLater(when, cb, tries-1)
                 else:
-                    self.nbs[nb_ipp] = None
+                    del self.sending[nb_ipp]
+                    self.cleanupIfDoneSending()
 
-            cb(tries)
+            # Send on the next reactor loop.  This gives us a bit of time
+            # to listen for dupes from neighbors.
+            self.sending[nb_ipp] = reactor.callLater(0, cb, tries)
 
+        def cancelSendToNeighbor(self, nb_ipp):
+            # This neighbor already has the message, so don't send it.
+            try:
+                self.sending.pop(nb_ipp).cancel()
+            except (AttributeError, KeyError):
+                return
+            self.cleanupIfDoneSending()
 
-        def forgetTimeouts(self):
-            # Cancel any pending retransmits
+        def cleanupIfDoneSending(self):
+            # If no sends are left, free up some RAM.
+            if not self.sending:
+                del self.sending
 
-            for d in self.nbs.itervalues():
-                if d:
-                    d.cancel()
+        def scheduleExpire(self, msgs, ack_key):
+            # Forget about this message, eventually.
+            if self.expire_dcall:
+                self.expire_dcall.reset(60.0)
+                return
 
-            self.nbs.clear()
+            def cb():
+                self.expire_dcall = None
+                self.cancelAllSends()
+                del msgs[ack_key]
+
+            self.expire_dcall = reactor.callLater(60.0, cb)
+
+        def cancelAllSends(self):
+            # Cancel any pending sends.
+            try:
+                self.sending
+            except AttributeError:
+                return
+            for d in self.sending.itervalues():
+                d.cancel()
+            del self.sending
 
 
     def __init__(self, main):
         self.main = main
-        self.send_dcall = None
-        self.outbox = []
         self.msgs = {}
 
         self.rcollide_last_NS = None
@@ -3475,32 +3488,6 @@ class MessageRoutingManager(object):
         self.search_pktnum = r
         self.chat_pktnum = r
         self.main.osm.me.status_pktnum = r
-
-
-    def scheduleSendMessages(self):
-        if self.send_dcall:
-            return
-
-        def cb():
-            self.send_dcall = None
-
-            osm = self.main.osm
-
-            # Get my current neighbors who we know to be alive.  We don't
-            # need to verify pn.u_got_ack because it doesn't really matter
-            # if they filter our traffic.
-            sendto = [pn.ipp for pn in osm.pgm.pnbs.itervalues() if pn.got_ack]
-
-            # For each message waiting to be sent, send to each of my
-            # neighbors who needs it
-            for m in self.outbox:
-                for ipp in sendto:
-                    m.sendToNeighbor(ipp, self.main.ph)
-
-            # Clear the outbox
-            del self.outbox[:]
-
-        self.send_dcall = reactor.callLater(0, cb)
 
 
     def generateKey(self, data):
@@ -3526,17 +3513,12 @@ class MessageRoutingManager(object):
         # Extend the expiration time.
         m.scheduleExpire(self.msgs, ack_key)
 
-        # Is this locally generated?
-        if not nb_ipp:
-            return True
+        # If not locally-generated, tell the message that this neighbor
+        # acknowledged it.
+        if nb_ipp:
+            m.cancelSendToNeighbor(nb_ipp)
 
-        # Tell the message that this neighbor acknowledged it.
-        try:
-            m.nbs[nb_ipp].cancel()
-        except (KeyError, AttributeError):
-            pass
-        m.nbs[nb_ipp] = None
-
+        # Message is known.
         return True
 
 
@@ -3549,10 +3531,16 @@ class MessageRoutingManager(object):
         if ack_key in self.msgs:
             raise MessageCollisionError("Duplicate " + kind)
 
-        m = self.msgs[ack_key] = self.Message(data, tries)
-        self.pokeMessage(ack_key, nb_ipp)
-
+        ph = self.main.ph
         osm = self.main.osm
+
+        # Get my current neighbors who we know to be alive.  We don't
+        # need to verify pn.u_got_ack because it doesn't really matter.
+        sendto = (pn.ipp for pn in osm.pgm.pnbs.itervalues() if pn.got_ack)
+
+        # Start sending.
+        m = self.msgs[ack_key] = self.Message(data, tries, sendto, ph)
+        CHECK(self.pokeMessage(ack_key, nb_ipp))
 
         if data[10:16] == osm.me.ipp:
             CHECK(not self.main.hide_node)
@@ -3567,11 +3555,6 @@ class MessageRoutingManager(object):
                 # it can be interpreted as a remote nick collision.
                 self.rcollide_last_NS = m
                 self.rcollide_ipps.clear()
-
-        if tries > 0:
-            # Put message into the outbox
-            self.outbox.append(m)
-            self.scheduleSendMessages()
 
 
     def receivedRejection(self, ack_key, ipp):
@@ -3640,11 +3623,9 @@ class MessageRoutingManager(object):
     def shutdown(self):
         # Cancel everything
 
-        dcall_discard(self, 'send_dcall')
-
         for m in self.msgs.values():
             dcall_discard(m, 'expire_dcall')
-            m.forgetTimeouts()
+            m.cancelAllSends()
 
         self.msgs.clear()
 
@@ -4186,7 +4167,7 @@ class DtellaMain_Base(object):
                     my_ip = Ad().setRawIPPort(self.selectMyIP()).getTextIP()
                 except ValueError:
                     my_ip = "?"
-                
+
                 self.showLoginStatus(
                     "Your IP address (%s) is not authorized to use "
                     "this network." % my_ip)
