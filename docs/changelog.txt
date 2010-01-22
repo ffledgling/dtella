@@ -1,5 +1,13 @@
 Dtella Changelog
 
+1.2.6 (2010-01-22):
+- After a broadcast message has been forwarded, its ghost sits around
+in RAM for a while, so that duplicates can be ignored.  I increased this
+timeout from 1 minute to 3 minutes, which should eradicate the vast
+majority of zombie "chat spoofing" packets that I've observed.
+- Also did some cleanup/refactoring, so the message forwarding code is
+simpler, and each individual message wastes less RAM.
+
 1.2.5 (2010-01-17):
 - Try to fix the "chat spoofing" problem by decreasing a packet's hop
 count when it sits in the buffer for multiple seconds.
