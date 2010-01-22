@@ -3456,7 +3456,7 @@ class MessageRoutingManager(object):
         def scheduleExpire(self, msgs, ack_key):
             # Forget about this message, eventually.
             if self.expire_dcall:
-                self.expire_dcall.reset(60.0)
+                self.expire_dcall.reset(180.0)
                 return
 
             def cb():
@@ -3464,7 +3464,7 @@ class MessageRoutingManager(object):
                 self.cancelAllSends()
                 del msgs[ack_key]
 
-            self.expire_dcall = reactor.callLater(60.0, cb)
+            self.expire_dcall = reactor.callLater(180.0, cb)
 
         def cancelAllSends(self):
             # Cancel any pending sends.
