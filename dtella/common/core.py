@@ -1505,9 +1505,12 @@ class InitialContactManager(DatagramProtocol):
 
         self.main.showLoginStatus("Scanning For Online Nodes...", counter=1)
 
+        # Get the main UDP socket's bind interface (usually empty)
+        bind_ip = self.main.ph.transport.interface
+
         # Listen on an arbitrary UDP port
         try:
-            reactor.listenUDP(0, self)
+            reactor.listenUDP(0, self, interface=bind_ip)
         except twisted.internet.error.BindError:
             self.main.showLoginStatus("Failed to bind alt UDP port!")
             self.deferred.callback(('no_nodes', None))
