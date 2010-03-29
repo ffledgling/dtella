@@ -3,7 +3,6 @@
 
 import fix_path
 import unittest
-import dtella
 from dtella.common.util import cmpify_version
 from dtella.common.util import validateNick
 from dtella.common.util import CHECK

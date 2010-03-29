@@ -273,10 +273,15 @@ class SubnetMatcher(object):
         bisect.insort_right(self.nets, ipmask)
 
     def containsRange(self, ipmask):
-        i = bisect.bisect_right(self.nets, ipmask)
-        if i == 0:
-            return False
-        return IsSubsetOf(ipmask, self.nets[i-1])
+        # Skip the binary search when there's only one element, because
+        # searching through signed space is incompatible with the /0 range.
+        if len(self.nets) == 1:
+            i = 0
+        else:
+            i = bisect.bisect_right(self.nets, ipmask) - 1
+            if i < 0:
+                return False
+        return IsSubsetOf(ipmask, self.nets[i])
 
     def containsIP(self, int_ip):
         return self.containsRange((int_ip, ~0))
