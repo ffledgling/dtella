@@ -533,7 +533,8 @@ class IRCStateManager(object):
         try:
             osm = self.getOnlineStateManager()
         except NotOnline:
-            return False
+            # Removal was successful, even if it's not broadcasted.
+            return True
 
         chunks = []
         if message:
