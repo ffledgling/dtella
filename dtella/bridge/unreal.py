@@ -79,7 +79,9 @@ class UnrealConfig(object):
         # The channel Dtella will appear in.
         self.channel = channel
 
-        # Host masking parameters.
+        # Host masking parameters:
+        # hostmask_prefix is a string, like "prefix-"
+        # hostmask_keys is a list, like ["key1", "key2", "key3"]
         self.hostmasker = HostMasker(hostmask_prefix, hostmask_keys)
 
     def startService(self, main):
@@ -672,13 +674,13 @@ class HostMasker(object):
 
         return out
 
-    def maskIPv4(self, ip):
+    def maskIPv4(self, ad):
         KEY1, KEY2, KEY3 = self.keys
         m = self.md5
         d = self.downsample
         ipstr = self.ipstr
 
-        ip = [int(o) for o in ip.split('.')]
+        ip = ad.getIntTupleIP()
         alpha = d(m(m("%s:%s:%s" % (KEY2, ipstr(ip[:4]), KEY3)) + KEY1))
         beta =  d(m(m("%s:%s:%s" % (KEY3, ipstr(ip[:3]), KEY1)) + KEY2))
         gamma = d(m(m("%s:%s:%s" % (KEY1, ipstr(ip[:2]), KEY2)) + KEY3))

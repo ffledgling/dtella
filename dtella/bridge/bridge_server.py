@@ -330,6 +330,10 @@ class NotOnline(Exception):
     pass
 
 
+class BadHostnameError(Exception):
+    pass
+
+
 class User(object):
     uuid = None
     def __init__(self, inick, uuid):
@@ -915,24 +919,29 @@ class IRCStateManager(object):
     def bridgeevent_AddNickWithHostname(self, n, hostname):
         # Set up hostname and hostmask.
         scfg = getServiceConfig()
+        ad = Ad().setRawIPPort(n.ipp)
 
-        if hostname is None:
-            n.hostname = Ad().setRawIPPort(n.ipp).getTextIP()
-            try:
-                hm = scfg.hostmasker
-            except AttributeError:
-                n.hostmask = n.hostname
-            else:
-                n.hostmask = hm.maskIPv4(n.hostname)
-        else:
+        # Set regular hostname, falling back to IP if none exists.
+        if hostname:
             n.hostname = hostname
-            try:
-                hm = scfg.hostmasker
-            except AttributeError:
-                n.hostmask = n.hostname
-            else:
-                n.hostmask = hm.maskHostname(n.hostname)
+        else:
+            n.hostname = ad.getTextIP()
 
+        # Set cloaked hostname.
+        try:
+            hm = scfg.hostmasker
+        except AttributeError:
+            # Masking disabled.
+            n.hostmask = n.hostname
+        else:
+            # Masking enabled.
+            try:
+                if not hostname:
+                    raise BadHostnameError
+                n.hostmask = hm.maskHostname(hostname)
+            except BadHostnameError:
+                n.hostmask = hm.maskIPv4(ad)
+ 
         osm = self.getOnlineStateManager()
 
         # Check channel bans on-join.

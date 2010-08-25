@@ -46,6 +46,7 @@ from dtella.bridge.bridge_server import irc_to_dc
 from dtella.bridge.bridge_server import irc_strip
 from dtella.bridge.bridge_server import getServiceConfig
 from dtella.bridge.bridge_server import getBindIP
+from dtella.bridge.bridge_server import BadHostnameError
 
 B_USER = "dtbridge"
 B_REALNAME = "Dtella Bridge"
@@ -66,7 +67,7 @@ class InspIRCdConfig(object):
 
     def __init__(self, host, port, ssl, sendpass, recvpass,
                  network_name, my_host, my_name, sid, channel,
-                 hostmask_prefix, hostmask_keys):
+                 cloak_mode, cloak_prefix, cloak_key):
         # Connection parameters for remote IRC server
         self.host = host                  # ip/hostname
         self.port = port                  # integer
@@ -85,8 +86,12 @@ class InspIRCdConfig(object):
         self.channel = channel
 
         # Host masking parameters.
-        # TODO: figure out InspIRCd hostmasking.
-        self.hostmasker = HostMasker(hostmask_prefix, hostmask_keys)
+        if not cloak_mode:
+            pass
+        elif cloak_mode == "half":
+            self.hostmasker = HalfModeCloak(cloak_prefix, cloak_key)
+        elif cloak_mode == "full":
+            raise NotImplemented("cloak_mode='full' has not been implemented.")
 
     def startService(self, main):
         ifactory = IRCFactory(main)
@@ -912,60 +917,51 @@ class InspIRCdServer(LineOnlyReceiver):
             self.shutdown_deferred.callback("Bye!")
 
 
-class HostMasker(object):
-    # FIXME: make this work with InspIRCd
+class HalfModeCloak(object):
+    # InspIRCd 2.0 "half"-mode host cloaking.
+    # This is based on inspircd/src/modules/m_cloaking.cpp
 
-    # UnrealIRCd-compatible hostmasking.
-    # This is based on Unreal*/src/modules/cloak.c
+    base32 = "0123456789abcdefghijklmnopqrstuv"
 
-    def __init__(self, prefix, keys):
+    def __init__(self, prefix, key):
         self.prefix = prefix
-        self.keys = keys
+        self.key = key
 
     def maskHostname(self, host):
-        KEY1, KEY2, KEY3 = self.keys
-        m = self.md5
-        d = self.downsample
+        if not host or len(host) > 50:
+            raise BadHostnameError
 
-        alpha = d(m(m("%s:%s:%s" % (KEY1, host, KEY2)) + KEY3))
-        out = "%s-%X" % (self.prefix, alpha)
-    
-        try:
-            out += host[host.index('.'):]
-        except ValueError:
-            pass
+        return "%s%s%s" % (
+            self.prefix,
+            self.segmentCloak(host, 1, 6),
+            self.lastTwoDomainParts(host))
 
-        return out
-
-    def maskIPv4(self, ip):
-        KEY1, KEY2, KEY3 = self.keys
-        m = self.md5
-        d = self.downsample
-        ipstr = self.ipstr
-
-        ip = [int(o) for o in ip.split('.')]
-        alpha = d(m(m("%s:%s:%s" % (KEY2, ipstr(ip[:4]), KEY3)) + KEY1))
-        beta =  d(m(m("%s:%s:%s" % (KEY3, ipstr(ip[:3]), KEY1)) + KEY2))
-        gamma = d(m(m("%s:%s:%s" % (KEY1, ipstr(ip[:2]), KEY2)) + KEY3))
-
-        return "%X.%X.%X.IP" % (alpha, beta, gamma)
-
-    def getChecksum(self):
-        KEY1, KEY2, KEY3 = self.keys
-        m = self.md5
-
-        checksum = m("%s:%s:%s" % (KEY1, KEY2, KEY3))
-        return "MD5:" + ''.join(("%02x" % ord(x))[::-1] for x in checksum)
+    def maskIPv4(self, ad):
+        ip = ad.getIntTupleIP()
+        bindata = ad.getRawIP()
+        return "%s%s.%s.%d.%d.IP" % (
+            self.prefix,
+            self.segmentCloak(bindata, 10, 3),
+            self.segmentCloak(bindata[:3], 11, 3),
+            ip[1],
+            ip[0])
 
     def md5(self, in_str):
         return md5(in_str).digest()
 
-    def downsample(self, in_str):
-        a = array.array('B', in_str)
-        result = 0
-        for i in range(0,16,4):
-            result = (result << 8) + (a[i]^a[i+1]^a[i+2]^a[i+3])
-        return result
+    def segmentCloak(self, item, id, len):
+        hashed = self.md5("%c%s%c%s" % (id, self.key, 0, item))[:len]
+        return ''.join(self.base32[ord(x) & 0x1f] for x in hashed)
 
-    def ipstr(self, ip):
-        return '.'.join(["%d" % o for o in ip])
+    def lastTwoDomainParts(self, host):
+        # This can actually return more than two parts, but that doesn't
+        # really matter, as long as it matches InspIRCd.
+        dots = 0
+        splitdot = len(host)
+        for x in reversed(range(len(host))):
+            if host[x] == '.':
+                splitdot = x
+                dots += 1
+            if dots >= 3:
+                break
+        return host[splitdot:]
