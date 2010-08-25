@@ -1020,7 +1020,7 @@ class IRCStateManager(object):
                 self.bot_user, None, "Bridge lost connection to Dtella")
 
     def event_KickMe(self, lines, rejoin_time):
-        raise NotImplemented("Bridge can't be kicked.")
+        raise NotImplementedError("Bridge can't be kicked.")
 
     def shutdown(self):
         if self.ircs:

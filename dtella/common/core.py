@@ -4135,15 +4135,15 @@ class DtellaMain_Base(object):
 
 
     def cleanupOnExit(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def reconnectDesired(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def startConnecting(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def startInitialContact(self):
@@ -4251,19 +4251,19 @@ class DtellaMain_Base(object):
 
 
     def getBridgeManager(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def queryLocation(self, my_ipp):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def logPacket(self, text):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def showLoginStatus(self, text, counter=None):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def shutdown(self, reconnect):
@@ -4332,15 +4332,15 @@ class DtellaMain_Base(object):
 
 
     def afterShutdownHandlers(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def getOnlineDCH(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def getStateObserver(self):
-        raise NotImplemented("Override me!")
+        raise NotImplementedError("Override me!")
 
 
     def kickObserver(self, lines, rejoin_time):

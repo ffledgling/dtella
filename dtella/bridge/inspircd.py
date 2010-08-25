@@ -90,8 +90,8 @@ class InspIRCdConfig(object):
             pass
         elif cloak_mode == "half":
             self.hostmasker = HalfModeCloak(cloak_prefix, cloak_key)
-        elif cloak_mode == "full":
-            raise NotImplemented("cloak_mode='full' has not been implemented.")
+        else
+            raise NotImplementedError("Unknown cloak_mode: %s" % cloak_mode)
 
     def startService(self, main):
         ifactory = IRCFactory(main)
