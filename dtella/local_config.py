@@ -103,7 +103,7 @@ pre_table = {
 suf_table = {
     'cerias':'CERIAS', 'cs':'CS', 'ecn':'ECN', 'hfs':'HFS',
     'ics':'ITaP Lab', 'lib':'Library', 'mgmt':'Management',
-    'uns':'News', 'cfs':'CFS'}
+    'uns':'News', 'cfs':'CFS', 'first': 'FST'}
 
 def hostnameToLocation(hostname):
     # Convert a hostname into a human-readable location name.
