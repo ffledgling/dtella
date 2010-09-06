@@ -129,7 +129,7 @@ class DynamicConfigUpdateManager(object):
                 add_ipp(osm.me.ipp)
             else:
                 try:
-                    add_ipp(self.main.selectMyIP())
+                    add_ipp(self.main.selectMyIP().getRawIPPort())
                 except ValueError:
                     pass
 

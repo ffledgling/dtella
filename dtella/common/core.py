@@ -4167,7 +4167,7 @@ class DtellaMain_Base(object):
 
             elif result == 'foreign_ip':
                 try:
-                    my_ip = Ad().setRawIPPort(self.selectMyIP()).getTextIP()
+                    my_ip = self.selectMyIP(allow_bad=True).getTextIP()
                 except ValueError:
                     my_ip = "?"
 
@@ -4234,7 +4234,7 @@ class DtellaMain_Base(object):
 
         # Get my address and port
         try:
-            my_ipp = self.selectMyIP()
+            my_ipp = self.selectMyIP().getRawIPPort()
         except ValueError:
             self.showLoginStatus("Can't determine my own IP?!")
             return
@@ -4405,11 +4405,10 @@ class DtellaMain_Base(object):
 
 
     def addMyIPReport(self, from_ad, my_ad):
-        # fromip = the IP who sent us this guess
-        # myip = the IP that seems to belong to us
+        # from_ad = the IP who sent us this guess
+        # my_ad = the IP that seems to belong to us
 
-        if not (from_ad.auth('sx', self) and my_ad.auth('sx', self)):
-            return
+        CHECK(from_ad.auth('sx', self))
 
         fromip = from_ad.getRawIP()
         myip = my_ad.getRawIP()
@@ -4428,30 +4427,29 @@ class DtellaMain_Base(object):
         self.myip_reports.append((fromip, myip))
 
 
-    def selectMyIP(self):
+    def selectMyIP(self, allow_bad=False):
         # Out of the last 5 responses, pick the IP that occurs most often.
-        # In case of a tie, pick the more recent one.  This whole IP detection
-        # thing is mostly stupid, but it's better than just trusting a
-        # single response.
+        # In case of a tie, pick the more recent one.
 
-        ips = [r[1] for r in self.myip_reports]
-        ips.reverse()
+        # Map from ip -> list of indexes
+        ip_hits = {}
 
-        counts = {}
-
-        for ip in ips:
+        for i, (reporter, ip) in enumerate(self.myip_reports):
             try:
-                counts[ip] += 1
+                ip_hits[ip].append(i)
             except KeyError:
-                counts[ip] = 1
+                ip_hits[ip] = [i]
 
-        maxc = max(counts.values())
+        # Sort by (hit count, highest index) descending.
+        scores = [(len(hits), hits[-1], ip)
+                  for ip, hits in ip_hits.iteritems()]
+        scores.sort(reverse=True)
 
-        for ip in ips:
-            if counts[ip] == maxc:
-                ad = Ad().setRawIP(ip)
-                ad.port = self.state.udp_port
-                return ad.getRawIPPort()
+        for hit_count, highest_index, ip in scores:
+            ad = Ad().setRawIP(ip)
+            ad.port = self.state.udp_port
+            if allow_bad or ad.auth('sx', self):
+                return ad
 
         raise ValueError
 
