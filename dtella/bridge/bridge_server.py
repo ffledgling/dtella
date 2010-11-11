@@ -817,7 +817,7 @@ class IRCStateManager(object):
             LOG.info("Found a conflicting Q-line: %s" % nickmask)
 
             # If any nicks exist under that Q-line, we'll need to abort.
-            for u in self.users.itervalues():
+            for u in set(self.users.itervalues()):
                 if q.match(u.inick):
                     LOG.info("... and a nick to go with it: %s" % u.inick)
                     return True
@@ -836,7 +836,7 @@ class IRCStateManager(object):
     def killConflictingUsers(self):
         # Find any reserved nicks, and KILL them.
         CHECK(self.ircs and not self.syncd)
-        bad_users = [u for u in self.users.itervalues()
+        bad_users = [u for u in set(self.users.itervalues())
                      if matches_dc_to_irc_prefix(u.inick)]
         LOG.info("Conflicting users: %r" % bad_users)
         for u in bad_users:
