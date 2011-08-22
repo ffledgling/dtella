@@ -190,6 +190,7 @@ class StateManager(object):
 
         CHECK(len(data) % 6 == 4)
 
+        # 2011-08-21: New nodes ignore the value of 'when'.
         when, = struct.unpack("!I", data[:4])
         ipps = [data[i:i+6] for i in range(4, len(data), 6)]
         

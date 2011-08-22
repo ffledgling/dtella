@@ -934,8 +934,10 @@ class PeerHandler(DatagramProtocol):
 
             persist = bool(flags & PERSIST_BIT)
 
-            if rest:
-                raise BadPacketError("Extra data")
+            # 2011-08-21: allow 'rest' to be non-empty, in case we want to add
+            #             new fields someday.
+            if len(rest) > 1024:
+                raise BadPacketError("Too much extra data")
 
             if not (5 <= expire <= 30*60):
                 raise BadPacketError("Expire time out of range")
@@ -1414,8 +1416,10 @@ class PeerHandler(DatagramProtocol):
         c_nbs, rest = self.decodeNodeList(rest)
         u_nbs, rest = self.decodeNodeList(rest)
 
-        if rest:
-            raise BadPacketError("Extra data")
+        # 2011-08-21: allow 'rest' to be non-empty, in case we want to add
+        #             new fields someday.
+        if len(rest) > 1024:
+            raise BadPacketError("Too much extra data")
 
         if not (5 <= expire <= 30*60):
             raise BadPacketError("Expire time out of range")

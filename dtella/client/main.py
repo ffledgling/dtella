@@ -179,15 +179,15 @@ class DtellaMain_Client(core.DtellaMain_Base):
         # Get config from DNS
         def dns_cb():
             try:
+                # 2011-08-21: New nodes ignore the value of 'when'.
                 when, ipps = self.state.dns_ipcache
             except ValueError:
                 pass
             else:
                 random.shuffle(ipps)
-                age = max(time.time() - when, 0)
                 for ipp in ipps:
                     ad = Ad().setRawIPPort(ipp)
-                    self.state.refreshPeer(ad, age)
+                    self.state.refreshPeer(ad, 0)
 
             self.startInitialContact()
 
