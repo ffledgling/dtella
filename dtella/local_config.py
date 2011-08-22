@@ -98,12 +98,13 @@ pre_table = {
     'mrdh':'Meredith', 'wind':'Windsor', 'harr':'Harrison',
     'hawk':'Hawkins', 'mcut':'McCutcheon', 'owen':'Owen',
     'hltp':'Hilltop', 'yong':'Young', 'pvil':'P.Village',
+    'fstc':'FST', 'fste':'FST', 'fstw':'FST',
     'pal':'AirLink', 'dsl':'DSL', 'vpn':'VPN'}
 
 suf_table = {
     'cerias':'CERIAS', 'cs':'CS', 'ecn':'ECN', 'hfs':'HFS',
     'ics':'ITaP Lab', 'lib':'Library', 'mgmt':'Management',
-    'uns':'News', 'cfs':'CFS', 'first': 'FST'}
+    'uns':'News', 'cfs':'CFS'}
 
 def hostnameToLocation(hostname):
     # Convert a hostname into a human-readable location name.
