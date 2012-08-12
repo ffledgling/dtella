@@ -1,5 +1,14 @@
 Dtella Changelog
 
+1.2.7 (2012-08-11):
+- Release the handful of SVN changes from the last couple years:
+- Fixed Issue 17, where the "not authorized" message was displaying the
+incorrect IP address.
+- Permit (and ignore) additional fields in the YR/NS handlers.  These might
+be useful for future extensibility.
+- Ignore the "when" timestamp in dconfig, because we never used it.
+- Purdue-specific: Add FST to the Locations table.
+
 1.2.6 (2010-01-22):
 - After a broadcast message has been forwarded, its ghost sits around
 in RAM for a while, so that duplicates can be ignored.  I increased this
