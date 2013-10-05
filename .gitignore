@@ -1,3 +1,7 @@
+# Ignore backup files
+*.*~
+*.swp
+
 *.py[cod]
 
 # C extensions
