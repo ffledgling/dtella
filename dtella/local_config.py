@@ -51,7 +51,8 @@ minshare_cap = 100 * (1024**3)   # (=100GiB)
 # make changes once the program has been distributed.  In the unlikely event
 # that you don't want any filtering, use ['0.0.0.0/0']
 #allowed_subnets = ['128.210.0.0/15', '128.10.0.0/16', '128.46.0.0/16']
-allowed_subnets = ['10.121.80.0/24', '192.168.2.0/24']
+allowed_subnets = ['10.121.0.0/16', '192.168.2.0/24']
+#allowed_subnets = ['192.168.1.0/24', '192.168.3.0/24']
 
 # Here we configure an object which pulls 'Dynamic Config' from some source
 # at a known fixed location on the Internet.  This config contains a small
@@ -91,6 +92,7 @@ use_locations = False
 #rdns_servers = ['192.168.1.1']#, '4.2.2.2', '8.8.8.8']
 rdns_servers = ['10.120.200.61', '10.120.200.64', '10.120.200.65', 
              '10.120.200.66', '10.120.200.63', '10.120.200.62']
+#rdns_servers = ['192.168.1.1']
 
 # Customized data for our implementation of hostnameToLocation
 import re
