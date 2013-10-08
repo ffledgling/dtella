@@ -1,0 +1,31 @@
+#!/bin/bash
+
+# Installing dependencies
+echo 'Getting dtella dependencies'
+
+# Make sure Python is installed
+sudo apt-get install python2.7
+
+# Make sure Openssl is installed
+sudo apt-get install openssl
+
+# Install the python pip 
+sudo apt-get install python-pip
+
+
+# Please note there is an issue with installing on 32-bit machines
+# the pip installer is not able to install pip, feel free to try if you have 32-bit
+# intead uncomment the following line to install using apt-get
+#sudo apt-get install python-twisted
+
+# Install the dependencies 
+sudo pip install twisted
+sudo pip install PyCrypto
+sudo pip install dnspython
+sudo pip install gdata
+
+echo 'Run dtella with: python2 dtella.py'
+
+echo 'Create a new hub in DC++ with these options:'
+echo '-> Name:    Dtella'
+echo '-> Address: 127.0.0.1:7314'
