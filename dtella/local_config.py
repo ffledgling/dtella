@@ -51,7 +51,7 @@ minshare_cap = 100 * (1024**3)   # (=100GiB)
 # make changes once the program has been distributed.  In the unlikely event
 # that you don't want any filtering, use ['0.0.0.0/0']
 #allowed_subnets = ['128.210.0.0/15', '128.10.0.0/16', '128.46.0.0/16']
-allowed_subnets = ['10.121.0.0/16', '192.168.2.0/24']
+allowed_subnets = ['10.120.0.0/13', '192.168.2.0/24']
 #allowed_subnets = ['192.168.1.0/24', '192.168.3.0/24']
 
 # Here we configure an object which pulls 'Dynamic Config' from some source
