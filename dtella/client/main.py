@@ -75,6 +75,7 @@ class DtellaMain_Client(core.DtellaMain_Base):
 
         # Peer discovery handler
         self.pdh = core.PeerDiscovery(self)
+        
 
         # State Manager
         self.state = dtella.common.state.StateManager(
@@ -210,6 +211,10 @@ class DtellaMain_Client(core.DtellaMain_Base):
 
         ad = Ad().setRawIPPort(my_ipp)
         my_ip = ad.getTextIP()
+
+        # Set my local ip in the state
+        # self.state.local_ip = my_ip
+        # self.state.saveState()
 
         skip = False
         for ip,loc in self.location.items():

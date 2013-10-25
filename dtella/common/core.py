@@ -1518,7 +1518,24 @@ class PeerDiscovery(DatagramProtocol):
         self.transport.joinGroup("228.0.0.5")
         # Send to 228.0.0.5:8005 - all listeners on the multicast address
         # (including us) will receive this message.
-        self.transport.write('Client: Ping', ("228.0.0.5", 8005))
+
+
+        # Get my address and port
+        osm = self.main.osm
+
+        if osm:
+            ad = Ad().getTextIP(osm.me.ipp)
+        else:
+            # If I don't know my own IP, at least fill in a dummy one.
+            ad = Ad().setAddrTuple((self.main.state.local_ip, self.main.state.udp_port))
+            #ad = Ad().setAddrTuple(('0.0.0.0', self.main.state.udp_port))
+        #try:
+        #    my_ipp = self.selectMyIP().getRawIPPort()
+        #except ValueError:
+        #    self.showLoginStatus("Can't determine my own IP?!")
+        #    return
+
+        self.transport.write(ad.getTextIPPort(), ("228.0.0.5", 8005))
 
 
     def datagramReceived(self, datagram, address):

@@ -326,6 +326,18 @@ class UDPPort(LoadSaver):
         self.packValue(d, 'H', state.udp_port)
 
 
+class LocalIP(LoadSaver):
+    key = 'local_ip'
+
+    def load(self, state, d):
+        try:
+            state.local_ip = '0.0.0.0'
+        except StandardError:
+            state.local_ip = '0.0.0.0'
+
+    def save(self, state, d):
+        self.setKey(d, state.local_ip)
+
 
 class IPCache(LoadSaver):
 
@@ -414,6 +426,7 @@ class DNSPkHashes(LoadSaver):
 client_loadsavers = [Persistent(),
                      LocalSearch(),
                      UDPPort(),
+                     LocalIP(),
                      IPCache(),
                      Suffix(),
                      DNSIPCache(),
