@@ -1520,30 +1520,38 @@ class PeerDiscovery(DatagramProtocol):
         # (including us) will receive this message.
 
 
-        # Get my address and port
-        osm = self.main.osm
-
-        if osm:
-            ad = Ad().getTextIP(osm.me.ipp)
-        else:
-            # If I don't know my own IP, at least fill in a dummy one.
-            ad = Ad().setAddrTuple((self.main.state.local_ip, self.main.state.udp_port))
-            #ad = Ad().setAddrTuple(('0.0.0.0', self.main.state.udp_port))
-        #try:
-        #    my_ipp = self.selectMyIP().getRawIPPort()
-        #except ValueError:
-        #    self.showLoginStatus("Can't determine my own IP?!")
-        #    return
-
-        self.transport.write(ad.getTextIPPort(), ("228.0.0.5", 8005))
-
-
     def datagramReceived(self, datagram, address):
         print "Datagram %s received from %s" % (repr(datagram), repr(address))
+
+
         if datagram == "Client: Ping":
             # Rather than replying to the group multicast address, we send the
             # reply directly (unicast) to the originating port:
             self.transport.write("Server: Pong", address)
+
+        # Add the peers ip address and port and attempt to connect to them
+        try:
+            ad = Ad().setTextIPPort("%s:%s" % (repr(datagram), repr(address)))
+        except ValueError:
+            pass
+        else:
+            if not ad.port:
+                out("Port number must be nonzero.")
+                
+            elif ad.auth('sx', self.main):
+                self.main.state.refreshPeer(ad, 0)
+                out("Added to peer cache: %s" % ad.getTextIPPort())
+
+                # Jump-start stuff if it's not already going
+                self.main.startConnecting()
+            else:
+                out("The address '%s' is not permitted on this network."
+                    % ad.getTextIPPort())
+
+
+    # Send a unicast message with the port that dtella is running on
+    def discoverPeers(self):
+        self.transport.write("%s" % (self.main.state.udp_port), ("228.0.0.5", 8005))
 
 
     def decodePacket(self, fmt, data):

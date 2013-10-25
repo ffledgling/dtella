@@ -331,12 +331,14 @@ class LocalIP(LoadSaver):
 
     def load(self, state, d):
         try:
+            #state.local_ip = self.unpackValue(d, 'H')
             state.local_ip = '0.0.0.0'
         except StandardError:
             state.local_ip = '0.0.0.0'
 
     def save(self, state, d):
         self.setKey(d, state.local_ip)
+        #self.packValue(d, 'H', state.local_ip)
 
 
 class IPCache(LoadSaver):

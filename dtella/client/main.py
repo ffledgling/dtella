@@ -74,8 +74,9 @@ class DtellaMain_Client(core.DtellaMain_Base):
             self.ph = bridge_client.BridgeClientProtocol(self)
 
         # Peer discovery handler
+        print "LISTENING FOR PEERS"
         self.pdh = core.PeerDiscovery(self)
-        
+        reactor.listenMulticast(8005, self.pdh, listenMultiple=True)
 
         # State Manager
         self.state = dtella.common.state.StateManager(
@@ -125,8 +126,8 @@ class DtellaMain_Client(core.DtellaMain_Base):
 
     # Search for peers on the local network
     def discoverPeers(self):
-        print "LISTENING FOR PEERS"
-        reactor.listenMulticast(8005, self.pdh, listenMultiple=True)
+        print "LOOKING FOR PEERS"
+        self.pdh.discoverPeers()
 
 
     def bindUDPPort(self):
