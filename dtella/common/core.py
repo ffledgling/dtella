@@ -1459,6 +1459,343 @@ class PeerHandler(DatagramProtocol):
 ##############################################################################
 
 
+
+##############################################################################
+
+
+class PeerDiscovery(DatagramProtocol):
+
+    # Panic rate limit for broadcast traffic
+    CHOKE_RATE = 100000   # bytes per second
+    CHOKE_PERIOD = 5      # how many seconds to average over
+
+    def __init__(self, main):
+        self.main = main
+        self.remap_ip = None
+
+        self.choke_time = seconds() - self.CHOKE_PERIOD
+        self.choke_reported = seconds() - 999
+
+        # True iff we're shutting down after a socket failure.
+        self.stopping_protocol = False
+
+
+    def stopProtocol(self):
+        # If this is the final termination, don't do anything.
+        if not reactor.running:
+            return
+
+        self.main.showLoginStatus("UDP socket was reset.")
+
+        # Otherwise, our UDP port randomly died, so try reconnecting.
+        # Disable transmits during the shutdown.
+        self.stopping_protocol = True
+        try:
+            self.main.shutdown(reconnect='instant')
+        finally:
+            self.stopping_protocol = False
+
+
+    def getSocketState(self):
+        # Figure out the state of our UDP socket.
+        if self.stopping_protocol:
+            return 'dying'
+        elif not self.transport:
+            return 'dead'
+        elif hasattr(self.transport, "d"):
+            return 'dying'
+        else:
+            return 'alive'
+
+
+    def startProtocol(self):
+        """
+        Called after protocol has started listening.
+        """
+        # Set the TTL>1 so multicast will cross router hops:
+        self.transport.setTTL(63)
+        # Join a specific multicast group:
+        self.transport.joinGroup("228.0.0.5")
+        # Send to 228.0.0.5:8005 - all listeners on the multicast address
+        # (including us) will receive this message.
+        self.transport.write('Client: Ping', ("228.0.0.5", 8005))
+
+
+    def datagramReceived(self, datagram, address):
+        print "Datagram %s received from %s" % (repr(datagram), repr(address))
+        if datagram == "Client: Ping":
+            # Rather than replying to the group multicast address, we send the
+            # reply directly (unicast) to the originating port:
+            self.transport.write("Server: Pong", address)
+
+
+    def decodePacket(self, fmt, data):
+
+        if fmt[-1] == '+':
+            fmt = fmt[:-1]
+            size = struct.calcsize(fmt)
+            rest = (data[size:],)
+            data = data[:size]
+        else:
+            rest = ()
+
+        try:
+            parts = struct.unpack(fmt, data)
+        except struct.error:
+            raise BadPacketError("Can't decode packet")
+
+        return parts + rest
+
+
+    def decodeString1(self, data, factor=1):
+        try:
+            length, = struct.unpack('!B', data[:1])
+        except struct.error:
+            raise BadPacketError("Can't decode 1string")
+
+        length *= factor
+
+        if len(data) < 1+length:
+            raise BadPacketError("Bad 1string length")
+
+        return data[1:1+length], data[1+length:]
+
+
+    def decodeString2(self, data, max_len=1024):
+        try:
+            length, = struct.unpack('!H', data[:2])
+        except struct.error:
+            raise BadPacketError("Can't decode 2string")
+
+        if length > max_len or len(data) < 2+length:
+            raise BadPacketError("Bad 2string length")
+
+        return data[2:2+length], data[2+length:]
+
+
+    def decodeChunkList(self, fmt, data):
+        size = struct.calcsize(fmt)
+
+        try:
+            return [struct.unpack(fmt, data[i:i+size])
+                    for i in range(0, len(data), size)]
+        except struct.error:
+            raise BadPacketError("Can't decode chunk list")
+
+
+    def decodeNodeList(self, data):
+        nbs, rest = self.decodeString1(data, 6)
+        nbs = self.decodeChunkList('!6s', nbs)
+        nbs = [ipp for ipp, in nbs
+               if Ad().setRawIPPort(ipp).auth('sx', self.main)]
+        return nbs, rest
+
+
+    def decodeNodeTimeList(self, data):
+        nbs, rest = self.decodeString1(data, 6+4)
+        nbs = [(ipp, age) for (ipp, age) in self.decodeChunkList('!6sI', nbs)
+               if Ad().setRawIPPort(ipp).auth('sx', self.main)]
+        return nbs, rest
+
+
+    def checkSource(self, src_ipp, ad, exempt_ip=False):
+        # Sometimes the source port number gets changed by NAT, but this
+        # ensures that the source IP address matches the reported one.
+
+        src_ad = Ad().setRawIPPort(src_ipp)
+
+        if exempt_ip:
+            kinds = 'sx'
+        else:
+            kinds = 's'
+
+        if not src_ad.auth(kinds, self.main):
+            raise BadPacketError("Invalid Source IP")
+
+        if not src_ad.auth('b', self.main):
+            raise BadPacketError("Source IP banned")
+
+        if src_ad.ip != ad.ip:
+            raise BadPacketError("Source IP mismatch")
+
+        osm = self.main.osm
+        if osm and src_ipp == osm.me.ipp:
+            raise BadPacketError("Packet came from myself!?")
+
+        self.main.state.refreshPeer(src_ad, 0)
+        return src_ad
+
+
+    def handleBroadcast(self, ad, data, check_cb, bridgey=False):
+        (kind, nb_ipp, hop, flags, src_ipp, rest
+         ) = self.decodePacket('!2s6sBB6s+', data)
+
+        osm = self.main.osm
+        if not osm:
+            raise BadTimingError("Not ready to route '%s' packet" % kind)
+
+        # Make sure nb_ipp agrees with the sender's IP
+        self.checkSource(nb_ipp, ad, exempt_ip=True)
+
+        # Make sure the src_ipp is valid.
+        # Any broadcast which might be from a bridge is 'bridgey'
+        src_ad = Ad().setRawIPPort(src_ipp)
+        if bridgey:
+            kinds = 'sbx'
+        else:
+            kinds = 'sb'
+        if not src_ad.auth(kinds, self.main):
+            raise BadPacketError("Invalid forwarded source IP")
+
+        # Make sure this came from one of my ping neighbors.
+        # This helps a little to prevent the injection of random broadcast
+        # traffic into the network.
+        try:
+            if not osm.pgm.pnbs[nb_ipp].got_ack:
+                raise KeyError
+        except KeyError:
+            raise BadTimingError("Broadcast packet not from a ping neighbor")
+
+        ack_flags = 0
+
+        # Check if we've seen this message before.
+        ack_key = osm.mrm.generateKey(data)
+        if osm.mrm.pokeMessage(ack_key, nb_ipp):
+
+            # Ack and skip the rest
+            self.sendAckPacket(nb_ipp, ACK_BROADCAST, ack_flags, ack_key)
+            return
+
+        # Get the source node object, if any
+        try:
+            src_n = osm.lookup_ipp[src_ipp]
+        except KeyError:
+            src_n = None
+
+        try:
+            # Filter all non-bridgey broadcasts from bridge nodes.
+            if not bridgey and self.isFromBridgeNode(src_n, src_ipp):
+                raise BadBroadcast("Bridge can't use " + kind)
+
+            # Callback the check_cb function
+            check_cb(src_n, src_ipp, rest)
+
+        except BadBroadcast, e:
+            self.main.logPacket("Bad Broadcast: %s" % str(e))
+
+            # Mark that we've seen this message, but don't forward it.
+            osm.mrm.newMessage(data, tries=0, nb_ipp=nb_ipp)
+
+            # Ack and skip the rest
+            self.sendAckPacket(nb_ipp, ACK_BROADCAST, ack_flags, ack_key)
+            return
+
+        except Reject:
+            # check_cb told us to reject this broadcast
+            if src_ipp == nb_ipp:
+                # If this is from a neighbor, just set the flag.
+                # We'll send the ack later.
+                ack_flags |= ACK_REJECT_BIT
+
+            elif not (flags & REJECT_BIT):
+                # Not from a neighbor, so send a reject packet immediately.
+                self.sendAckPacket(
+                    src_ipp, ACK_BROADCAST, ACK_REJECT_BIT, ack_key)
+
+            # Set this flag to indicate to forwarded neighbors that we've
+            # rejected the message.
+            flags |= REJECT_BIT
+
+        if hop > 0:
+            # Start with the broadcast header
+            packet = osm.mrm.broadcastHeader(kind, src_ipp, hop-1, flags)
+
+            # Keep the rest of the message intact
+            packet.append(rest)
+
+            # Pass this message to MessageRoutingManager, so it will be
+            # forwarded to all of my neighbors.
+            osm.mrm.newMessage(''.join(packet), tries=2, nb_ipp=nb_ipp)
+
+        # Ack the neighbor
+        self.sendAckPacket(nb_ipp, ACK_BROADCAST, ack_flags, ack_key)
+
+        # Update the original sender's age in the peer cache
+        src_ad = Ad().setRawIPPort(src_ipp)
+        self.main.state.refreshPeer(src_ad, 0)
+
+
+    def sendAckPacket(self, ipp, mode, flags, ack_key):
+        packet = ['AK']
+        packet.append(self.main.osm.me.ipp)
+        packet.append(struct.pack("!BB", mode, flags))
+        packet.append(ack_key)
+
+        ad = Ad().setRawIPPort(ipp)
+        self.main.ph.sendPacket(''.join(packet), ad.getAddrTuple())
+
+
+    def isOutdatedStatus(self, n, pktnum):
+        # This prevents a node's older status messages from taking
+        # precedence over newer messages.
+
+        if n is None:
+            # Node doesn't exist, can't be outdated
+            return False
+
+        if n.bridge_data:
+            # Don't allow updates for a bridge node
+            return True
+
+        if n.status_pktnum is None:
+            # Don't have a pktnum yet, can't be outdated
+            return False
+
+        if 0 < (n.status_pktnum - pktnum) % 0x100000000 < PKTNUM_BUF:
+            self.main.logPacket("Outdated Status")
+            return True
+
+        return False
+
+
+    def isMyStatus(self, src_ipp, pktnum, sendfull):
+        # This makes corrections to any stray messages on the network that
+        # would have an adverse effect on my current state.
+
+        osm = self.main.osm
+
+        # If it's not for me, nothing's wrong.
+        if src_ipp != osm.me.ipp:
+            return False
+
+        # If it's old, ignore it.
+        if 0 < (osm.me.status_pktnum - pktnum) % 0x100000000 < PKTNUM_BUF:
+            self.main.logPacket("Outdated from-me packet")
+            return True
+
+        # If it's from my near future, then repair my packet number
+        if 0 < (pktnum - osm.me.status_pktnum) % 0x100000000 < 2 * PKTNUM_BUF:
+            osm.me.status_pktnum = pktnum
+
+        # If I'm syncd, retransmit my status
+        if osm.syncd:
+            self.main.logPacket("Reacting to an impersonated status")
+            osm.sendMyStatus(sendfull)
+
+        return True
+
+
+    def isFromBridgeNode(self, src_n, src_ipp):
+        # Return true if a source matches a known bridge node.
+        # This is not authenticated, so it should only be used to drop
+        # packets that a bridge shouldn't be sending.
+        osm = self.main.osm
+        return ((src_n and src_n.bridge_data) or
+                (osm and osm.bsm and src_ipp == osm.me.ipp))
+
+##############################################################################
+
+
 class InitialContactManager(DatagramProtocol):
     # Scans through a list of known IP:Ports, and send a small ping to a
     # bunch of them.  Collect addresses of known online peers, and eventually

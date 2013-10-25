@@ -1094,6 +1094,7 @@ class DtellaBot(object):
         ("--",         "ACTIONS"),
         ("REJOIN",     "Hop back online after a kick or collision"),
         ("ADDPEER",    "Add the address of another node to your cache"),
+        ("FINDPEERS",  "Finds peers on your local network"),
         ("INVITE",     "Show your current IP and port to give to a friend"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
         ("TERMINATE",  "Completely kill your current Dtella process."),
@@ -1204,6 +1205,13 @@ class DtellaBot(object):
             "remote config data or your local neighbor cache, then you "
             "can use this command to manually add the address of an existing "
             "node that you know about."
+            ),
+
+        "FINDPEERS":(
+            "",
+            "Dtella will search for peers on your local network, if no peers are "
+            "found then a slow, but exhaustive, network discovery of possible peers "
+            "on the network will take place until one is found."
             ),
             
         "INVITE":(
@@ -1316,7 +1324,6 @@ class DtellaBot(object):
 
 
     def handleCmd_ADDPEER(self, out, args, prefix):
-
         if len(args) == 1:
             try:
                 ad = Ad().setTextIPPort(args[0])
@@ -1338,10 +1345,17 @@ class DtellaBot(object):
                 return
 
         self.syntaxHelp(out, 'ADDPEER', prefix)
-        
-    
-    def handleCmd_INVITE(self, out, args, prefix):
-        
+
+
+    def handleCmd_FINDPEERS(self, out, args, prefix):
+        if len(args) == 0:
+            self.main.discoverPeers()
+            return
+            
+        self.syntaxHelp(out, 'FINDPEERS', prefix)
+
+
+    def handleCmd_INVITE(self, out, args, prefix):     
         if len(args) == 0:
             osm = self.main.osm
             if osm:

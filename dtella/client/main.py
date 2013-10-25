@@ -73,6 +73,9 @@ class DtellaMain_Client(core.DtellaMain_Base):
         else:
             self.ph = bridge_client.BridgeClientProtocol(self)
 
+        # Peer discovery handler
+        self.pdh = core.PeerDiscovery(self)
+
         # State Manager
         self.state = dtella.common.state.StateManager(
             self, STATE_FILE, dtella.common.state.client_loadsavers)
@@ -118,6 +121,11 @@ class DtellaMain_Client(core.DtellaMain_Base):
             # Port is already gone, so try reconnecting.
             CHECK(udp_state == 'dead')
             self.startConnecting()
+
+    # Search for peers on the local network
+    def discoverPeers(self):
+        print "LISTENING FOR PEERS"
+        reactor.listenMulticast(8005, self.pdh, listenMultiple=True)
 
 
     def bindUDPPort(self):
