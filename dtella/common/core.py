@@ -1520,19 +1520,15 @@ class PeerDiscovery(DatagramProtocol):
         # (including us) will receive this message.
 
 
-    def datagramReceived(self, datagram, address):
-        print "Datagram %s received from %s" % (repr(datagram), repr(address))
-
-
-        if datagram == "Client: Ping":
-            # Rather than replying to the group multicast address, we send the
-            # reply directly (unicast) to the originating port:
-            self.transport.write("Server: Pong", address)
+    def datagramReceived(self, datagram, (host, port)):
+        print "Datagram %s received from %s:%s" % (datagram, host, port)
 
         # Add the peers ip address and port and attempt to connect to them
         try:
-            ad = Ad().setTextIPPort("%s:%s" % (repr(datagram), repr(address)))
+            print "%s:%s" % (host, datagram)
+            ad = Ad().setTextIPPort("%s:%s" % (host, datagram))
         except ValueError:
+            print "DISCOVERY FAILED"
             pass
         else:
             if not ad.port:
@@ -1540,13 +1536,12 @@ class PeerDiscovery(DatagramProtocol):
                 
             elif ad.auth('sx', self.main):
                 self.main.state.refreshPeer(ad, 0)
-                out("Added to peer cache: %s" % ad.getTextIPPort())
+                print "Added to peer cache: %s" % ad.getTextIPPort()
 
                 # Jump-start stuff if it's not already going
                 self.main.startConnecting()
             else:
-                out("The address '%s' is not permitted on this network."
-                    % ad.getTextIPPort())
+                print "The address '%s' is not permitted on this network." % ad.getTextIPPort()
 
 
     # Send a unicast message with the port that dtella is running on
