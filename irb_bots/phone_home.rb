@@ -1,11 +1,26 @@
+#Install ruby1.9.1 or higher 
+#Install ruby's gem manager (rubygems1.9.1 for ubuntu users)
+#
+#gem install cinch
+#
+#Run the dtella.py script and launch the DC++ client connect to the hub
+#(Address = 127.0.0.1:7314). In the DC++ client chat you will enter the command
+#to set a static peer connection port Using the !UDP command. So say you wanted
+#to create a static port at 9231 you would enter.
+#
+#!UDP 9231
+#
+#Now change the following line to be equal the given port you gave in the !UDP command.
+#So say you changed your port to 9231 change the following line to: $dc_port = 9231
+$dc_port = 0000
+
 require 'cinch'
 
 # IRC Bot configurations
 bot_name = "Remote"
-bot_nickname = "Josephs_bot"
+bot_nickname = "MyBot" #Choose your bot's name
 irc_server = "cs-club.ca"
 irc_port = 6697
-$dc_port = 9231
 use_ssl = true
 oper_cmd = Array.new()   # Place oper authentication commands in a file called .oper_cmd "#ucsc",
 autojoin_channels = [ "#ucsc", "#vending_machine"]
@@ -54,17 +69,10 @@ bot = Cinch::Bot.new do
     # RMS will respond when he is addressed, it's too difficult to add support
   # for him to understand the context and know who to respond to
   on :message, /^#{bot_nickname}[\:,]* (.+)/ do |m, convo|
-  	if m.user.realname.match(/Daniel/) || m.user.host.match(/dick@nat023.dc-uoit.net.*/) then
-  		if $i == 0 then
-  			m.reply("Shitty#{m.user.nick}")
-  			$i+=1
-  		end
-  	elsif
    		m.reply("#{m.user.nick}, " + getIp() + ":" + $dc_port.to_s)
 
       puts "my host #{m.user.data}"
       puts "MyIP #{m.user.host.scan(IP_ADDRESS_REGEX)[0]}"
-	end
   end
 
     # Log channel members when they make a channel message
