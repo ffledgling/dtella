@@ -1513,7 +1513,7 @@ class PeerDiscovery(DatagramProtocol):
         Called after protocol has started listening.
         """
         # Set the TTL>1 so multicast will cross router hops:
-        self.transport.setTTL(63)
+        self.transport.setTTL(255)
         # Join a specific multicast group:
         self.transport.joinGroup("228.0.0.5")
         # Send to 228.0.0.5:8005 - all listeners on the multicast address
