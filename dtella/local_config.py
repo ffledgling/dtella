@@ -49,6 +49,7 @@ minshare_cap = 100 * (1024**3)   # (=100GiB)
 # Default UDP startup port
 # Usually Dtella uses a random UDP port to listen on for dtella-dtella
 # communication, this breaks the Force Scan functionality
+default_udpport = 13337
 
 # This is a list of subnets (in CIDR notation) which will be permitted on
 # the network.  Make sure you get this right initially, because you can't

@@ -1847,7 +1847,7 @@ class InitialContactManager(DatagramProtocol):
         for ipp, seen in self.main.state.peers.iteritems():
             self.peers[ipp] = self.PeerInfo(ipp, seen)
 
-
+        # Anhad additions
         def addPeersFromConfigFile():
             local.allowed_subnets
 
@@ -1865,6 +1865,22 @@ class InitialContactManager(DatagramProtocol):
                     b += "00000000"
                     outQuads -= 1
                 return b
+
+            # convert a decimal number to binary representation
+            # if d is specified, left-pad the binary number with 0s to that length
+            def dec2bin(n,d=None):
+                s = ""
+                while n>0:
+                    if n&1:
+                        s = "1"+s
+                    else:
+                        s = "0"+s
+                    n >>= 1
+                if d is not None:
+                    while len(s)<d:
+                        s = "0"+s
+                if s == "": s = "0"
+                return s
 
             # convert a binary string into an IP address
             def bin2ip(b):
@@ -1893,7 +1909,7 @@ class InitialContactManager(DatagramProtocol):
                     ips = []
                     ipPrefix = baseIP[:-(32-subnet)]
                     for i in range(2**(32-subnet)):
-                        ip.append(bin2ip(ipPrefix+dec2bin(i, (32-subnet))))
+                        ips.append(bin2ip(ipPrefix+dec2bin(i, (32-subnet))))
 
                     return ips
 
@@ -1903,11 +1919,11 @@ class InitialContactManager(DatagramProtocol):
 
             ad = Ad()
             for subnet_ip in subnet_ips:
-                ad.setTextIPPort(subnet_ip + ':' + local.default_UDPPort)
+                ad.setTextIPPort(subnet_ip + ':' + str(local.default_udpport))
                 ipp = ad.getRawIPPort()
                 print subnet_ip, ipp
 
-                if not self.peers.haskey(ipp):
+                if not self.peers.has_key(ipp):
                     self.peers[ipp] = self.PeerInfo(ipp, 0)
 
 
