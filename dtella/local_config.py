@@ -46,11 +46,24 @@ hub_name = "Dtella@UOIT"
 # setting the minshare to 99999TiB, and effectively disabling the network.
 minshare_cap = 100 * (1024**3)   # (=100GiB)
 
+# Default UDP startup port
+# Usually Dtella uses a random UDP port to listen on for dtella-dtella
+# communication, this breaks the Force Scan functionality
+
 # This is a list of subnets (in CIDR notation) which will be permitted on
 # the network.  Make sure you get this right initially, because you can't
 # make changes once the program has been distributed.  In the unlikely event
 # that you don't want any filtering, use ['0.0.0.0/0']
-allowed_subnets = ['10.0.0.0/8', '172.16.0.0/16', '192.168.0.0/16']
+#allowed_subnets = ['10.0.0.0/8', '172.16.0.0/16', '192.168.0.0/16']
+allowed_subnets = [
+                   #'10.0.0.0/8',
+                   #'172.16.0.0/16',
+                   '192.168.0.0/24'
+                ]
+
+# This is used to use a horrible every IP based scan for peer discovery, use it
+# only as a last resort.
+force_scan = True
 
 # Here we configure an object which pulls 'Dynamic Config' from some source
 # at a known fixed location on the Internet.  This config contains a small
@@ -69,7 +82,7 @@ allowed_subnets = ['10.0.0.0/8', '172.16.0.0/16', '192.168.0.0/16']
 # -- Use Google Spreadsheet --
 import dtella.modules.pull_gdata
 dconfig_puller = dtella.modules.pull_gdata.GDataPuller(
-   sheet_key = "0Ajyi_XIZlre8dGZhRDZ6T0hDVEFNMWxFUHVaM3lldEE"
+   sheet_key = "whatthefuck"
    )
 
 # Enable this if you can devise a meaningful mapping from a user's hostname

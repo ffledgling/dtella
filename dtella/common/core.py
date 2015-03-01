@@ -19,6 +19,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 """
+import pprint
 
 import struct
 import heapq
@@ -1845,6 +1846,86 @@ class InitialContactManager(DatagramProtocol):
 
         for ipp, seen in self.main.state.peers.iteritems():
             self.peers[ipp] = self.PeerInfo(ipp, seen)
+
+
+        def addPeersFromConfigFile():
+            local.allowed_subnets
+
+            # convert an IP address from its dotted-quad format to its
+            # 32 binary digit representation
+            def ip2bin(ip):
+                b = ""
+                inQuads = ip.split(".")
+                outQuads = 4
+                for q in inQuads:
+                    if q != "":
+                        b += dec2bin(int(q),8)
+                        outQuads -= 1
+                while outQuads > 0:
+                    b += "00000000"
+                    outQuads -= 1
+                return b
+
+            # convert a binary string into an IP address
+            def bin2ip(b):
+                ip = ""
+                for i in range(0,len(b),8):
+                    ip += str(int(b[i:i+8],2))+"."
+                return ip[:-1]
+
+            # print a list of IP addresses based on the CIDR block specified
+            def convertCIDR(c):
+                parts = c.split("/")
+                baseIP = ip2bin(parts[0])
+                try:
+                    subnet = int(parts[1])
+                except IndexError: # When c is not actually in CIDR
+                    return [bin2ip(baseIP)]
+
+                # Python string-slicing weirdness:
+                # "myString"[:-1] -> "myStrin" but "myString"[:0] -> ""
+                # if a subnet of 32 was specified simply print the single IP
+                if subnet == 32:
+                    return [bin2ip(baseIP)]
+                # for any other size subnet, print a list of IP addresses by concatenating
+                # the prefix with each of the suffixes in the subnet
+                else:
+                    ips = []
+                    ipPrefix = baseIP[:-(32-subnet)]
+                    for i in range(2**(32-subnet)):
+                        ip.append(bin2ip(ipPrefix+dec2bin(i, (32-subnet))))
+
+                    return ips
+
+            subnet_ips = []
+            for cidr in local.allowed_subnets:
+                subnet_ips += convertCIDR(cidr)
+
+            ad = Ad()
+            for subnet_ip in subnet_ips:
+                ad.setTextIPPort(subnet_ip + ':' + local.default_UDPPort)
+                ipp = ad.getRawIPPort()
+                print subnet_ip, ipp
+
+                if not self.peers.haskey(ipp):
+                    self.peers[ipp] = self.PeerInfo(ipp, 0)
+
+
+        if local.force_scan:
+            addPeersFromConfigFile()
+
+
+
+
+        print 'Debug printing...'
+        for key, value in self.peers.iteritems():
+            pprint.pprint(key)
+            ip, port = struct.unpack('!4sH', key)
+            print socket.inet_ntoa(ip), port
+            #pprint.pprint(value)
+            print value.__dict__
+
+        print 'Done debug printing'
 
         self.heap = self.peers.values()
         heapq.heapify(self.heap)
