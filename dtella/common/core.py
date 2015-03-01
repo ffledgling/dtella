@@ -2056,7 +2056,7 @@ class InitialContactManager(DatagramProtocol):
 
             self.checkStatus()
 
-        p.timeout_dcall = reactor.callLater(5.0, cb)
+        p.timeout_dcall = reactor.callLater(180.0, cb)
 
 
     def cancelPeerContactTimeout(self, p):

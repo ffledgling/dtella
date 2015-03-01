@@ -264,6 +264,7 @@ class DtellaMain_Client(core.DtellaMain_Base):
 
 
     def logPacket(self, text):
+        print text
         dch = self.dch
         if dch and dch.bot.dbg_show_packets:
             dch.bot.say(text)
