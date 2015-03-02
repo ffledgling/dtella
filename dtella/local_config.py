@@ -26,7 +26,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 # Use this prefix for filenames when building executables and installers.
 # It will be concatenated with the version number below.
-build_prefix = "dtella-uoit-"
+build_prefix = "dtellaP2P-"
 
 # Dtella version number.
 version = "2015.03.02"
@@ -34,7 +34,7 @@ version = "2015.03.02"
 # This is an arbitrary string which is used for encrypting packets.
 # It essentially defines the uniqueness of a Dtella network, so every
 # network should have its own unique key.
-network_key = 'VivaLaDC'
+network_key = 'VivaLaDC++-Dtella-94'
 
 # This is the name of the "hub" which is seen by the user's DC client.
 # "Dtella@____" is the de-facto standard, but nobody's stopping you
