@@ -29,17 +29,17 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 build_prefix = "dtella-uoit-"
 
 # Dtella version number.
-version = "2013.09.01"
+version = "2015.03.02"
 
 # This is an arbitrary string which is used for encrypting packets.
 # It essentially defines the uniqueness of a Dtella network, so every
 # network should have its own unique key.
-network_key = 'uoitComplexDtella-94'
+network_key = 'VivaLaDC'
 
 # This is the name of the "hub" which is seen by the user's DC client.
 # "Dtella@____" is the de-facto standard, but nobody's stopping you
 # from picking something else.
-hub_name = "Dtella@UOIT"
+hub_name = "Dtella-Hub"
 
 # This enforces a maximum cap for the 'minshare' value which appears in DNS.
 # It should be set to some sane value to prevent the person managing DNS from
@@ -55,13 +55,11 @@ default_udpport = 13337
 # the network.  Make sure you get this right initially, because you can't
 # make changes once the program has been distributed.  In the unlikely event
 # that you don't want any filtering, use ['0.0.0.0/0']
-#allowed_subnets = ['10.0.0.0/8', '172.16.0.0/16', '192.168.0.0/16']
 allowed_subnets = [
                    #'10.0.0.0/8',
                    #'172.16.0.0/16',
                    #'192.168.0.0/24',
 
-                   # OBH
                    '10.1.33.0/24',
                    '10.1.34.0/24',
                    '10.1.35.0/24',
@@ -71,20 +69,19 @@ allowed_subnets = [
                    '10.1.39.0/24',
                    '10.1.40.0/24',
 
-                   # NBH,
                    '10.1.65.0/24',
                    '10.1.67.0/24',
 
-                   # GH,
                    '10.1.97.0/24',
                    '10.1.98.0/24',
                    '10.1.99.0/24',
 
-                   # BAKUL,
                    '10.1.129.0/24',
+                   '10.1.130.0/24',
+                   '10.1.131.0/24',
+                   '10.1.132.0/24',
                    '10.1.133.0/24',
 
-                   # Labs,
                    '10.2.57.0/24',
                 ]
 
@@ -109,7 +106,7 @@ force_scan = True
 # -- Use Google Spreadsheet --
 import dtella.modules.pull_gdata
 dconfig_puller = dtella.modules.pull_gdata.GDataPuller(
-   sheet_key = "whatthefuck"
+   sheet_key = 'doesnotexist'
    )
 
 # Enable this if you can devise a meaningful mapping from a user's hostname

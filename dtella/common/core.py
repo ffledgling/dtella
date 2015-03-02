@@ -2056,7 +2056,8 @@ class InitialContactManager(DatagramProtocol):
 
             self.checkStatus()
 
-        p.timeout_dcall = reactor.callLater(180.0, cb)
+        # Anhad: Control time before peer look-up seems to fail, might need to tune this
+        p.timeout_dcall = reactor.callLater(60.0, cb)
 
 
     def cancelPeerContactTimeout(self, p):
