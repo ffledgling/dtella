@@ -7,13 +7,53 @@ campuses and other low-latency LANs, for more information see [http://dtella.org
 
 About this Repository
 ----------------------------------------
+This repository is a fork of https://github.com/gnu-user/dtella which is in turn a fork of the
+[latest revision (r635)](https://code.google.com/p/dtella/source/detail?r=635) of Dtella from the
+official SVN repository. The intent of this fork, like the other fork is to improve upon the original Dtella
+implementation, investigate ways that it could be improved further and additionally adapt it for
+local use.
 
-This repository was created as a fork of the [latest revision (r635)](https://code.google.com/p/dtella/source/detail?r=635)
-of Dtella from the official SVN repository. The intent of this fork is to improve upon
-the original Dtella implementation and investigate ways that it could be improved further.
+Peer Discovery Methods Supported
+--------------------------------
+
+In decreasing order of efficiency.
+
+1. Google Spreadsheet
+2. DNS
+3. Multicast
+4. Network Scan
+
+TODO
+----
+- [ ] DTella page
+- [ ] Clean up code
+- [ ] Add better/faster P2P scanning
+- [ ] Improve multicasing code
+- [ ] Document differences clearly
+- [ ] Expose debugging and configuration options via flags/bot commands
+
+
+Additional Configuration Options
+--------------------------------
+
+This fork adds a couple of options to the original dtella configuration file, doucmented here:
+
+- `force_scan`: A full Network Scan is a floody technique, it's used only when this option is set to `True`
+- `default_udpport`: Used by Network Scan, set to `None` if you wish to use a random port like the original dtella instead.
+
+
+
+Original README.md
+==================
+
+Everything beyond this section is from the original README, it may or may not
+be accurate. It stays here for historical purposes and till I get around to
+writing a better README.
+
+**End of section**
 
 Setting up Dtella
-----------------------------------------
+------------------
 
 ### Ubuntu
 
