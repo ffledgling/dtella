@@ -34,7 +34,7 @@ version = "2015.03.02"
 # This is an arbitrary string which is used for encrypting packets.
 # It essentially defines the uniqueness of a Dtella network, so every
 # network should have its own unique key.
-network_key = 'VivaLaDC++-Dtella-94'
+network_key = 'uoitComplexDtella-94'
 
 # This is the name of the "hub" which is seen by the user's DC client.
 # "Dtella@____" is the de-facto standard, but nobody's stopping you
