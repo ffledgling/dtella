@@ -6,12 +6,13 @@ campuses and other low-latency LANs, for more information see [http://dtella.org
 
 
 About this Repository
-----------------------------------------
-This repository is a fork of https://github.com/gnu-user/dtella which is in turn a fork of the
-[latest revision (r635)](https://code.google.com/p/dtella/source/detail?r=635) of Dtella from the
-official SVN repository. The intent of this fork, like the other fork is to improve upon the original Dtella
-implementation, investigate ways that it could be improved further and additionally adapt it for
-local use.
+---------------------
+
+This repository is a fork of [gnu-user/dtella](https://github.com/gnu-user/dtella) which is in turn
+a fork of the [latest revision (r635)](https://code.google.com/p/dtella/source/detail?r=635) of
+Dtella from the official SVN repository. The intent of this fork, like the other fork is to improve
+upon the original Dtella implementation, investigate ways that it could be improved further and
+additionally adapt it for local use.
 
 Peer Discovery Methods Supported
 --------------------------------
@@ -33,6 +34,12 @@ TODO
 - [ ] Expose debugging and configuration options via flags/bot commands
 
 
+Installing
+----------
+
+See [Install Instructions](https://github.com/ffledgling/dtella/blob/master/INSTALL.md)
+
+
 Additional Configuration Options
 --------------------------------
 
@@ -50,7 +57,7 @@ Everything beyond this section is from the original README, it may or may not
 be accurate. It stays here for historical purposes and till I get around to
 writing a better README.
 
-**End of section**
+***End of section***
 
 Setting up Dtella
 ------------------
