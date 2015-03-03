@@ -6,6 +6,24 @@ You need the following things installed. (Will vary by distribution).
 - Python (2.7+)
 - python-virtualenv
 - pip
+- build-essentials
+- python-devel (for CentOS, RHEL, Fedora) / python-dev (for Debian, Ubuntu, Mint)
+
+Following are the steps to install the above dependencies for few major distributions.
+
+### For CentOS, RHEL, Fedora
+
+```
+sudo yum install python python-pip build-essentials python-devel
+pip install virtualenv
+```
+
+### For Debian, Ubuntu, Mint
+
+```
+sudo apt-get install python python-pip build-essentials python-dev
+pip install virtualenv
+```
 
 There are two ways to install and setup dtella on a Linux system, the first using Virtual Environments is cleaner and recommended.
 
