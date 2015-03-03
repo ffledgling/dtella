@@ -21,7 +21,7 @@ pip install virtualenv
 ### For Debian, Ubuntu, Mint
 
 ```
-sudo yum install python python-pip build-essentials python-dev
+sudo apt-get install python python-pip build-essentials python-dev
 pip install virtualenv
 ```
 
