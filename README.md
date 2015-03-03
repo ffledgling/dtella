@@ -39,6 +39,10 @@ Installing
 
 See [Install Instructions](https://github.com/ffledgling/dtella/blob/master/INSTALL.md)
 
+After follwing the install instructions, follow the **Connecting to Dtella (connecting to local DCC hub)** section below (Step #3 onwards).
+
+---------------------
+
 
 Additional Configuration Options
 --------------------------------
@@ -98,7 +102,7 @@ Connecting to Dtella (connecting to local DCC hub)
 
 2. Start the dtella script
 
-3. Add a new connection to your
+3. Add a new connection to your Client
 
 4. Enter the name as anything you like
 
