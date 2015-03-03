@@ -104,7 +104,7 @@ Windows
 Avoid using this Operating System when given the choice.
 It'll probably be slow, the network libraries are subpar.
 
-1. Download the setup file from the [Releases]() Section and run it.
+1. Download the setup file from the [Releases](https://github.com/ffledgling/dtella/releases) Section and run it.
 
 2. If you get a warning message stating that the package is from an "Unkown Publisher", just click
    on "More Info" and then "Continue Anyway".
