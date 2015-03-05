@@ -3,15 +3,19 @@
 # Installing dependencies
 echo 'Getting dtella dependencies'
 
-# Make sure Python is installed
-sudo apt-get install python2.7
+if grep "Ubuntu" /etc/issue > /dev/null
+then
+  echo "UBUNTU"
+  pacman="apt-get"
+elif grep "Fedora" /etc/issue > /dev/null
+then
+  echo "FEDORA"
+  pacman="yum"
+fi
 
-# Make sure Openssl is installed
-sudo apt-get install openssl
-
-# Install the python pip 
-sudo apt-get install python-pip
-
+sudo $pacman install python2.7
+sudo $pacman install openssl
+sudo $pacman install python-pip
 
 # Please note there is an issue with installing on 32-bit machines
 # the pip installer is not able to install pip, feel free to try if you have 32-bit
