@@ -32,6 +32,7 @@ TODO
 - [ ] Improve multicasing code
 - [ ] Document differences clearly
 - [ ] Expose debugging and configuration options via flags/bot commands
+- [ ] Replace existing readboard with a distributed one (possibly by extending the DC protocol)
 
 
 Installing
