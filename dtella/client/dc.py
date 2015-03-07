@@ -38,6 +38,8 @@ import random
 import re
 import binascii
 import socket
+import urllib
+import urllib2
 
 from zope.interface import implements
 from zope.interface.verify import verifyClass
@@ -1098,6 +1100,8 @@ class DtellaBot(object):
         ("INVITE",     "Show your current IP and port to give to a friend"),
         ("REBOOT",     "Exit from the network and immediately reconnect"),
         ("TERMINATE",  "Completely kill your current Dtella process."),
+        ("READ",       "Fetch data from read board."),
+        ("ADD",        "Add data to read board."),
         ("--",         "SETTINGS"),
         ("TOPIC",      "View or change the global topic"),
         ("SUFFIX",     "View or change your location suffix"),
@@ -1301,6 +1305,43 @@ class DtellaBot(object):
 
         self.syntaxHelp(out, 'REBOOT', prefix)
 
+    def handleCmd_READ(self, out, args, prefix):
+
+        response = urllib2.urlopen(local.read_board_view_url)
+        self.say(response.read())
+
+        self.syntaxHelp(out, 'READ', prefix)
+
+    def handleCmd_ADD(self, out, args, prefix):
+
+        response = urllib2.urlopen(local.read_board_view_url)
+        text = response.read() + '\n' + ' '.join(args).lower()
+
+        URL = local.read_board_edit_url
+
+        params = [
+            ('id', local.read_board_edit_id),
+            ('text', text),
+            ('submit', 'Save'),
+            ('mode', 'edit')]
+
+        data = urllib.urlencode(params)
+        print("Uploading ...")
+        try:
+            req = urllib2.Request(URL, data)
+            response = urllib2.urlopen(req)
+            resp_code = response.getcode()
+            if resp_code == 200:
+                print(response.geturl())
+            else:
+                out('Error: Could not upload file. HTTP Response Code %s\n' % resp_code)
+        except urllib2.URLError, e:
+            print e
+            out('Error: Could not connect to %s\n' % URL)
+
+        out("Your request is my command")
+
+        self.syntaxHelp(out, 'ADD', prefix)
 
     def handleCmd_UDP(self, out, args, prefix):
         if len(args) == 0:
