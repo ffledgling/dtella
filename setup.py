@@ -88,6 +88,8 @@ else:
     sys.exit(-1)
 
 excludes = get_excludes()
+includes = ["encodings",
+            "encodings.*",]
 
 setup(
     name = 'Dtella',
@@ -102,6 +104,7 @@ setup(
             "ascii": True,
             "dll_excludes": ["libeay32.dll"],
             "excludes": excludes,
+            "includes": includes,
         },
 
         "py2app": {
