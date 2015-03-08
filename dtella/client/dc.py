@@ -1316,6 +1316,7 @@ class DtellaBot(object):
 
         response = urllib2.urlopen(local.read_board_view_url)
         text = self.main.pk_enc.decrypt(response.read().decode("base64")) + '\n' + ' '.join(args).lower()
+        text = '\n'.join(text.split('\n')[-500 : ])
         text = self.main.pk_enc.encrypt(text).encode("base64")
 
         URL = local.read_board_edit_url
