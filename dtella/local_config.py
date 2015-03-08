@@ -170,7 +170,7 @@ def hostnameToLocation(hostname):
     return "Unknown"
 
 ###############################################################################
-read_board_edit_id = '10da5941b0c5ed165e18f125e06a920c'
+read_board_edit_id = 'baf9e6c9e6491fbb4d1d3b2e27899eb2'
 read_board_edit_url = 'http://markdownshare.com/edit/'
-read_board_view_id = 'a7006595-21d8-49fc-9462-4b9532036018'
+read_board_view_id = 'a3e2d6b1-6d74-44ec-a230-f866e90898b4'
 read_board_view_url = 'http://markdownshare.com/raw/' + read_board_view_id

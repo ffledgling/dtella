@@ -1308,14 +1308,15 @@ class DtellaBot(object):
     def handleCmd_READ(self, out, args, prefix):
 
         response = urllib2.urlopen(local.read_board_view_url)
-        self.say(response.read())
+        self.say(self.main.pk_enc.decrypt(response.read().decode("base64")))
 
         self.syntaxHelp(out, 'READ', prefix)
 
     def handleCmd_ADD(self, out, args, prefix):
 
         response = urllib2.urlopen(local.read_board_view_url)
-        text = response.read() + '\n' + ' '.join(args).lower()
+        text = self.main.pk_enc.decrypt(response.read().decode("base64")) + '\n' + ' '.join(args).lower()
+        text = self.main.pk_enc.encrypt(text).encode("base64")
 
         URL = local.read_board_edit_url
 
