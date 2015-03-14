@@ -1160,7 +1160,7 @@ class PeerHandler(DatagramProtocol):
             (pktnum, nhash, rest
              ) = self.decodePacket('!I4s+', rest)
 
-            topic, rest = self.decodeString1(rest)
+            topic, rest = self.decodeString2(rest, max_length=65535)
             if rest:
                 raise BadPacketError("Extra data")
 
@@ -2996,8 +2996,9 @@ class OnlineStateManager(object):
 
         self.removeNodeFromNodesList(n)
 
+        # For now we don't want the topic to be wiped out when a node leaves
         # Tell the TopicManager this node is leaving
-        self.tm.checkLeavingNode(n)
+        # self.tm.checkLeavingNode(n)
 
         # If it's a bridge node, clean up the extra data
         if n.bridge_data:
@@ -4483,7 +4484,7 @@ class TopicManager(object):
                 return False
 
         # Sanitize the topic
-        topic = topic[:255].replace('\r','').replace('\n','')
+        topic = topic[:65535]
 
         # Get old topic
         old_topic = self.topic
@@ -4500,7 +4501,7 @@ class TopicManager(object):
 
         # If it's changed, push it to the title bar
         if topic != old_topic:
-            dch.pushTopic(topic)
+            dch.pushTopic(topic.replace('\r', '').replace('\n', ''))
 
         # If a change was reported, tell the user that it changed.
         if changed and nick:
@@ -4517,8 +4518,8 @@ class TopicManager(object):
     def broadcastNewTopic(self, topic):
         osm = self.main.osm
 
-        if len(topic) > 255:
-            topic = topic[:255]
+        if len(topic) > 65535:
+            topic = topic[:65535]
 
         # Update topic locally
         if not self.updateTopic(osm.me, osm.me.nick, topic, changed=True):
@@ -4531,7 +4532,7 @@ class TopicManager(object):
         packet.append(struct.pack('!I', osm.mrm.getPacketNumber_search()))
 
         packet.append(osm.me.nickHash())
-        packet.append(struct.pack('!B', len(topic)))
+        packet.append(struct.pack('!H', len(topic)))
         packet.append(topic)
 
         osm.mrm.newMessage(''.join(packet), tries=4)
