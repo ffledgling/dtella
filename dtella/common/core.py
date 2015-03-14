@@ -1160,7 +1160,7 @@ class PeerHandler(DatagramProtocol):
             (pktnum, nhash, rest
              ) = self.decodePacket('!I4s+', rest)
 
-            topic, rest = self.decodeString2(rest, max_length=65535)
+            topic, rest = self.decodeString2(rest, max_len=65535)
             if rest:
                 raise BadPacketError("Extra data")
 
@@ -4243,7 +4243,7 @@ class SyncRequestRoutingManager(object):
             topic = osm.tm.topic
         else:
             topic = ""
-        packet.append(struct.pack('!B', len(topic)))
+        packet.append(struct.pack('!H', len(topic)))
         packet.append(topic)
 
         # Contacted Nodes
@@ -4501,7 +4501,7 @@ class TopicManager(object):
 
         # If it's changed, push it to the title bar
         if topic != old_topic:
-            dch.pushTopic(topic.replace('\r', '').replace('\n', ''))
+            dch.pushTopic(topic)
 
         # If a change was reported, tell the user that it changed.
         if changed and nick:
