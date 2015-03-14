@@ -31,7 +31,6 @@ class UtilTestCase(unittest.TestCase):
     def testValidateNick(self):
         self.assertEqual(validateNick("P"), "too short")
         self.assertEqual(validateNick(""), "too short")
-        self.assertEqual(validateNick("5id"), "must start with a letter")
         self.assertEqual(validateNick("Some$thing"),
                          "contains an invalid character: '$'")
         self.assertEqual(validateNick("Paul"), "")

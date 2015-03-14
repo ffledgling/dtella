@@ -72,9 +72,6 @@ def validateNick(nick):
     if len(nick) > 30:
         return "too long"
 
-    if not nick[0].isalpha():
-        return "must start with a letter"
-
     chars = ("-0123456789"
              "ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_`"
              "abcdefghijklmnopqrstuvwxyz{}"
