@@ -145,14 +145,14 @@ class DtellaMain_Client(core.DtellaMain_Base):
         # Otherwise, the port is dead, so try to rebind it.
         CHECK(udp_state == 'dead')
 
-        # Anhad addition:
-        try:
-            print 'port debugging'
-            print self.state.udp_port
-            self.state.udp_port = local.default_udpport
-            print 'done port debugging'
-        except:
-            print 'got an error;'
+        # Anhad addition, Uncomment for debugging
+        #try:
+        #    print 'port debugging'
+        #    print self.state.udp_port
+        #    self.state.udp_port = local.default_udpport
+        #    print 'done port debugging'
+        #except:
+        #    print 'got an error;'
 
         try:
             reactor.listenUDP(self.state.udp_port, self.ph)
@@ -264,7 +264,8 @@ class DtellaMain_Client(core.DtellaMain_Base):
 
 
     def logPacket(self, text):
-        print text
+        # Anhad addition, Uncomment for debugging
+        #print text
         dch = self.dch
         if dch and dch.bot.dbg_show_packets:
             dch.bot.say(text)

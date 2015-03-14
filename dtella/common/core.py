@@ -1921,7 +1921,8 @@ class InitialContactManager(DatagramProtocol):
             for subnet_ip in subnet_ips:
                 ad.setTextIPPort(subnet_ip + ':' + str(local.default_udpport))
                 ipp = ad.getRawIPPort()
-                print subnet_ip, ipp
+                # Anhad Addition, uncomment for debugging
+                #print subnet_ip, ipp
 
                 if not self.peers.has_key(ipp):
                     self.peers[ipp] = self.PeerInfo(ipp, 0)
@@ -1933,15 +1934,16 @@ class InitialContactManager(DatagramProtocol):
 
 
 
-        print 'Debug printing...'
-        for key, value in self.peers.iteritems():
-            pprint.pprint(key)
-            ip, port = struct.unpack('!4sH', key)
-            print socket.inet_ntoa(ip), port
-            #pprint.pprint(value)
-            print value.__dict__
+        # Uncomment for Debugging
+        #print 'Debug printing...'
+        #for key, value in self.peers.iteritems():
+        #    pprint.pprint(key)
+        #    ip, port = struct.unpack('!4sH', key)
+        #    print socket.inet_ntoa(ip), port
+        #    #pprint.pprint(value)
+        #    print value.__dict__
 
-        print 'Done debug printing'
+        #print 'Done debug printing'
 
         self.heap = self.peers.values()
         heapq.heapify(self.heap)
