@@ -30,7 +30,7 @@ build_prefix = "dtellaP2P-"
 
 # Dtella version number.
 # Uses date +%Y.%m.%d.%H.%M, manually updated, don't reply on it.
-version = "2015.03.15.04.44"
+version = "2015.03.15.15.08"
 
 # This is an arbitrary string which is used for encrypting packets.
 # It essentially defines the uniqueness of a Dtella network, so every

@@ -1932,8 +1932,6 @@ class InitialContactManager(DatagramProtocol):
             addPeersFromConfigFile()
 
 
-
-
         # Uncomment for Debugging
         #print 'Debug printing...'
         #for key, value in self.peers.iteritems():

@@ -146,13 +146,13 @@ class DtellaMain_Client(core.DtellaMain_Base):
         CHECK(udp_state == 'dead')
 
         # Anhad addition, Uncomment for debugging
-        #try:
+        try:
         #    print 'port debugging'
         #    print self.state.udp_port
-        #    self.state.udp_port = local.default_udpport
+            self.state.udp_port = local.default_udpport
         #    print 'done port debugging'
-        #except:
-        #    print 'got an error;'
+        except:
+            print 'Error setting default port'
 
         try:
             reactor.listenUDP(self.state.udp_port, self.ph)
