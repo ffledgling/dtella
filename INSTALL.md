@@ -14,7 +14,7 @@ Following are the steps to install the above dependencies for few major distribu
 ### For CentOS, RHEL, Fedora
 
 ```
-sudo yum install python python-pip build-essentials python-devel
+sudo yum install python python-pip python-devel
 pip install virtualenv
 ```
 
