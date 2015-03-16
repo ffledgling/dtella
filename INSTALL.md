@@ -6,7 +6,7 @@ You need the following things installed. (Will vary by distribution).
 - Python (2.7+)
 - python-virtualenv
 - pip
-- build-essentials
+- build-essential
 - python-devel (for CentOS, RHEL, Fedora) / python-dev (for Debian, Ubuntu, Mint)
 
 Following are the steps to install the above dependencies for few major distributions.
@@ -21,7 +21,7 @@ pip install virtualenv
 ### For Debian, Ubuntu, Mint
 
 ```
-sudo apt-get install python python-pip build-essentials python-dev
+sudo apt-get install python python-pip build-essential python-dev
 pip install virtualenv
 ```
 
